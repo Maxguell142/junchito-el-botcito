@@ -1,0 +1,15 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "webhook_token": ""
+  },
+  "auth": {
+    "username": "",
+    "password": "",
+    "session_token": "",
+    "role": "ADMIN_TRADER"
+  },
+  "identities": [],
+  "bots": []
+}

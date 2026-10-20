@@ -14,7 +14,7 @@
 
 ```json
 {
-  "token": "secret_quantum_tradingview_token_2026",
+  "token": "<CONFIGURE_WEBHOOK_TOKEN>",
   "bot_id": "bot_1",
   "ticker": "MNQ",
   "action": "BUY",
@@ -36,7 +36,7 @@
 //@version=5
 strategy("Quantum MNQ Webhook Scalper", overlay=true, margin_long=100, margin_short=100)
 
-var string secret_token = "secret_quantum_tradingview_token_2026"
+var string secret_token = input.string("", "Webhook token")
 var string bot_target = "bot_1"
 
 // Condiciones lógicas

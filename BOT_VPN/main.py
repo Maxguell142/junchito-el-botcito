@@ -2,9 +2,14 @@
 main.py - Servidor Central FastAPI y Gateway WebSocket para Trading de Futuros (MNQ)
 
 Expone:
+- `/api/auth/login` y `/api/auth/me`: Autenticación institucional y gestión de sesión.
+- `/api/emergency/flatten-all`: Control de pánico para liquidar todas las órdenes a FLAT.
+- `/api/emergency/stop-all`: Kill-Switch global para pausar todos los bots.
+- `/api/identities`: Catálogo y alta de personas titulares (KYC).
+- `/api/bots/{id}/proxy-test`: Test de ping e IP saliente para el proxy SOCKS5 del bot.
 - `/api/webhook`: Endpoint HTTP POST receptor de alertas JSON de TradingView.
 - `/ws`: WebSocket bidireccional de baja latencia para el Dashboard en tiempo real.
-- Rutas REST para pausar/reanudar bots, editar horarios, agregar cuentas y bots.
+- Rutas REST completas para bots, horarios y cuentas de prop firms con credenciales.
 - Servidor de archivos estáticos para la interfaz web (#0D0D0D Dark Theme).
 """
 
@@ -21,7 +26,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from bot_engine import BotManager, Account, TradingBot
+from bot_engine import BotManager, Account, TradingBot, IdentityProfile
 from strategies import STRATEGY_REGISTRY, get_strategy
 
 logger = logging.getLogger("server")
@@ -60,7 +65,27 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 
-# Modelos Pydantic para validación de datos
+# ======================================================================
+# MODELOS PYDANTIC
+# ======================================================================
+
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
+class AddIdentityPayload(BaseModel):
+    id: str
+    full_name: str
+    alias: Optional[str] = ""
+    country: str = "US"
+    city: Optional[str] = ""
+    flag: Optional[str] = "🌐"
+    kyc_status: Optional[str] = "VERIFIED"
+    email: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
 class WebhookPayload(BaseModel):
     token: Optional[str] = None
     bot_id: Optional[str] = None
@@ -84,7 +109,9 @@ class CreateBotPayload(BaseModel):
     id: str
     name: str
     strategy: str
+    identity_id: Optional[str] = None
     proxy_url: Optional[str] = ""
+    jitter_ms: Optional[int] = 120
     start_time: str = "09:30"
     end_time: str = "12:00"
     accounts: Optional[List[Dict[str, Any]]] = []
@@ -96,17 +123,24 @@ class AddAccountPayload(BaseModel):
     broker: str = "Tradovate"
     prop_firm: str = "Apex Trader Funding"
     balance: float = 50000.0
+    titular_name: Optional[str] = ""
+    environment: Optional[str] = "EVALUATION"  # "EVALUATION", "FUNDED_PA", "DEMO"
+    username: Optional[str] = ""
+    password: Optional[str] = ""
+    max_contracts: Optional[int] = 2
+    daily_loss_limit: Optional[float] = 1000.0
 
 
-# Ciclo de vida asíncrono de FastAPI
+# ======================================================================
+# CICLO DE VIDA ASÍNCRONO
+# ======================================================================
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicio: Cargar configuración y arrancar telemetría
     bot_manager.load_config()
     telemetry_task = asyncio.create_task(bot_manager.telemetry_loop(ws_manager.broadcast))
     logger.info("Sistema Central Multi-Bot iniciado correctamente.")
     yield
-    # Cierre: Cancelar tareas y cerrar sesiones de red
     telemetry_task.cancel()
     for bot in bot_manager.bots.values():
         await bot.proxy_connector.close()
@@ -115,11 +149,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Quantum FX - MNQ Multi-Bot Orchestrator",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan
 )
 
-# Middleware CORS para permitir interacciones seguras
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -130,48 +163,136 @@ app.add_middleware(
 
 
 # ======================================================================
-# RUTAS DE LA API (WEBHOOKS & CONTROL)
+# ENDPOINTS DE AUTENTICACIÓN
+# ======================================================================
+
+@app.post("/api/auth/login", summary="Inicio de Sesión")
+async def login(payload: LoginPayload):
+    """Valida las credenciales de acceso institucional."""
+    expected_user = bot_manager.auth.get("username")
+    expected_pass = bot_manager.auth.get("password")
+    session_token = bot_manager.auth.get("session_token")
+
+    if not expected_user or not expected_pass or not session_token:
+        raise HTTPException(status_code=503, detail="Autenticación no configurada.")
+
+    if payload.username == expected_user and payload.password == expected_pass:
+        return {
+            "status": "SUCCESS",
+            "token": session_token,
+            "user": {
+                "username": expected_user,
+                "role": bot_manager.auth.get("role", "ADMIN_TRADER")
+            }
+        }
+    raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+
+
+@app.get("/api/auth/me", summary="Datos del Usuario en Sesión")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Verifica si la sesión actual es válida."""
+    expected_token = bot_manager.auth.get("session_token")
+    token = authorization.replace("Bearer ", "") if authorization else None
+
+    if token and expected_token and token == expected_token:
+        return {
+            "authenticated": True,
+            "username": bot_manager.auth.get("username", "admin"),
+            "role": bot_manager.auth.get("role", "ADMIN_TRADER")
+        }
+    return {"authenticated": False}
+
+
+# ======================================================================
+# CONTROLES DE EMERGENCIA (FLATTEN ALL & STOP ALL)
+# ======================================================================
+
+@app.post("/api/emergency/flatten-all", summary="🔴 Quitar Todas las Órdenes (FLAT)")
+async def emergency_flatten_all():
+    """Cierra instantáneamente todas las posiciones abiertas en todas las cuentas."""
+    res = bot_manager.flatten_all_positions()
+    await ws_manager.broadcast(bot_manager.get_system_snapshot())
+    return res
+
+
+@app.post("/api/emergency/stop-all", summary="⏹️ Kill-Switch Global (Apagar Bots)")
+async def emergency_stop_all():
+    """Pausa todos los bots activos simultáneamente."""
+    count = bot_manager.stop_all_bots()
+    await ws_manager.broadcast(bot_manager.get_system_snapshot())
+    return {"status": "ALL_STOPPED", "bots_paused": count}
+
+
+# ======================================================================
+# GESTIÓN DE IDENTIDADES (PERSONAS TITULARES / KYC)
+# ======================================================================
+
+@app.get("/api/identities", summary="Listar Identidades Titulares")
+async def list_identities():
+    return [i.to_dict() for i in bot_manager.identities.values()]
+
+
+@app.post("/api/identities", summary="Registrar Nueva Identidad (Titular KYC)")
+async def create_identity(payload: AddIdentityPayload):
+    if payload.id in bot_manager.identities:
+        raise HTTPException(status_code=400, detail="Esta identidad ya existe.")
+
+    new_ident = IdentityProfile(
+        id=payload.id,
+        full_name=payload.full_name,
+        alias=payload.alias or payload.full_name,
+        country=payload.country,
+        city=payload.city or "",
+        flag=payload.flag or "🌐",
+        kyc_status=payload.kyc_status or "VERIFIED",
+        email=payload.email or "",
+        notes=payload.notes
+    )
+    bot_manager.identities[payload.id] = new_ident
+    bot_manager.save_config()
+    await ws_manager.broadcast(bot_manager.get_system_snapshot())
+    return {"status": "CREATED", "identity": new_ident.to_dict()}
+
+
+# ======================================================================
+# VERIFICACIÓN DE RED Y PROXIES (SOCKS5 TEST)
+# ======================================================================
+
+@app.post("/api/bots/{bot_id}/proxy-test", summary="Probar Latencia e IP del Proxy")
+async def test_bot_proxy(bot_id: str):
+    res = await bot_manager.test_proxy(bot_id)
+    await ws_manager.broadcast(bot_manager.get_system_snapshot())
+    return res
+
+
+# ======================================================================
+# WEBHOOKS & TRADING CONTROL
 # ======================================================================
 
 @app.post("/api/webhook", summary="Receptor de Señales de TradingView")
 async def receive_webhook(payload: WebhookPayload, authorization: Optional[str] = Header(None)):
-    """
-    Endpoint HTTP POST para recibir alertas JSON emitidas por TradingView.
-    Valida autenticación por token, evalúa la estrategia y replica la orden en las cuentas asignadas.
-    """
     provided_token = payload.token or (authorization.replace("Bearer ", "") if authorization else None)
-    if bot_manager.webhook_token and provided_token != bot_manager.webhook_token:
-        raise HTTPException(status_code=401, detail="Token de webhook inválido o no suministrado.")
+    if not bot_manager.webhook_token:
+        raise HTTPException(status_code=503, detail="Token de webhook no configurado.")
+    if provided_token != bot_manager.webhook_token:
+        raise HTTPException(status_code=401, detail="Token de webhook inválido.")
 
     signal_dict = payload.model_dump()
-    logger.info(f"Señal recibida en /api/webhook: {signal_dict['action']} {signal_dict['ticker']} @ {signal_dict['price']}")
+    logger.info(f"Señal recibida: {signal_dict['action']} MNQ @ {signal_dict['price']}")
 
     results = await bot_manager.dispatch_webhook(signal_dict)
-    
-    # Notificación inmediata al WebSocket
-    snapshot = bot_manager.get_system_snapshot()
-    await ws_manager.broadcast(snapshot)
-
-    return {
-        "status": "PROCESSED",
-        "ticker": payload.ticker,
-        "results": results
-    }
+    await ws_manager.broadcast(bot_manager.get_system_snapshot())
+    return {"status": "PROCESSED", "results": results}
 
 
-@app.get("/api/bots", summary="Obtener estado de todos los bots")
-async def get_all_bots():
-    """Retorna la lista de bots con sus métricas, proxies y cuentas."""
-    return bot_manager.get_system_snapshot()
-
-
-@app.post("/api/bots", summary="Crear nuevo Bot de Trading dinámicamente")
+@app.post("/api/bots", summary="Crear Nuevo Bot Vinculado a Titular")
 async def create_bot(payload: CreateBotPayload):
-    """Permite al usuario dar de alta un nuevo bot en caliente."""
     if payload.id in bot_manager.bots:
-        raise HTTPException(status_code=400, detail=f"El bot con ID '{payload.id}' ya existe.")
+        raise HTTPException(status_code=400, detail=f"El bot '{payload.id}' ya existe.")
 
     strat = get_strategy(payload.strategy)
+    identity = bot_manager.identities.get(payload.identity_id)
+
     new_accounts = []
     for acc_data in payload.accounts:
         new_accounts.append(
@@ -180,7 +301,9 @@ async def create_bot(payload: CreateBotPayload):
                 custom_name=acc_data.get("custom_name", "Cuenta Prop"),
                 broker=acc_data.get("broker", "Tradovate"),
                 prop_firm=acc_data.get("prop_firm", "Apex Trader Funding"),
-                balance=float(acc_data.get("balance", 50000.0))
+                balance=float(acc_data.get("balance", 50000.0)),
+                titular_name=identity.full_name if identity else "",
+                environment=acc_data.get("environment", "EVALUATION")
             )
         )
 
@@ -188,7 +311,9 @@ async def create_bot(payload: CreateBotPayload):
         bot_id=payload.id,
         name=payload.name,
         strategy=strat,
+        identity=identity,
         proxy_url=payload.proxy_url,
+        jitter_ms=payload.jitter_ms or 120,
         schedule={
             "start_time": payload.start_time,
             "end_time": payload.end_time,
@@ -200,31 +325,25 @@ async def create_bot(payload: CreateBotPayload):
 
     bot_manager.bots[payload.id] = new_bot
     bot_manager.save_config()
-    logger.info(f"Nuevo bot creado: {payload.name} ({payload.id})")
-
-    # Transmitir actualización
     await ws_manager.broadcast(bot_manager.get_system_snapshot())
     return {"status": "CREATED", "bot": new_bot.to_dict()}
 
 
 @app.post("/api/bots/{bot_id}/toggle", summary="Activar o Pausar Bot")
 async def toggle_bot(bot_id: str):
-    """Alterna el estado del bot entre ACTIVE y PAUSED."""
     bot = bot_manager.bots.get(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot no encontrado")
 
     bot.status = "PAUSED" if bot.status == "ACTIVE" else "ACTIVE"
-    bot.log_event("STATE", f"Estado cambiado a {bot.status} por el usuario.")
+    bot.log_event("STATE", f"Estado cambiado a {bot.status}.")
     bot_manager.save_config()
-
     await ws_manager.broadcast(bot_manager.get_system_snapshot())
     return {"status": "SUCCESS", "bot_id": bot_id, "new_status": bot.status}
 
 
 @app.put("/api/bots/{bot_id}/schedule", summary="Actualizar horario de trading")
 async def update_schedule(bot_id: str, schedule: ScheduleUpdate):
-    """Modifica la ventana operativa del bot en hora EST."""
     bot = bot_manager.bots.get(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot no encontrado")
@@ -234,52 +353,55 @@ async def update_schedule(bot_id: str, schedule: ScheduleUpdate):
     if schedule.timezone:
         bot.schedule["timezone"] = schedule.timezone
 
-    bot.log_event("CONFIG", f"Horario operativo actualizado a {schedule.start_time} - {schedule.end_time} EST.")
+    bot.log_event("CONFIG", f"Horario operativo: {schedule.start_time} - {schedule.end_time} EST.")
     bot_manager.save_config()
-
     await ws_manager.broadcast(bot_manager.get_system_snapshot())
     return {"status": "UPDATED", "schedule": bot.schedule}
 
 
-@app.post("/api/bots/{bot_id}/accounts", summary="Vincular cuenta a un bot")
+@app.post("/api/bots/{bot_id}/accounts", summary="Vincular Cuenta con Credenciales y Entorno")
 async def add_account(bot_id: str, payload: AddAccountPayload):
-    """Agrega una cuenta con nombre personalizado a la lista de un bot."""
     bot = bot_manager.bots.get(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot no encontrado")
+
+    titular = payload.titular_name or (bot.identity.full_name if bot.identity else "Titular Desconocido")
+    pwd_masked = "••••••••" if payload.password else "••••••••"
 
     new_acc = Account(
         id=payload.id,
         custom_name=payload.custom_name,
         broker=payload.broker,
         prop_firm=payload.prop_firm,
-        balance=payload.balance
+        balance=payload.balance,
+        titular_name=titular,
+        environment=payload.environment or "EVALUATION",
+        username=payload.username or "",
+        password_masked=pwd_masked,
+        max_contracts=payload.max_contracts or 2,
+        daily_loss_limit=payload.daily_loss_limit or 1000.0
     )
     bot.accounts.append(new_acc)
-    bot.log_event("CONFIG", f"Cuenta añadida: {new_acc.custom_name} ({new_acc.broker} / {new_acc.prop_firm})")
+    bot.log_event("CONFIG", f"Cuenta añadida: {new_acc.custom_name} ({new_acc.prop_firm} // Titular: {titular})")
     bot_manager.save_config()
-
     await ws_manager.broadcast(bot_manager.get_system_snapshot())
     return {"status": "ADDED", "account": new_acc.to_dict()}
 
 
-@app.post("/api/bots/{bot_id}/close", summary="Cerrar posiciones abiertas de un bot")
+@app.post("/api/bots/{bot_id}/close", summary="Cerrar posiciones de un bot")
 async def close_bot_positions(bot_id: str):
-    """Cierra de inmediato todas las posiciones activas en las cuentas del bot."""
     bot = bot_manager.bots.get(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot no encontrado")
 
     realized = bot.close_all_positions(bot_manager.market_price)
     bot_manager.save_config()
-
     await ws_manager.broadcast(bot_manager.get_system_snapshot())
     return {"status": "POSITIONS_CLOSED", "bot_id": bot_id, "pnl_realized": realized}
 
 
 @app.get("/api/strategies", summary="Lista de estrategias disponibles")
 async def list_strategies():
-    """Retorna las estrategias que se pueden inyectar en los bots."""
     data = []
     for name, cls in STRATEGY_REGISTRY.items():
         temp = cls()
@@ -291,43 +413,16 @@ async def list_strategies():
     return data
 
 
-@app.post("/api/test-signal", summary="Disparar señal de prueba para MNQ")
-async def test_signal(
-    action: str = Body(default="BUY", embed=True),
-    bot_id: Optional[str] = Body(default=None, embed=True)
-):
-    """Genera una señal de prueba instantánea para validar la replicación en el dashboard."""
-    signal = {
-        "bot_id": bot_id,
-        "token": bot_manager.webhook_token,
-        "ticker": "MNQ",
-        "action": action.upper(),
-        "price": bot_manager.market_price,
-        "contracts": 1,
-        "sl": bot_manager.market_price - 12.0 if action.upper() == "BUY" else bot_manager.market_price + 12.0,
-        "tp": bot_manager.market_price + 25.0 if action.upper() == "BUY" else bot_manager.market_price - 25.0,
-        "fvg_valid": True,
-        "smt_divergence": True,
-        "delta": 220
-    }
-    results = await bot_manager.dispatch_webhook(signal)
-    await ws_manager.broadcast(bot_manager.get_system_snapshot())
-    return {"test_signal": signal, "results": results}
-
-
 # ======================================================================
 # WEBSOCKET REAL-TIME STREAMING
 # ======================================================================
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Transmite estado en tiempo real (PnL, latencias, cuentas, logs) a los clientes."""
     await ws_manager.connect(websocket)
     try:
-        # Enviar estado inicial inmediato al conectar
         await websocket.send_json(bot_manager.get_system_snapshot())
         while True:
-            # Escucha comandos que puedan venir desde el cliente UI
             data = await websocket.receive_text()
             try:
                 cmd = json.loads(data)

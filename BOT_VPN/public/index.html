@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QUANTUM FX // MNQ Multi-Bot Orchestrator</title>
+  <title>QUANTUM FX // Plataforma Institucional Multi-Bot MNQ</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,23 +11,74 @@
 </head>
 <body>
 
-  <!-- Barra Superior de Control y Métricas Globales -->
-  <header class="top-nav">
+  <!-- ======================================================================
+       PANTALLA DE INICIO DE SESIÓN (LOGIN OVERLAY)
+       ====================================================================== -->
+  <div class="login-overlay" id="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-brand">
+          <span class="logo-icon">▲</span>
+          <div class="login-brand-text">
+            <h1>QUANTUM FX</h1>
+            <span>INSTITUTIONAL FUTURES TRADING // CME MNQ</span>
+          </div>
+        </div>
+        <p class="login-sub">Acceso Seguro a la Terminal Multi-Bot & Replicación Prop Firms</p>
+      </div>
+
+      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label for="login-username">Usuario o ID de Operador</label>
+          <input type="text" id="login-username" placeholder="ej. admin" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Contraseña Maestra</label>
+          <div class="password-wrap">
+            <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('login-password')">👁️</button>
+          </div>
+        </div>
+
+        <div class="login-helpers">
+          <label class="checkbox-label">
+            <input type="checkbox" id="login-remember" checked> Recordar Sesión
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-login-submit">
+          <span>Ingresar a la Terminal</span> ➔
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <span>Aislamiento de Red SOCKS5 // Anti-Mirroring & Titulares KYC</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======================================================================
+       BARRA SUPERIOR (HEADER INSTITUCIONAL)
+       ====================================================================== -->
+  <header class="top-nav" id="main-header">
     <div class="brand">
       <div class="brand-logo">
         <span class="logo-icon">▲</span>
         <div class="brand-text">
           <span class="brand-title">QUANTUM FX</span>
-          <span class="brand-subtitle">MNQ FUTURES MULTI-BOT // WINDOWS HIGH-PERFORMANCE</span>
+          <span class="brand-subtitle">MNQ FUTURES MULTI-BOT // HIGH-PERFORMANCE</span>
         </div>
       </div>
-      <div class="market-badge">
+      <div class="market-badge" title="Cotización Micro E-mini Nasdaq en CME">
         <span class="pulse-dot"></span>
         <span class="ticker-label">MNQ-CME</span>
         <span class="market-price" id="market-price-val">18,245.50</span>
       </div>
     </div>
 
+    <!-- Métricas Globales de la Sesión -->
     <div class="global-metrics">
       <div class="metric-item">
         <span class="m-label">PnL SESIÓN GLOBAL</span>
@@ -47,42 +98,214 @@
       </div>
     </div>
 
+    <!-- Controles de Emergencia y Perfil de Usuario -->
     <div class="top-actions">
-      <div class="ws-status" id="ws-status" title="Estado de conexión WebSocket">
+      <div class="ws-status" id="ws-status" title="Estado de conexión en tiempo real">
         <span class="ws-dot"></span>
         <span class="ws-text">Conectando...</span>
       </div>
-      <div class="test-signals-group">
-        <button class="btn btn-test-buy" onclick="triggerTestSignal('BUY')" title="Simular señal BUY desde TradingView">⚡ Test BUY</button>
-        <button class="btn btn-test-sell" onclick="triggerTestSignal('SELL')" title="Simular señal SELL desde TradingView">⚡ Test SELL</button>
+
+      <!-- BOTONES DE PÁNICO Y CONTROL INSTITUCIONAL -->
+      <div class="emergency-controls-group">
+        <button class="btn btn-emergency-flatten" onclick="promptFlattenAll()" title="Cierra inmediatamente todas las posiciones abiertas en todas las cuentas">
+          <span class="btn-dot">🔴</span> Quitar Órdenes (FLAT)
+        </button>
+        <button class="btn btn-emergency-stop" onclick="promptStopAll()" title="Apaga y pausa inmediatamente todos los bots activos">
+          <span class="btn-dot">⏹️</span> Apagar Bots
+        </button>
       </div>
+
       <button class="btn btn-primary" onclick="openAddBotModal()">
-        <span class="btn-icon">+</span> Agregar Bot
+        <span class="btn-icon">+</span> Nuevo Bot
       </button>
+
+      <!-- Perfil de Usuario / Logout -->
+      <div class="user-profile-menu">
+        <div class="user-avatar" id="header-user-avatar">AT</div>
+        <div class="user-details">
+          <span class="user-name" id="header-user-name">admin</span>
+          <span class="user-role-badge">ADMIN TRADER</span>
+        </div>
+        <button class="btn-logout" onclick="logoutUser()" title="Cerrar Sesión">⏻</button>
+      </div>
     </div>
   </header>
 
-  <!-- Contenedor Principal: Grid de Tarjetas de Bots -->
-  <main class="main-container">
-    <div class="section-header">
-      <div class="section-title-wrap">
-        <h2>Unidades de Ejecución en Paralelo</h2>
-        <span class="section-sub">Aislamiento SOCKS5 por Socket // Multi-Cuentas Apex, Topstep, Leelo, Blue Guardian</span>
-      </div>
-      <div class="filter-controls">
-        <span class="filter-tag active" onclick="filterBots('ALL')">Todos</span>
-        <span class="filter-tag" onclick="filterBots('ACTIVE')">Activos</span>
-        <span class="filter-tag" onclick="filterBots('PAUSED')">Pausados</span>
-      </div>
-    </div>
 
-    <!-- Grid dinámico de tarjetas -->
-    <div class="bot-grid" id="bot-grid">
-      <!-- Las tarjetas se generan dinámicamente mediante app.js -->
+  <!-- ======================================================================
+       BARRA DE NAVEGACIÓN SECUNDARIA (PESTAÑAS)
+       ====================================================================== -->
+  <nav class="sub-nav-tabs">
+    <div class="tabs-container">
+      <button class="tab-link active" onclick="switchTab('dashboard')">
+        <span class="tab-icon">📊</span> Dashboard & Bots
+      </button>
+      <button class="tab-link" onclick="switchTab('titulares')">
+        <span class="tab-icon">👤</span> Titulares & KYC (<span id="count-titulares">3</span>)
+      </button>
+      <button class="tab-link" onclick="switchTab('cuentas')">
+        <span class="tab-icon">💼</span> Cuentas Prop (<span id="count-cuentas">6</span>)
+      </button>
+      <button class="tab-link" onclick="switchTab('vpn')">
+        <span class="tab-icon">🛡️</span> VPN & Proxies
+      </button>
+      <button class="tab-link" onclick="switchTab('webhook')">
+        <span class="tab-icon">⚡</span> TradingView Webhook
+      </button>
     </div>
+  </nav>
+
+
+  <!-- ======================================================================
+       CONTENEDOR DE VISTAS PRINCIPALES
+       ====================================================================== -->
+  <main class="main-container">
+
+    <!-- 1. VISTA DASHBOARD (BOTS GRID) -->
+    <section class="tab-view active" id="view-dashboard">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Unidades de Ejecución & Titulares Asignados</h2>
+          <span class="section-sub">Aislamiento SOCKS5 Dedicado // Anti-Mirroring con Jitter // Anti-Flagging Geográfico</span>
+        </div>
+        <div class="filter-controls">
+          <span class="filter-tag active" onclick="filterBots('ALL')">Todos</span>
+          <span class="filter-tag" onclick="filterBots('ACTIVE')">Activos</span>
+          <span class="filter-tag" onclick="filterBots('PAUSED')">Pausados</span>
+        </div>
+      </div>
+
+      <div class="bot-grid" id="bot-grid">
+        <!-- Renderizado dinámico desde app.js -->
+      </div>
+    </section>
+
+
+    <!-- 2. VISTA TITULARES & KYC -->
+    <section class="tab-view" id="view-titulares">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Personas Físicas & Identidades Legales (KYC)</h2>
+          <span class="section-sub">Cada titular cuenta con su propio bot, IP dedicada y cuentas de prop firms compradas a su nombre.</span>
+        </div>
+        <button class="btn btn-outline" onclick="openAddIdentityModal()">
+          <span class="btn-icon">+</span> Registrar Titular
+        </button>
+      </div>
+
+      <div class="identities-grid" id="identities-grid">
+        <!-- Tarjetas de identidades renderizadas dinámicamente -->
+      </div>
+    </section>
+
+
+    <!-- 3. VISTA CUENTAS PROP GESTIONADAS -->
+    <section class="tab-view" id="view-cuentas">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Cuentas Replicadas de Empresas de Fondeo</h2>
+          <span class="section-sub">Apex Trader Funding, Topstep, Leelo Trading, Blue Guardian, MyFundedFutures</span>
+        </div>
+        <div class="section-actions-group">
+          <button class="btn btn-primary" onclick="openAddAccountModal()">
+            <span class="btn-icon">+</span> Vincular Cuenta
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla Global de Cuentas -->
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>TITULAR (PERSONA)</th>
+                <th>NOMBRE CUENTA</th>
+                <th>PROP FIRM</th>
+                <th>BROKER</th>
+                <th>ENTORNO</th>
+                <th>USUARIO / LOGIN</th>
+                <th>BALANCE</th>
+                <th>PnL FLOTANTE</th>
+                <th>CONTRATOS</th>
+                <th>MÁX. CTOS</th>
+                <th>STOP DIARIO</th>
+                <th>ESTADO</th>
+              </tr>
+            </thead>
+            <tbody id="global-accounts-tbody">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 4. VISTA VPN & PROXIES SOCKS5 -->
+    <section class="tab-view" id="view-vpn">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Centro de Túneles VPN & Aislamiento de Red</h2>
+          <span class="section-sub">Garantiza que la máquina Windows no altere su IP global y cada bot emita órdenes desde su propia IP pública.</span>
+        </div>
+      </div>
+
+      <div class="vpn-grid" id="vpn-grid">
+        <!-- Renderizado dinámico de tarjetas de red -->
+      </div>
+    </section>
+
+
+    <!-- 5. VISTA TRADINGVIEW WEBHOOK -->
+    <section class="tab-view" id="view-webhook">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Configuración de Alertas & Webhooks de TradingView</h2>
+          <span class="section-sub">Conecta tus indicadores y estrategias de Pine Script directamente al motor QUANTUM FX.</span>
+        </div>
+      </div>
+
+      <div class="webhook-panel-grid">
+        <div class="webhook-card">
+          <h3>🔗 URL del Webhook Receptor</h3>
+          <p class="card-desc">Copia y pega esta URL en la casilla "URL del Webhook" al crear una alerta en TradingView.</p>
+          <div class="copy-input-group">
+            <input type="text" id="webhook-url-input" readonly value="http://TU_IP_O_DOMINIO:8000/api/webhook">
+            <button class="btn btn-outline" onclick="copyWebhookUrl()">Copiar URL</button>
+          </div>
+
+          <h3 class="mt-4">🔑 Token Secreto de Autenticación</h3>
+          <p class="card-desc">Configura un token propio en <code>config.json</code>. No compartas ni publiques ese archivo.</p>
+        </div>
+
+        <div class="webhook-card">
+          <h3>📝 Formato de Mensaje JSON de la Alerta</h3>
+          <p class="card-desc">Pega este JSON en el cuerpo del mensaje de la alerta de TradingView. Puedes usar variables dinámicas de Pine Script.</p>
+          <pre class="code-box text-mono"><code>{
+  "token": "&lt;CONFIGURE_WEBHOOK_TOKEN&gt;",
+  "ticker": "MNQ",
+  "action": "{{strategy.order.action}}",
+  "price": {{close}},
+  "contracts": 1,
+  "sl": 0.0,
+  "tp": 0.0,
+  "strategy": "ICTStrategy",
+  "comment": "TradingView Alert"
+}</code></pre>
+          <button class="btn btn-outline btn-block mt-2" onclick="copyWebhookPayload()">Copiar Formato JSON</button>
+        </div>
+      </div>
+    </section>
+
   </main>
 
-  <!-- Modal Detallado de Inspección de Bot -->
+
+  <!-- ======================================================================
+       MODALES
+       ====================================================================== -->
+
+  <!-- 1. Modal Detallado de Inspección de Bot -->
   <div class="modal-overlay" id="bot-detail-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -90,6 +313,7 @@
           <div class="bot-status-tag" id="modal-bot-status-badge">🟢 ACTIVO</div>
           <h2 id="modal-bot-name">MNQ ICT Scalper</h2>
           <span class="badge-strat" id="modal-bot-strategy">ICTStrategy</span>
+          <span class="badge-titular-pill" id="modal-bot-titular-badge">👤 Titular</span>
         </div>
         <div class="modal-header-actions">
           <button class="btn btn-secondary btn-sm" id="modal-toggle-btn" onclick="toggleCurrentModalBot()">Pausar Bot</button>
@@ -137,104 +361,297 @@
             <span class="kpi-sub" id="modal-win-loss">0 Ganados / 0 Perdidos</span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-label">TRADES EJECUTADOS</span>
-            <span class="kpi-val" id="modal-total-trades">0</span>
-            <span class="kpi-sub">Replicados en paralelo</span>
+            <span class="kpi-label">REGLA CONSISTENCIA (MAX DÍA)</span>
+            <span class="kpi-val text-amber" id="modal-consistency-val">0.0%</span>
+            <span class="kpi-sub">Límite institucional máx 30%</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">MAX DRAWDOWN</span>
             <span class="kpi-val text-danger" id="modal-max-dd">$0.00</span>
-            <span class="kpi-sub">Control de riesgo institucional</span>
+            <span class="kpi-sub">Trailing Stop de seguridad</span>
           </div>
         </div>
 
-        <!-- Tabla de Cuentas Gestionadas -->
+        <!-- Tabla de Cuentas del Bot -->
         <div class="detail-section">
           <div class="section-sub-header">
-            <h3>Cuentas Gestionadas Vinculadas</h3>
-            <button class="btn btn-outline btn-xs" onclick="openAddAccountPrompt()">+ Vincular Cuenta</button>
+            <h3>Cuentas Gestionadas de este Titular</h3>
+            <button class="btn btn-outline btn-xs" onclick="openAddAccountModalForCurrentBot()">+ Vincular Cuenta</button>
           </div>
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>NOMBRE PERSONALIZADO</th>
-                  <th>PROP FIRM / BROKER</th>
-                  <th>ESTADO</th>
+                  <th>NOMBRE CUENTA</th>
+                  <th>PROP FIRM</th>
+                  <th>BROKER</th>
+                  <th>ENTORNO</th>
+                  <th>LOGIN</th>
                   <th>BALANCE</th>
                   <th>PnL FLOTANTE</th>
-                  <th>POSICIÓN MNQ</th>
                   <th>CONTRATOS</th>
-                  <th>ÚLTIMA ORDEN</th>
+                  <th>ESTADO</th>
                 </tr>
               </thead>
-              <tbody id="modal-accounts-tbody">
-                <!-- Cuentas renderizadas dinámicamente -->
-              </tbody>
+              <tbody id="modal-accounts-tbody"></tbody>
             </table>
           </div>
         </div>
 
-        <!-- Consola de Logs en Tiempo Real -->
+        <!-- Consola de Logs -->
         <div class="detail-section">
           <div class="section-sub-header">
-            <h3>Consola de Auditoría y Eventos (Segundo a Segundo)</h3>
+            <h3>Consola de Auditoría y Eventos</h3>
             <span class="log-indicator">🔴 STREAMING EN VIVO</span>
           </div>
-          <div class="terminal-console" id="modal-console-logs">
-            <!-- Eventos generados en tiempo real -->
-          </div>
+          <div class="terminal-console" id="modal-console-logs"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal para Agregar Nuevo Bot -->
+
+  <!-- 2. Modal Profesional para Vincular Cuenta (NUEVO) -->
+  <div class="modal-overlay" id="add-account-modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>Vincular Nueva Cuenta de Fondeo</h2>
+        <button class="modal-close" onclick="closeAddAccountModal()">&times;</button>
+      </div>
+      <form class="modal-body form-body" onsubmit="submitAddAccount(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bot y Titular Asignado *</label>
+            <select id="acc-target-bot" required>
+              <!-- Llenado dinámico con bots y sus titulares -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nombre / Alias de la Cuenta *</label>
+            <input type="text" id="acc-custom-name" placeholder="ej. Apex 50k PA #3" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Empresa de Fondeo (Prop Firm) *</label>
+            <select id="acc-prop-firm" required>
+              <option value="Apex Trader Funding">Apex Trader Funding</option>
+              <option value="Topstep">Topstep</option>
+              <option value="Leelo Trading">Leelo Trading</option>
+              <option value="Blue Guardian">Blue Guardian</option>
+              <option value="MyFundedFutures">MyFundedFutures</option>
+              <option value="Bulenox">Bulenox</option>
+              <option value="TradeDay">TradeDay</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Broker / Conector *</label>
+            <select id="acc-broker" required>
+              <option value="Tradovate">Tradovate API (REST & WS)</option>
+              <option value="Rithmic">Rithmic (R|API+ Chicago)</option>
+              <option value="ProjectX">ProjectX</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Entorno Operativo *</label>
+            <select id="acc-environment" required>
+              <option value="FUNDED_PA">Funded / PA (Performance Account)</option>
+              <option value="EVALUATION">Evaluation (Prueba de Fondeo)</option>
+              <option value="DEMO">Simulación / Demo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Balance Inicial en USD *</label>
+            <input type="number" id="acc-balance" value="50000" step="500" required>
+          </div>
+        </div>
+
+        <!-- Credenciales de la cuenta -->
+        <div class="form-section-title">Credenciales de Acceso a la Prop Firm</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Usuario / Account ID *</label>
+            <input type="text" id="acc-username" placeholder="ej. APEX-992140" required>
+          </div>
+          <div class="form-group">
+            <label>Contraseña / API Key *</label>
+            <div class="password-wrap">
+              <input type="password" id="acc-password" placeholder="••••••••" required>
+              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('acc-password')">👁️</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parámetros de Riesgo -->
+        <div class="form-section-title">Parámetros de Riesgo y Consistencia</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Máx. Contratos MNQ Permitidos</label>
+            <input type="number" id="acc-max-contracts" value="2" min="1" max="20" required>
+          </div>
+          <div class="form-group">
+            <label>Límite de Pérdida Diaria ($ USD)</label>
+            <input type="number" id="acc-daily-loss" value="1000" step="50" required>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddAccountModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Vincular y Conectar Cuenta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- 3. Modal para Crear Nuevo Bot -->
   <div class="modal-overlay" id="add-bot-modal">
-    <div class="modal-content modal-sm">
+    <div class="modal-content modal-md">
       <div class="modal-header">
         <h2>Crear Nuevo Bot de Trading</h2>
         <button class="modal-close" onclick="closeAddBotModal()">&times;</button>
       </div>
-      <div class="modal-body form-body">
-        <div class="form-group">
-          <label>ID Único del Bot</label>
-          <input type="text" id="new-bot-id" placeholder="ej. bot_4_scalper">
+      <form class="modal-body form-body" onsubmit="submitCreateBot(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>ID Único del Bot *</label>
+            <input type="text" id="new-bot-id" placeholder="ej. bot_4_scalper" required>
+          </div>
+          <div class="form-group">
+            <label>Nombre del Bot *</label>
+            <input type="text" id="new-bot-name" placeholder="ej. MNQ New York Breaker" required>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Nombre del Bot</label>
-          <input type="text" id="new-bot-name" placeholder="ej. MNQ Asia Session Breakout">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Persona Titular Asignada (KYC) *</label>
+            <select id="new-bot-identity" required>
+              <!-- Opciones de titulares cargadas dinámicamente -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Estrategia Inyectada *</label>
+            <select id="new-bot-strategy" required>
+              <option value="ICTStrategy">ICTStrategy (FVG, MSS, Killzones)</option>
+              <option value="SMTStrategy">SMTStrategy (Smart Money Tool Divergences)</option>
+              <option value="OrderFlowStrategy">OrderFlowStrategy (Delta, CVD, Absorption)</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Estrategia Inyectada</label>
-          <select id="new-bot-strategy">
-            <option value="ICTStrategy">ICTStrategy (FVG, MSS, Killzones)</option>
-            <option value="SMTStrategy">SMTStrategy (Smart Money Tool Divergences)</option>
-            <option value="OrderFlowStrategy">OrderFlowStrategy (Delta, CVD, Absorption)</option>
-          </select>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Proxy SOCKS5 Dedicado</label>
+            <input type="text" id="new-bot-proxy" placeholder="socks5://user:pass@127.0.0.1:1083">
+            <small class="form-hint">Aísla los sockets sin alterar la IP de Windows.</small>
+          </div>
+          <div class="form-group">
+            <label>Anti-Mirroring Jitter (ms)</label>
+            <input type="number" id="new-bot-jitter" value="120" min="40" max="500">
+            <small class="form-hint">Retardo aleatorio estocástico entre órdenes.</small>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Proxy SOCKS5 Dedicado (Opcional)</label>
-          <input type="text" id="new-bot-proxy" placeholder="socks5://user:pass@127.0.0.1:1083">
-          <small class="form-hint">Si se deja vacío, utilizará la conexión de red directa.</small>
-        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label>Hora Inicio (EST)</label>
-            <input type="time" id="new-bot-start" value="09:30">
+            <input type="time" id="new-bot-start" value="09:30" required>
           </div>
           <div class="form-group">
             <label>Hora Fin (EST)</label>
-            <input type="time" id="new-bot-end" value="12:00">
+            <input type="time" id="new-bot-end" value="12:00" required>
           </div>
         </div>
+
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeAddBotModal()">Cancelar</button>
-          <button class="btn btn-primary" onclick="submitCreateBot()">Crear y Desplegar Bot</button>
+          <button type="button" class="btn btn-secondary" onclick="closeAddBotModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Crear y Desplegar Bot</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- 4. Modal Registrar Nueva Persona Titular (KYC) -->
+  <div class="modal-overlay" id="add-identity-modal">
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h2>Registrar Nuevo Titular (KYC)</h2>
+        <button class="modal-close" onclick="closeAddIdentityModal()">&times;</button>
+      </div>
+      <form class="modal-body form-body" onsubmit="submitAddIdentity(event)">
+        <div class="form-group">
+          <label>ID Interno *</label>
+          <input type="text" id="new-ident-id" placeholder="ej. id_roberto" required>
+        </div>
+        <div class="form-group">
+          <label>Nombre y Apellidos Completos *</label>
+          <input type="text" id="new-ident-name" placeholder="ej. Roberto Gómez Bolaños" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>País (Código ISO) *</label>
+            <input type="text" id="new-ident-country" placeholder="US, ES, MX, AR..." required maxlength="3">
+          </div>
+          <div class="form-group">
+            <label>Ciudad / Estado</label>
+            <input type="text" id="new-ident-city" placeholder="ej. Ciudad de México">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Emoji Bandera</label>
+            <input type="text" id="new-ident-flag" placeholder="🇲🇽" maxlength="4">
+          </div>
+          <div class="form-group">
+            <label>Estado de KYC</label>
+            <select id="new-ident-kyc">
+              <option value="VERIFIED">Verificado (Aprobado)</option>
+              <option value="PENDING">En Revisión / Pendiente</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Correo Electrónico de las Cuentas</label>
+          <input type="email" id="new-ident-email" placeholder="titular@correo.com">
+        </div>
+        <div class="form-group">
+          <label>Notas Internas</label>
+          <textarea id="new-ident-notes" rows="2" placeholder="Documento ID, fecha de nacimiento, contacto..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddIdentityModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar Persona</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- 5. Modal de Confirmación Institucional -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-content modal-confirm">
+      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <h2 id="confirm-title">¿Confirmar Acción?</h2>
+      <p id="confirm-message">Esta es una acción crítica que afectará la operativa en tiempo real.</p>
+      <div class="modal-footer confirm-actions">
+        <button class="btn btn-secondary" onclick="resolveConfirm(false)">Cancelar</button>
+        <button class="btn btn-danger" id="confirm-ok-btn" onclick="resolveConfirm(true)">Confirmar</button>
       </div>
     </div>
   </div>
+
+
+  <!-- ======================================================================
+       CONTENEDOR DE NOTIFICACIONES TOAST (NOTIFICACIONES EN VIVO)
+       ====================================================================== -->
+  <div class="toast-container" id="toast-container"></div>
+
 
   <script src="/static/app.js"></script>
 </body>

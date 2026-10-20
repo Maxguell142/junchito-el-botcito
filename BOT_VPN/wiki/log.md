@@ -35,3 +35,15 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - Validada la ausencia de páginas huérfanas: todas las páginas en `wiki/` están catalogadas en `wiki/index.md` y cuentan con referencias cruzadas bidireccionales.
 - Verificado el cumplimiento de formato YAML frontmatter en todos los documentos.
 - Estado de la base de conocimiento: Saludable y 100% sincronizada con el código fuente del motor de trading.
+
+## [2026-10-16] query | Extracción de contexto integral del sistema QUANTUM FX
+- Se analizó la arquitectura general, el motor de ejecución en Python/Node, el aislamiento por proxies SOCKS5, la replicación multi-cuenta de MNQ, las estrategias algorítmicas y el dashboard.
+- Contexto consolidado para guiar las siguientes fases de desarrollo solicitadas por el usuario.
+
+## [2026-10-17] build | Arquitectura Institucional de Proxies Residenciales ISP (US) y Anti-Mirroring
+- Documentada la configuración de proxies SOCKS5 por entorno; las direcciones y los datos de titulares se mantienen en la configuración local.
+- Ajustado el rango de Anti-Mirroring Jitter entre 50ms y 350ms con distribución estocástica por cuenta.
+- Integrado en el Dashboard y la consola el indicador activo de ISP, puerto SOCKS5, Geo-Match OK con nodo US y latencia directa hacia CME Chicago.
+
+## [2026-10-17] query | Recomendación de nuevas arquitecturas de Frontend y Backend
+- Propuesta de patrones arquitectónicos avanzados: Event-Driven Queue (EDA/ZeroMQ), Circuit Breaker de riesgo institucional, graficación Canvas/WebGL (Lightweight Charts), aislamiento multi-proceso, sidecar de Telegram y PWA.
