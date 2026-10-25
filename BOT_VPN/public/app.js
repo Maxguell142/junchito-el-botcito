@@ -18,6 +18,7 @@ const state = {
   activeTab: 'dashboard',
   bots: [],
   identities: [],
+  riskPolicy: null,
   selectedBotId: null,
   activeFilter: 'ALL',
   marketPrice: 18245.50,
@@ -47,6 +48,19 @@ function updateHeaderUser() {
   const nameElem = document.getElementById('header-user-name');
   if (avatar) avatar.textContent = (state.currentUser.username || 'AD').substring(0, 2).toUpperCase();
   if (nameElem) nameElem.textContent = state.currentUser.username || 'admin';
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    state.token = null;
+    localStorage.removeItem('quantum_auth_token');
+    ws?.close();
+    document.getElementById('login-overlay')?.classList.remove('hidden');
+  }
+  return response;
 }
 
 function togglePasswordVisibility(inputId) {
@@ -79,10 +93,13 @@ async function handleLoginSubmit(event) {
 
     if (remember) {
       localStorage.setItem('quantum_auth_token', state.token);
+    } else {
+      localStorage.removeItem('quantum_auth_token');
     }
 
     document.getElementById('login-overlay').classList.add('hidden');
     updateHeaderUser();
+    initWebSocket();
     showToast(`Bienvenido de nuevo, ${state.currentUser.username}`, 'success');
   } catch (err) {
     showToast(err.message, 'error');
@@ -93,8 +110,14 @@ async function logoutUser() {
   const ok = await confirmModal('Cerrar Sesión', '¿Deseas desconectar tu sesión institucional?', false);
   if (!ok) return;
 
+  try {
+    if (state.token) await apiFetch('/api/auth/logout', { method: 'POST' });
+  } catch (err) {
+    console.warn('La sesión local se cerró aunque el servidor no respondió.', err);
+  }
   state.token = null;
   localStorage.removeItem('quantum_auth_token');
+  ws?.close();
   document.getElementById('login-overlay').classList.remove('hidden');
   showToast('Sesión finalizada correctamente', 'info');
 }
@@ -137,11 +160,18 @@ function initWebSocket() {
       state.wsConnected = true;
       updateWsStatus('En Línea', true);
       clearTimeout(reconnectTimer);
+      ws.send(JSON.stringify({ action: 'AUTH', token: state.token }));
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === 'AUTH_ERROR') {
+          state.token = null;
+          localStorage.removeItem('quantum_auth_token');
+          document.getElementById('login-overlay')?.classList.remove('hidden');
+          return;
+        }
         if (data.type === 'SNAPSHOT') {
           handleStateSnapshot(data);
         }
@@ -150,10 +180,19 @@ function initWebSocket() {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       state.wsConnected = false;
-      updateWsStatus('Reconectando...', false);
-      reconnectTimer = setTimeout(initWebSocket, 2000);
+      if (event.code === 1008 || event.code === 4401) {
+        state.token = null;
+        localStorage.removeItem('quantum_auth_token');
+        document.getElementById('login-overlay')?.classList.remove('hidden');
+      }
+      if (state.token) {
+        updateWsStatus('Reconectando...', false);
+        reconnectTimer = setTimeout(initWebSocket, 2000);
+      } else {
+        updateWsStatus('Desconectado', false);
+      }
     };
 
     ws.onerror = () => {
@@ -177,6 +216,7 @@ function updateWsStatus(text, connected) {
 function handleStateSnapshot(snapshot) {
   state.bots = snapshot.bots || [];
   state.identities = snapshot.identities || [];
+  state.riskPolicy = snapshot.risk_policy || null;
   state.marketPrice = snapshot.market_price_mnq || 18245.50;
 
   // Actualizar Header
@@ -229,7 +269,7 @@ async function promptFlattenAll() {
   if (!confirmed) return;
 
   try {
-    const resp = await fetch('/api/emergency/flatten-all', { method: 'POST' });
+    const resp = await apiFetch('/api/emergency/flatten-all', { method: 'POST' });
     const data = await resp.json();
     showToast(`Posiciones cerradas (FLAT). PnL Realizado: ${formatCurrency(data.total_realized_pnl)}`, 'success');
   } catch (err) {
@@ -246,7 +286,7 @@ async function promptStopAll() {
   if (!confirmed) return;
 
   try {
-    const resp = await fetch('/api/emergency/stop-all', { method: 'POST' });
+    const resp = await apiFetch('/api/emergency/stop-all', { method: 'POST' });
     const data = await resp.json();
     showToast(`Kill-Switch activado: ${data.bots_paused} bots han sido pausados.`, 'warn');
   } catch (err) {
@@ -324,14 +364,14 @@ function renderBotGrid() {
         <div class="bot-net-strip" style="flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px;">
           <div style="display: flex; justify-content: space-between; width: 100%;">
             <div>
-              <span class="net-ip-tag font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || '192.0.2.1')}:${bot.proxy_port || 10808}</span>
+              <span class="net-ip-tag font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || 'No verificada')}</span>
               <span style="margin: 0 4px; opacity: 0.4;">|</span>
-              <span class="net-ping-tag font-bold">⚡ ${bot.proxy_ping_ms || 12.8} ms (CME Chicago)</span>
+              <span class="net-ping-tag font-bold">${bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'Latencia no verificada'}</span>
             </div>
             <span style="font-size: 0.68rem; color: var(--text-secondary);">${escapeHtml(bot.isp_provider ? bot.isp_provider.split(' ')[0] : 'ISP')}</span>
           </div>
           <div class="geo-match-tag ${bot.geo_consistent ? 'ok' : 'warn'}" style="width: 100%; justify-content: space-between;">
-            <span>${escapeHtml(bot.geo_match_status || '🛡️ Geo-Match OK // US Node (Residential ISP)')}</span>
+            <span>${escapeHtml(bot.geo_match_status || 'No verificado')}</span>
             <span style="font-size: 0.65rem; opacity: 0.8;">Jitter: ${bot.jitter_min_ms || 50}-${bot.jitter_max_ms || 350}ms</span>
           </div>
         </div>
@@ -462,6 +502,15 @@ function renderGlobalAccounts() {
   tbody.innerHTML = allAccounts.map(acc => {
     const pnlClass = acc.floating_pnl >= 0 ? 'text-neon' : 'text-danger';
     const titular = acc.titular_name || (acc.bot_ident ? acc.bot_ident.full_name : 'Titular');
+    const riskLimits = state.riskPolicy?.limits || {};
+    const maxContracts = Math.min(
+      acc.max_contracts ?? 2,
+      riskLimits.max_contracts_per_account ?? Number.POSITIVE_INFINITY
+    );
+    const dailyLossLimit = Math.min(
+      acc.daily_loss_limit ?? 1000,
+      riskLimits.daily_loss_per_account ?? Number.POSITIVE_INFINITY
+    );
 
     return `
       <tr>
@@ -474,8 +523,8 @@ function renderGlobalAccounts() {
         <td class="text-mono font-semibold">${formatCurrency(acc.balance)}</td>
         <td class="text-mono ${pnlClass}">${formatCurrency(acc.floating_pnl)}</td>
         <td class="text-mono">${acc.active_contracts} ctos</td>
-        <td class="text-mono">${acc.max_contracts || 2}</td>
-        <td class="text-mono">$${acc.daily_loss_limit || 1000}</td>
+        <td class="text-mono">${maxContracts}</td>
+        <td class="text-mono">$${dailyLossLimit}</td>
         <td><span class="text-neon" style="font-size: 0.72rem;">● ${escapeHtml(acc.status)}</span></td>
       </tr>`;
   }).join('');
@@ -507,27 +556,27 @@ function renderVpnCenter() {
         <div class="vpn-ping-box">
           <div class="ping-stat-row">
             <span class="text-secondary">Proveedor ISP Residencial:</span>
-            <span class="text-mono text-neon">${escapeHtml(bot.isp_provider || 'Comcast Cable Communications')}</span>
+            <span class="text-mono">${escapeHtml(bot.isp_provider || 'No verificado')}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Ubicación del Nodo US:</span>
-            <span class="text-mono">${escapeHtml(bot.node_location || 'New York, NY (US)')}</span>
+            <span class="text-mono">${escapeHtml(bot.node_location || 'No verificado')}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Proxy SOCKS5:</span>
-            <span class="text-mono" style="font-size: 0.72rem;">${escapeHtml(bot.proxy_url || 'socks5://ny-res.quantum-network.com:10808')}</span>
+            <span class="text-mono" style="font-size: 0.72rem;">${escapeHtml(bot.proxy_url || 'No configurado')}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">IP Pública Saliente:</span>
-            <span class="text-mono text-neon font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || '192.0.2.1')}:${bot.proxy_port || 10808}</span>
+            <span class="text-mono font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || 'No verificada')}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Latencia Socket (CME Chicago):</span>
-            <span class="text-mono font-bold text-neon">⚡ ${bot.proxy_ping_ms || 12.8} ms</span>
+            <span class="text-mono font-bold">${bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'No verificada'}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Anti-Flagging Geográfico:</span>
-            <span class="${bot.geo_consistent ? 'text-neon' : 'text-amber'}">${escapeHtml(bot.geo_description || 'Geo-Match OK // US Node')}</span>
+            <span class="${bot.geo_consistent ? 'text-neon' : 'text-amber'}">${escapeHtml(bot.geo_description || 'No verificado')}</span>
           </div>
         </div>
 
@@ -541,9 +590,11 @@ function renderVpnCenter() {
 async function testProxyPing(botId) {
   try {
     showToast(`Ejecutando ping para proxy de ${botId}...`, 'info');
-    const resp = await fetch(`/api/bots/${botId}/proxy-test`, { method: 'POST' });
-    if (!resp.ok) throw new Error('Error en prueba de proxy');
+    const resp = await apiFetch(`/api/bots/${botId}/proxy-test`, { method: 'POST' });
     const res = await resp.json();
+    if (!resp.ok || !res.is_healthy) {
+      throw new Error(res.message || res.detail || 'La conexión real del proxy no está disponible.');
+    }
     showToast(`Test exitoso: Ping ${res.ping_ms}ms // IP ${res.detected_ip}`, 'success');
   } catch (err) {
     showToast(`Fallo de conexión al proxy: ${err.message}`, 'error');
@@ -586,13 +637,11 @@ async function submitAddAccount(event) {
   const broker = document.getElementById('acc-broker').value;
   const environment = document.getElementById('acc-environment').value;
   const balance = parseFloat(document.getElementById('acc-balance').value) || 50000;
-  const username = document.getElementById('acc-username').value.trim();
-  const password = document.getElementById('acc-password').value.trim();
   const maxContracts = parseInt(document.getElementById('acc-max-contracts').value) || 2;
   const dailyLoss = parseFloat(document.getElementById('acc-daily-loss').value) || 1000;
 
-  if (!customName || !username || !password) {
-    showToast('Por favor completa todos los campos requeridos', 'error');
+  if (!customName) {
+    showToast('El nombre de la cuenta es obligatorio', 'error');
     return;
   }
 
@@ -603,14 +652,12 @@ async function submitAddAccount(event) {
     prop_firm: propFirm,
     environment: environment,
     balance: balance,
-    username: username,
-    password: password,
     max_contracts: maxContracts,
     daily_loss_limit: dailyLoss
   };
 
   try {
-    const resp = await fetch(`/api/bots/${botId}/accounts`, {
+    const resp = await apiFetch(`/api/bots/${botId}/accounts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -622,7 +669,7 @@ async function submitAddAccount(event) {
     }
 
     closeAddAccountModal();
-    showToast(`Cuenta "${customName}" conectada con éxito.`, 'success');
+    showToast(`Cuenta de prueba "${customName}" guardada. No está conectada al broker.`, 'info');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
@@ -669,7 +716,7 @@ async function submitCreateBot(event) {
   };
 
   try {
-    const resp = await fetch('/api/bots', {
+    const resp = await apiFetch('/api/bots', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -718,7 +765,7 @@ async function submitAddIdentity(event) {
   };
 
   try {
-    const resp = await fetch('/api/identities', {
+    const resp = await apiFetch('/api/identities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -768,9 +815,9 @@ function updateDetailModalContent(botId) {
   const toggleBtn = document.getElementById('modal-toggle-btn');
   toggleBtn.textContent = bot.status === 'ACTIVE' ? 'Pausar Bot' : 'Reanudar Bot';
 
-  document.getElementById('modal-proxy-url').textContent = bot.proxy_url || 'Direct (Host)';
-  document.getElementById('modal-proxy-ip').textContent = bot.proxy_ip || '127.0.0.1';
-  document.getElementById('modal-proxy-ping').textContent = `⚡ ${bot.proxy_ping_ms || 12.0} ms`;
+  document.getElementById('modal-proxy-url').textContent = bot.proxy_url || 'No configurado';
+  document.getElementById('modal-proxy-ip').textContent = bot.proxy_ip || 'No verificada';
+  document.getElementById('modal-proxy-ping').textContent = bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'No verificada';
 
   if (bot.schedule) {
     document.getElementById('modal-start-time').value = bot.schedule.start_time || '09:30';
@@ -818,7 +865,7 @@ function updateDetailModalContent(botId) {
 
 async function toggleBot(botId) {
   try {
-    const resp = await fetch(`/api/bots/${botId}/toggle`, { method: 'POST' });
+    const resp = await apiFetch(`/api/bots/${botId}/toggle`, { method: 'POST' });
     if (!resp.ok) throw new Error('Error cambiando estado');
     const data = await resp.json();
     showToast(`Bot ${botId} cambiado a ${data.new_status || data.status}`, 'info');
@@ -836,7 +883,7 @@ async function closeBotPositions(botId) {
   if (!ok) return;
 
   try {
-    const resp = await fetch(`/api/bots/${botId}/close`, { method: 'POST' });
+    const resp = await apiFetch(`/api/bots/${botId}/close`, { method: 'POST' });
     if (!resp.ok) throw new Error('Error cerrando posiciones');
     const data = await resp.json();
     showToast(`Posiciones cerradas. PnL: ${formatCurrency(data.pnl_realized)}`, 'success');
@@ -855,7 +902,7 @@ async function saveCurrentModalSchedule() {
   const end = document.getElementById('modal-end-time').value;
 
   try {
-    const resp = await fetch(`/api/bots/${state.selectedBotId}/schedule`, {
+    const resp = await apiFetch(`/api/bots/${state.selectedBotId}/schedule`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start_time: start, end_time: end, timezone: 'America/New_York' })
@@ -976,5 +1023,5 @@ function escapeHtml(text) {
 // Inicialización de la aplicación
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
-  initWebSocket();
+  if (state.token) initWebSocket();
 });

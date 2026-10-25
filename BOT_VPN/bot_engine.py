@@ -3,22 +3,25 @@ bot_engine.py - Motor Asíncrono de Trading Multi-Bot de Futuros (MNQ)
 
 Responsable de:
 1. Arquitectura Multi-Identidad: Cada bot representa a una persona titular (KYC).
-2. Aislamiento de Red por Socket con Proxies Residenciales Dedicados (SOCKS5 estáticos de ISP en EE.UU.).
-3. Anti-Mirroring & Micro-Jitter (50ms - 350ms): Retardo estocástico entre órdenes en cuentas replicadas.
-4. Anti-Flagging: Verificación geográfica estricta con nodos residenciales de EE.UU. (Comcast, AT&T, Spectrum).
-5. Controles Institucionales de Emergencia: Flatten All Positions y Kill-Switch Global.
-6. Delimitación Estricta de Horarios (Zona Horaria New York / EST).
+2. Simulación local de señales y posiciones, sin enviar órdenes a un broker.
+3. Límites de riesgo de demostración con rechazos registrados.
+4. Controles de emergencia simulados y delimitación de horarios.
 """
 
 import asyncio
 import json
 import logging
+import math
+import os
 import random
+import sqlite3
 import time
 from collections import deque
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Any, Tuple
+from urllib.parse import urlsplit
 import zoneinfo
 
 import aiohttp
@@ -31,9 +34,32 @@ except ImportError:
     SOCKS_AVAILABLE = False
 
 from strategies import BaseStrategy, SignalDecision, get_strategy, MNQ_TICK_SIZE, MNQ_TICK_VALUE, MNQ_POINT_VALUE
+from persistence import PersistenceConflict, SQLiteStore
 
 logger = logging.getLogger("bot_engine")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+SIMULATION_RISK_DEFAULTS = {
+    "max_contracts_per_account": 1,
+    "max_total_contracts": 2,
+    "max_orders_per_day": 3,
+    "daily_loss_per_account": 50.0,
+    "daily_loss_global": 100.0,
+    "max_exposure": 100000.0,
+}
+
+
+def _risk_limit_from_environment(name: str, default: float, integer: bool = False) -> float | int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return int(default) if integer else default
+    try:
+        value = int(raw_value) if integer else float(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} debe ser un límite numérico positivo.") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} debe ser un límite numérico positivo.")
+    return value
 
 
 @dataclass
@@ -63,27 +89,28 @@ class ProxyConnector:
     def __init__(self, proxy_url: Optional[str] = None, outbound_ip: Optional[str] = None, isp_provider: Optional[str] = None):
         self.proxy_url = proxy_url.strip() if proxy_url else None
         self._session: Optional[aiohttp.ClientSession] = None
-        self.detected_ip: str = outbound_ip or "192.0.2.1"
-        self.isp_provider: str = isp_provider or "Comcast Cable Communications"
+        self.detected_ip: str = outbound_ip or ""
+        self.isp_provider: str = isp_provider or "No verificado"
         self.detected_country: str = "US"
-        self.ping_ms: float = 12.8
-        self.is_healthy: bool = True
+        self.ping_ms: float = 0.0
+        self.is_healthy: bool = False
         self.last_check: float = 0.0
 
     async def get_session(self) -> aiohttp.ClientSession:
         """Crea o reutiliza la sesión asíncrona dedicada con el conector SOCKS5."""
         if self._session is None or self._session.closed:
             connector = None
-            if self.proxy_url and self.proxy_url.lower().startswith("socks"):
+            if self.proxy_url:
+                if not self.proxy_url.lower().startswith(("socks5://", "socks5h://")):
+                    raise RuntimeError("El esquema del proxy configurado no es compatible; se bloquea la conexión directa.")
                 if SOCKS_AVAILABLE:
                     try:
                         connector = SocksProxyConnector.from_url(self.proxy_url)
-                    except Exception as e:
-                        logger.warning(f"Error creando conector SOCKS5 con {self.proxy_url}: {e}. Usando TCP normal.")
-                        connector = aiohttp.TCPConnector()
+                    except Exception:
+                        logger.error("No se pudo crear el conector SOCKS5; se bloquea la conexión directa.")
+                        raise RuntimeError("No se pudo crear el conector SOCKS5 configurado.") from None
                 else:
-                    logger.warning("aiohttp-socks no está instalado. Usando TCP directo.")
-                    connector = aiohttp.TCPConnector()
+                    raise RuntimeError("aiohttp-socks no está instalado; se bloquea la conexión directa.")
             else:
                 connector = aiohttp.TCPConnector()
 
@@ -97,12 +124,16 @@ class ProxyConnector:
 
     async def check_ping_and_ip(self) -> Tuple[float, str]:
         """Verifica la conectividad, mide el ping en ms y registra la IP pública residencial de salida."""
-        start_time = time.perf_counter()
-        session = await self.get_session()
-        test_url = "https://api.ipify.org?format=json"
+        if not self.proxy_url:
+            self.is_healthy = False
+            self.ping_ms = 0.0
+            self.last_check = time.time()
+            return self.ping_ms, self.detected_ip
 
+        start_time = time.perf_counter()
         try:
-            async with session.get(test_url, timeout=4) as resp:
+            session = await self.get_session()
+            async with session.get("https://api.ipify.org?format=json", timeout=4) as resp:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
                 if resp.status == 200:
                     data = await resp.json()
@@ -111,12 +142,11 @@ class ProxyConnector:
                     self.is_healthy = True
                 else:
                     self.ping_ms = round(elapsed_ms, 1)
-                    self.is_healthy = True
-        except Exception:
-            # Latencia ultra-baja realista hacia los datacenters de CME en Chicago / Aurora
-            latency_jitter = random.uniform(3.8, 14.2)
-            self.ping_ms = round(latency_jitter, 1)
-            self.is_healthy = True
+                    self.is_healthy = False
+        except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError):
+            logger.warning("Falló la verificación real del proxy configurado.")
+            self.ping_ms = 0.0
+            self.is_healthy = False
 
         self.last_check = time.time()
         return self.ping_ms, self.detected_ip
@@ -135,7 +165,7 @@ class Account:
     active_contracts: int = 0
     current_position: str = "FLAT"   # "FLAT", "LONG", "SHORT"
     entry_price: float = 0.0
-    status: str = "CONNECTED"        # "CONNECTED", "ERROR", "DISCONNECTED"
+    status: str = "NOT_CONFIGURED"
     last_order_time: Optional[str] = None
     titular_name: str = ""           # Nombre de la persona titular
     environment: str = "FUNDED_PA"   # "FUNDED_PA", "EVALUATION", "DEMO"
@@ -143,39 +173,35 @@ class Account:
     password_masked: str = "••••••••"
     max_contracts: int = 2
     daily_loss_limit: float = 1000.0
+    daily_pnl: float = 0.0
+    orders_today: int = 0
+    daily_metrics_date: str = field(default_factory=lambda: datetime.now(timezone.utc).date().isoformat())
+
+    def reset_daily_metrics_if_needed(self) -> None:
+        today = datetime.now(timezone.utc).date().isoformat()
+        if self.daily_metrics_date != today:
+            self.daily_pnl = 0.0
+            self.orders_today = 0
+            self.daily_metrics_date = today
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["username"] = "••••" if self.username else ""
+        return data
 
 
 class BrokerAdapter:
-    """
-    Abstracción de interfaz para la ejecución de órdenes en Tradovate y Rithmic.
-    Incluye Anti-Mirroring con micro-jitter estocástico (50ms - 350ms).
-    """
+    """Actualiza posiciones simuladas sin abrir conexiones ni enviar órdenes."""
 
     @staticmethod
     async def execute_order(
         account: Account,
-        decision: SignalDecision,
-        proxy_connector: ProxyConnector,
-        jitter_min_ms: int = 50,
-        jitter_max_ms: int = 350
+        decision: SignalDecision
     ) -> Dict[str, Any]:
-        """
-        Ejecuta o replica una orden en la cuenta a través del socket aislado del proxy residencial.
-        Aplica un micro-delay aleatorio (jitter entre 50ms y 350ms) para evitar que múltiples
-        cuentas golpeen el CME en el mismo milisegundo (Anti-Mirroring).
-        """
-        jitter_delay = random.uniform(jitter_min_ms, jitter_max_ms) / 1000.0
-        await asyncio.sleep(jitter_delay)
-
-        start_exec = time.perf_counter()
-        session = await proxy_connector.get_session()
-        await asyncio.sleep(0.012)  # Simula tiempo de procesamiento en el gateway de Chicago
-
-        exec_latency_ms = round((time.perf_counter() - start_exec + jitter_delay) * 1000, 2)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        """Actualiza el estado local y devuelve una ejecución claramente simulada."""
+        account.reset_daily_metrics_if_needed()
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
         # Actualización de posición en la cuenta
         if decision.action == "BUY":
@@ -188,6 +214,7 @@ class BrokerAdapter:
             account.entry_price = decision.entry_price
 
         account.last_order_time = now_str
+        account.orders_today += 1
 
         return {
             "account_id": account.id,
@@ -195,17 +222,19 @@ class BrokerAdapter:
             "titular_name": account.titular_name,
             "broker": account.broker,
             "prop_firm": account.prop_firm,
-            "status": "FILLED",
+            "mode": "SIMULATED",
+            "status": "SIMULATED",
             "contracts": decision.contracts,
             "price": decision.entry_price,
             "action": decision.action,
-            "latency_ms": exec_latency_ms,
+            "latency_ms": 0.0,
             "timestamp": now_str
         }
 
     @staticmethod
     def close_position(account: Account, current_market_price: float) -> float:
         """Cierra la posición abierta y calcula el PnL realizado."""
+        account.reset_daily_metrics_if_needed()
         if account.active_contracts == 0 or account.current_position == "FLAT":
             return 0.0
 
@@ -217,6 +246,7 @@ class BrokerAdapter:
 
         trade_pnl = round(points_diff * MNQ_POINT_VALUE * account.active_contracts, 2)
         account.realized_pnl += trade_pnl
+        account.daily_pnl += trade_pnl
         account.balance += trade_pnl
         account.floating_pnl = 0.0
         account.active_contracts = 0
@@ -258,9 +288,9 @@ class TradingBot:
         self.identity = identity
         self.proxy_connector = ProxyConnector(proxy_url, outbound_ip, isp_provider)
         self.proxy_port = proxy_port or 10808
-        self.isp_provider = isp_provider or "Comcast Cable Communications (Residential ISP)"
-        self.node_location = node_location or "New York, NY (US)"
-        self.geo_match_status = geo_match_status or "Geo-Match OK // US Node"
+        self.isp_provider = "No verificado"
+        self.node_location = "No verificado"
+        self.geo_match_status = "No verificado"
         self.schedule = schedule or {
             "start_time": "09:30",
             "end_time": "11:30",
@@ -295,8 +325,7 @@ class TradingBot:
         self.logs.append(entry)
 
     def is_geo_consistent(self) -> Tuple[bool, str]:
-        """Anti-Flagging: Valida correspondencia entre país del titular y proxy residencial."""
-        return True, self.geo_match_status
+        return False, "No verificado"
 
     def is_within_schedule(self) -> Tuple[bool, str]:
         tz_name = self.schedule.get("timezone", "America/New_York")
@@ -321,30 +350,49 @@ class TradingBot:
             return 0.0
         return round((self.today_pnl / self.net_pnl) * 100, 1)
 
-    async def process_signal(self, signal_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_signal(
+        self,
+        signal_data: Dict[str, Any],
+        risk_check: Optional[Callable[["TradingBot", SignalDecision], Optional[str]]] = None,
+    ) -> Dict[str, Any]:
         self.log_event("SIGNAL", f"Señal entrante: {signal_data.get('action')} @ {signal_data.get('price')}")
 
         if self.status != "ACTIVE":
             msg = f"Señal ignorada: Bot {self.status}."
             self.log_event("WARNING", msg)
-            return {"status": "IGNORED", "reason": msg, "bot_id": self.bot_id}
+            return {"status": "IGNORED", "reason": msg, "bot_id": self.bot_id, "mode": "SIMULATED"}
 
         in_window, window_reason = self.is_within_schedule()
         if not in_window:
             msg = f"Señal omitida: {window_reason}"
             self.log_event("FILTER", msg)
-            return {"status": "IGNORED", "reason": msg, "bot_id": self.bot_id}
+            return {"status": "IGNORED", "reason": msg, "bot_id": self.bot_id, "mode": "SIMULATED"}
 
         decision = self.strategy.evaluate_signal(signal_data)
         if not decision.approved:
             self.log_event("REJECTED", f"Estrategia rechazó: {decision.reason}")
-            return {"status": "REJECTED", "reason": decision.reason, "bot_id": self.bot_id}
+            return {
+                "status": "REJECTED",
+                "reason": decision.reason,
+                "bot_id": self.bot_id,
+                "mode": "SIMULATED",
+            }
+
+        if risk_check:
+            risk_reason = risk_check(self, decision)
+            if risk_reason:
+                self.log_event("RISK_REJECTED", risk_reason)
+                return {
+                    "status": "RISK_REJECTED",
+                    "reason": risk_reason,
+                    "bot_id": self.bot_id,
+                    "mode": "SIMULATED",
+                }
 
         self.log_event("APPROVED", f"Aprobada por {self.strategy.name}: {decision.reason}")
 
-        # Replicación Multi-Cuenta Paralela con Micro-Jitter (Anti-Mirroring 50ms - 350ms)
         tasks = [
-            BrokerAdapter.execute_order(acc, decision, self.proxy_connector, self.jitter_min_ms, self.jitter_max_ms)
+            BrokerAdapter.execute_order(acc, decision)
             for acc in self.accounts
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -356,9 +404,11 @@ class TradingBot:
             else:
                 successful_replications.append(res)
 
-        self.total_trades += 1
+        if successful_replications:
+            self.total_trades += 1
         return {
-            "status": "EXECUTED",
+            "status": "SIMULATED" if successful_replications else "FAILED",
+            "mode": "SIMULATED",
             "bot_id": self.bot_id,
             "titular": self.identity.full_name if self.identity else "Desconocido",
             "decision": asdict(decision),
@@ -422,7 +472,7 @@ class TradingBot:
             "strategy": self.strategy.name,
             "strategy_description": self.strategy.description,
             "identity": self.identity.to_dict() if self.identity else None,
-            "proxy_url": self.proxy_connector.proxy_url,
+            "proxy_url": self.public_proxy_url(),
             "outbound_ip": self.proxy_connector.detected_ip,
             "proxy_port": self.proxy_port,
             "isp_provider": self.isp_provider,
@@ -453,6 +503,19 @@ class TradingBot:
             "logs": list(self.logs)
         }
 
+    def public_proxy_url(self) -> str:
+        if not self.proxy_connector.proxy_url:
+            return ""
+        try:
+            parsed = urlsplit(self.proxy_connector.proxy_url)
+            if not parsed.hostname:
+                return "[configured]"
+            host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+            port = f":{parsed.port}" if parsed.port else ""
+            return f"{parsed.scheme}://{host}{port}"
+        except ValueError:
+            return "[configured]"
+
 
 class BotManager:
     """
@@ -462,130 +525,223 @@ class BotManager:
     - Monitorea periódicamente las conexiones y proxies residenciales de ISP.
     """
 
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(self, config_path: str = "config.json", database_path: Optional[str] = None):
         self.config_path = config_path
+        default_database = Path(__file__).resolve().parent / "bot_vpn.sqlite3"
+        self.database_path = database_path or os.environ.get("BOT_VPN_DB_PATH", str(default_database))
+        self._store: Optional[SQLiteStore] = None
+        self._revision = 0
         self.bots: Dict[str, TradingBot] = {}
         self.identities: Dict[str, IdentityProfile] = {}
         self.auth: Dict[str, Any] = {}
         self.webhook_token: str = ""
         self.market_price: float = 18245.50
+        self.simulation_risk_limits = {
+            "max_contracts_per_account": _risk_limit_from_environment(
+                "BOT_VPN_SIM_MAX_CONTRACTS_PER_ACCOUNT",
+                SIMULATION_RISK_DEFAULTS["max_contracts_per_account"],
+                integer=True,
+            ),
+            "max_total_contracts": _risk_limit_from_environment(
+                "BOT_VPN_SIM_MAX_TOTAL_CONTRACTS",
+                SIMULATION_RISK_DEFAULTS["max_total_contracts"],
+                integer=True,
+            ),
+            "max_orders_per_day": _risk_limit_from_environment(
+                "BOT_VPN_SIM_MAX_ORDERS_PER_DAY",
+                SIMULATION_RISK_DEFAULTS["max_orders_per_day"],
+                integer=True,
+            ),
+            "daily_loss_per_account": _risk_limit_from_environment(
+                "BOT_VPN_SIM_DAILY_LOSS_PER_ACCOUNT",
+                SIMULATION_RISK_DEFAULTS["daily_loss_per_account"],
+            ),
+            "daily_loss_global": _risk_limit_from_environment(
+                "BOT_VPN_SIM_DAILY_LOSS_GLOBAL",
+                SIMULATION_RISK_DEFAULTS["daily_loss_global"],
+            ),
+            "max_exposure": _risk_limit_from_environment(
+                "BOT_VPN_SIM_MAX_EXPOSURE",
+                SIMULATION_RISK_DEFAULTS["max_exposure"],
+            ),
+        }
+        self.signal_lock = asyncio.Lock()
         self._bg_task: Optional[asyncio.Task] = None
         self._listeners: List[Any] = []
 
     def load_config(self):
-        """Carga la configuración desde config.json e inicializa bots e identidades."""
-        try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        """Carga el snapshot persistido e importa config.json una sola vez."""
+        self.webhook_token = os.environ.get("BOT_VPN_WEBHOOK_TOKEN", "")
+        self.auth = {
+            "username": os.environ.get("BOT_VPN_AUTH_USERNAME", ""),
+            "password": os.environ.get("BOT_VPN_AUTH_PASSWORD", ""),
+            "role": "ADMIN_TRADER"
+        }
+        if self._store is None:
+            self._store = SQLiteStore(self.database_path)
+        legacy_data = {"server": {"port": 8000}, "identities": [], "bots": []}
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", encoding="utf-8") as config_file:
+                legacy_data = json.load(config_file)
+        data, self._revision = self._store.load_or_import(legacy_data)
+        self.auth["role"] = (data.get("auth") or {}).get("role", "ADMIN_TRADER")
 
-            server_cfg = data.get("server", {})
-            self.webhook_token = server_cfg.get("webhook_token", self.webhook_token)
-            self.auth = data.get("auth", self.auth)
+        self.identities = {}
+        for ident_data in data.get("identities", []):
+            ident_id = ident_data.get("id")
+            self.identities[ident_id] = IdentityProfile(
+                id=ident_id,
+                full_name=ident_data.get("full_name", "Desconocido"),
+                alias=ident_data.get("alias", ""),
+                country=ident_data.get("country", "US"),
+                city=ident_data.get("city", "New York, NY"),
+                flag=ident_data.get("flag", "🌐"),
+                kyc_status=ident_data.get("kyc_status", "VERIFIED"),
+                email=ident_data.get("email", ""),
+                notes=ident_data.get("notes")
+            )
 
-            # Cargar catálogo de identidades de personas
-            self.identities = {}
-            for ident_data in data.get("identities", []):
-                ident_id = ident_data.get("id")
-                self.identities[ident_id] = IdentityProfile(
-                    id=ident_id,
-                    full_name=ident_data.get("full_name", "Desconocido"),
-                    alias=ident_data.get("alias", ""),
-                    country=ident_data.get("country", "US"),
-                    city=ident_data.get("city", "New York, NY"),
-                    flag=ident_data.get("flag", "🇺🇸"),
-                    kyc_status=ident_data.get("kyc_status", "VERIFIED"),
-                    email=ident_data.get("email", ""),
-                    notes=ident_data.get("notes")
+        self.bots = {}
+        for b_data in data.get("bots", []):
+            bot_id = b_data.get("id")
+            strat = get_strategy(b_data.get("strategy", "ICTStrategy"))
+            identity = self.identities.get(b_data.get("identity_id"))
+            accounts = [
+                Account(
+                    id=acc.get("id"),
+                    custom_name=acc.get("custom_name"),
+                    broker=acc.get("broker", "Tradovate"),
+                    prop_firm=acc.get("prop_firm", "Apex Trader Funding"),
+                    balance=float(acc.get("balance", 50000.0)),
+                    floating_pnl=float(acc.get("floating_pnl", 0.0)),
+                    realized_pnl=float(acc.get("realized_pnl", 0.0)),
+                    active_contracts=int(acc.get("active_contracts", 0)),
+                    current_position=acc.get("current_position", "FLAT"),
+                    entry_price=float(acc.get("entry_price", 0.0)),
+                    status="NOT_CONFIGURED",
+                    last_order_time=acc.get("last_order_time"),
+                    titular_name=acc.get("titular_name", identity.full_name if identity else ""),
+                    environment=acc.get("environment", "FUNDED_PA"),
+                    username=acc.get("username", ""),
+                    password_masked="••••••••",
+                    max_contracts=int(acc.get("max_contracts", 2)),
+                    daily_loss_limit=float(acc.get("daily_loss_limit", 1000.0)),
+                    daily_pnl=float(acc.get("daily_pnl", 0.0)),
+                    orders_today=int(acc.get("orders_today", 0)),
+                    daily_metrics_date=acc.get("daily_metrics_date", datetime.now(timezone.utc).date().isoformat()),
                 )
+                for acc in b_data.get("accounts", [])
+            ]
+            bot = TradingBot(
+                bot_id=bot_id,
+                name=b_data.get("name"),
+                strategy=strat,
+                identity=identity,
+                proxy_url=b_data.get("proxy_url"),
+                outbound_ip=b_data.get("outbound_ip"),
+                proxy_port=b_data.get("proxy_port"),
+                isp_provider=b_data.get("isp_provider"),
+                node_location=b_data.get("node_location"),
+                geo_match_status=b_data.get("geo_match_status"),
+                schedule=b_data.get("schedule"),
+                accounts=accounts,
+                status=b_data.get("status", "ACTIVE"),
+                jitter_min_ms=b_data.get("jitter_min_ms", b_data.get("jitter_ms", 50)),
+                jitter_max_ms=b_data.get("jitter_max_ms", 350)
+            )
+            bot.net_pnl = float(b_data.get("net_pnl", 0.0))
+            bot.today_pnl = float(b_data.get("today_pnl", 0.0))
+            bot.total_trades = int(b_data.get("total_trades", 0))
+            bot.winning_trades = int(b_data.get("winning_trades", 0))
+            bot.losing_trades = int(b_data.get("losing_trades", 0))
+            bot.max_drawdown = float(b_data.get("max_drawdown", 0.0))
+            self.bots[bot_id] = bot
 
-            # Cargar Bots vinculados
-            self.bots = {}
-            for b_data in data.get("bots", []):
-                bot_id = b_data.get("id")
-                strat = get_strategy(b_data.get("strategy", "ICTStrategy"))
-                identity_id = b_data.get("identity_id")
-                identity = self.identities.get(identity_id)
+        logger.info(
+            "Cargados %s bots y %s titulares desde SQLite (%s).",
+            len(self.bots), len(self.identities), self.database_path
+        )
 
-                accounts = [
-                    Account(
-                        id=acc.get("id"),
-                        custom_name=acc.get("custom_name"),
-                        broker=acc.get("broker", "Tradovate"),
-                        prop_firm=acc.get("prop_firm", "Apex Trader Funding"),
-                        balance=float(acc.get("balance", 50000.0)),
-                        floating_pnl=float(acc.get("floating_pnl", 0.0)),
-                        active_contracts=int(acc.get("active_contracts", 0)),
-                        status=acc.get("status", "CONNECTED"),
-                        titular_name=acc.get("titular_name", identity.full_name if identity else ""),
-                        environment=acc.get("environment", "FUNDED_PA"),
-                        username=acc.get("username", ""),
-                        password_masked=acc.get("password_masked", "••••••••"),
-                        max_contracts=int(acc.get("max_contracts", 2)),
-                        daily_loss_limit=float(acc.get("daily_loss_limit", 1000.0))
-                    )
-                    for acc in b_data.get("accounts", [])
-                ]
+    async def refresh_if_changed(self) -> None:
+        if self._store is not None and self._store.revision != self._revision:
+            previous_bots = list(self.bots.values())
+            self.load_config()
+            await asyncio.gather(*(bot.proxy_connector.close() for bot in previous_bots))
 
-                bot = TradingBot(
-                    bot_id=bot_id,
-                    name=b_data.get("name"),
-                    strategy=strat,
-                    identity=identity,
-                    proxy_url=b_data.get("proxy_url"),
-                    outbound_ip=b_data.get("outbound_ip"),
-                    proxy_port=b_data.get("proxy_port"),
-                    isp_provider=b_data.get("isp_provider"),
-                    node_location=b_data.get("node_location"),
-                    geo_match_status=b_data.get("geo_match_status"),
-                    schedule=b_data.get("schedule"),
-                    accounts=accounts,
-                    status=b_data.get("status", "ACTIVE"),
-                    jitter_min_ms=b_data.get("jitter_min_ms", 50),
-                    jitter_max_ms=b_data.get("jitter_max_ms", 350)
-                )
-                self.bots[bot_id] = bot
-
-            logger.info(f"Cargados {len(self.bots)} bots y {len(self.identities)} titulares KYC desde {self.config_path}")
-        except Exception as e:
-            logger.error(f"Error cargando {self.config_path}: {e}")
-
-    def save_config(self):
-        """Guarda el estado actual en config.json."""
-        try:
-            data = {
-                "server": {
-                    "host": "127.0.0.1",
-                    "port": 8000,
-                    "webhook_token": self.webhook_token
-                },
-                "auth": self.auth,
-                "identities": [ident.to_dict() for ident in self.identities.values()],
-                "bots": [
-                    {
-                        "id": bot.bot_id,
-                        "name": bot.name,
-                        "identity_id": bot.identity.id if bot.identity else None,
-                        "strategy": bot.strategy.name,
-                        "proxy_url": bot.proxy_connector.proxy_url,
-                        "outbound_ip": bot.proxy_connector.detected_ip,
-                        "proxy_port": bot.proxy_port,
-                        "isp_provider": bot.isp_provider,
-                        "node_location": bot.node_location,
-                        "geo_match": True,
-                        "geo_match_status": bot.geo_match_status,
-                        "status": bot.status,
-                        "jitter_min_ms": bot.jitter_min_ms,
-                        "jitter_max_ms": bot.jitter_max_ms,
-                        "schedule": bot.schedule,
-                        "accounts": [acc.to_dict() for acc in bot.accounts]
-                    }
-                    for bot in self.bots.values()
-                ]
+    def save_config(
+        self,
+        event: Optional[Dict[str, Any]] = None,
+        operations: Optional[List[Dict[str, Any]]] = None,
+    ):
+        """Guarda el snapshot y su auditoría en una sola transacción SQLite."""
+        if self._store is None:
+            self._store = SQLiteStore(self.database_path)
+            self._revision = self._store.revision
+        data = {
+            "server": {"host": "127.0.0.1", "port": 8000},
+            "auth": {"role": self.auth.get("role", "ADMIN_TRADER")},
+            "identities": [ident.to_dict() for ident in self.identities.values()],
+            "bots": [
+                {
+                    "id": bot.bot_id,
+                    "name": bot.name,
+                    "identity_id": bot.identity.id if bot.identity else None,
+                    "strategy": bot.strategy.name,
+                    "proxy_url": bot.public_proxy_url(),
+                    "outbound_ip": bot.proxy_connector.detected_ip,
+                    "proxy_port": bot.proxy_port,
+                    "isp_provider": bot.isp_provider,
+                    "node_location": bot.node_location,
+                    "geo_match_status": bot.geo_match_status,
+                    "status": bot.status,
+                    "jitter_min_ms": bot.jitter_min_ms,
+                    "jitter_max_ms": bot.jitter_max_ms,
+                    "schedule": bot.schedule,
+                    "net_pnl": bot.net_pnl,
+                    "today_pnl": bot.today_pnl,
+                    "total_trades": bot.total_trades,
+                    "winning_trades": bot.winning_trades,
+                    "losing_trades": bot.losing_trades,
+                    "max_drawdown": bot.max_drawdown,
+                    "accounts": [account.to_dict() for account in bot.accounts],
+                }
+                for bot in self.bots.values()
+            ],
+        }
+        if event is None:
+            event = {
+                "action": "state_changed",
+                "entity_type": "application",
+                "details": {"bot_count": len(self.bots), "identity_count": len(self.identities)},
             }
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error guardando config: {e}")
+        try:
+            self._revision = self._store.save_snapshot(data, self._revision, event, operations)
+        except (PersistenceConflict, sqlite3.Error):
+            try:
+                self.load_config()
+            except (sqlite3.Error, json.JSONDecodeError, OSError):
+                logger.exception("No se pudo restaurar el estado tras fallar la persistencia SQLite.")
+            raise
+
+    def close_storage(self) -> None:
+        if self._store is not None:
+            self._store.close()
+            self._store = None
+
+    def check_persistence(self) -> None:
+        if self._store is None:
+            raise sqlite3.OperationalError("Persistencia no inicializada.")
+        self._store.health_check()
+
+    def has_processed_signal(self, signal_id: str) -> bool:
+        if self._store is None:
+            self._store = SQLiteStore(self.database_path)
+            _, self._revision = self._store.load_or_import({
+                "server": {"port": 8000},
+                "identities": [],
+                "bots": [],
+            })
+        return self._store.has_processed_signal(signal_id)
 
     def flatten_all_positions(self) -> Dict[str, Any]:
         """
@@ -605,9 +761,27 @@ class BotManager:
             })
             bot.log_event("EMERGENCY", f"🔴 FLATTEN GLOBAL: Todas las cuentas cerradas a {self.market_price}.")
 
-        self.save_config()
+        self.save_config(
+            event={
+                "action": "simulated_flatten_all",
+                "entity_type": "application",
+                "status": "SIMULATED",
+                "details": {"market_price": self.market_price, "realized_pnl": round(total_pnl, 2)},
+            },
+            operations=[
+                {
+                    "bot_id": bot.bot_id,
+                    "operation_type": "FLATTEN_POSITIONS",
+                    "mode": "SIMULATED",
+                    "status": "SIMULATED",
+                    "details": {"market_price": self.market_price, "realized_pnl": item["realized_pnl"]},
+                }
+                for bot, item in zip(self.bots.values(), closed_bots)
+            ],
+        )
         return {
             "status": "ALL_FLATTENED",
+            "mode": "SIMULATED",
             "market_price": self.market_price,
             "total_realized_pnl": round(total_pnl, 2),
             "bots_affected": closed_bots
@@ -624,7 +798,13 @@ class BotManager:
                 bot.log_event("EMERGENCY", "⏹️ KILL-SWITCH GLOBAL: Bot apagado por comando institucional.")
                 paused_count += 1
 
-        self.save_config()
+        self.save_config(
+            event={
+                "action": "simulated_stop_all",
+                "entity_type": "application",
+                "details": {"bots_paused": paused_count, "mode": "SIMULATED"},
+            }
+        )
         return paused_count
 
     async def test_proxy(self, bot_id: str) -> Dict[str, Any]:
@@ -639,7 +819,7 @@ class BotManager:
 
         return {
             "bot_id": bot.bot_id,
-            "proxy_url": bot.proxy_connector.proxy_url,
+            "proxy_url": bot.public_proxy_url(),
             "outbound_ip": ip,
             "proxy_port": bot.proxy_port,
             "isp_provider": bot.isp_provider,
@@ -656,29 +836,107 @@ class BotManager:
         target_bot_id = signal.get("bot_id")
         results = []
 
-        if target_bot_id and target_bot_id in self.bots:
-            res = await self.bots[target_bot_id].process_signal(signal)
-            results.append(res)
-        else:
-            target_strategy = signal.get("strategy")
-            matched = False
-            for bot in self.bots.values():
-                if target_strategy and bot.strategy.name.lower() == target_strategy.lower():
-                    res = await bot.process_signal(signal)
-                    results.append(res)
-                    matched = True
+        if target_bot_id:
+            bot = self.bots.get(target_bot_id)
+            if bot is None:
+                return [{
+                    "status": "REJECTED",
+                    "reason": "La señal referencia un bot inexistente; no se distribuirá a otros bots.",
+                    "bot_id": target_bot_id,
+                    "mode": "SIMULATED",
+                }]
+            return [await bot.process_signal(signal, self._check_simulation_risk)]
 
-            if not matched:
-                for bot in self.bots.values():
-                    if bot.status == "ACTIVE":
-                        res = await bot.process_signal(signal)
-                        results.append(res)
+        target_strategy = signal.get("strategy")
+        if target_strategy:
+            matched_bots = [
+                bot for bot in self.bots.values()
+                if bot.strategy.name.lower() == target_strategy.lower()
+            ]
+            if not matched_bots:
+                return [{
+                    "status": "REJECTED",
+                    "reason": "La señal referencia una estrategia desconocida.",
+                    "mode": "SIMULATED",
+                }]
+        else:
+            matched_bots = [bot for bot in self.bots.values() if bot.status == "ACTIVE"]
+
+        for bot in matched_bots:
+            results.append(await bot.process_signal(signal, self._check_simulation_risk))
 
         return results
+
+    def _check_simulation_risk(self, selected_bot: TradingBot, decision: SignalDecision) -> Optional[str]:
+        accounts = [
+            (bot, account)
+            for bot in self.bots.values()
+            for account in bot.accounts
+        ]
+        for _, account in accounts:
+            account.reset_daily_metrics_if_needed()
+
+        if not selected_bot.accounts:
+            return "Señal bloqueada: el bot no tiene cuentas de simulación vinculadas."
+
+        if decision.contracts > self.simulation_risk_limits["max_contracts_per_account"]:
+            return (
+                "Señal bloqueada: supera el límite de demostración de "
+                f"{self.simulation_risk_limits['max_contracts_per_account']} contrato(s) por cuenta."
+            )
+
+        if any(account.current_position != "FLAT" for account in selected_bot.accounts):
+            return "Señal bloqueada: ya existe una posición simulada abierta en una cuenta del bot."
+
+        global_orders_today = sum(account.orders_today for _, account in accounts)
+        if global_orders_today + len(selected_bot.accounts) > self.simulation_risk_limits["max_orders_per_day"]:
+            return "Señal bloqueada: se alcanzó el límite global de órdenes simuladas del día."
+
+        for account in selected_bot.accounts:
+            if decision.contracts > account.max_contracts:
+                return f"Señal bloqueada: supera el límite de contratos de la cuenta {account.id}."
+            account_loss_limit = min(
+                account.daily_loss_limit,
+                self.simulation_risk_limits["daily_loss_per_account"],
+            )
+            account_day_pnl = account.daily_pnl + account.floating_pnl
+            projected_loss = abs(decision.entry_price - decision.stop_loss) * MNQ_POINT_VALUE * decision.contracts
+            if account_day_pnl - projected_loss <= -account_loss_limit:
+                return f"Señal bloqueada: alcanzaría el límite de pérdida diaria de la cuenta {account.id}."
+            if account.orders_today >= self.simulation_risk_limits["max_orders_per_day"]:
+                return f"Señal bloqueada: se alcanzó el límite diario de órdenes de la cuenta {account.id}."
+
+        global_daily_loss = sum(
+            min(0.0, account.daily_pnl + account.floating_pnl)
+            for _, account in accounts
+        )
+        projected_global_loss = (
+            abs(decision.entry_price - decision.stop_loss)
+            * MNQ_POINT_VALUE
+            * decision.contracts
+            * len(selected_bot.accounts)
+        )
+        if global_daily_loss - projected_global_loss <= -self.simulation_risk_limits["daily_loss_global"]:
+            return "Señal bloqueada: alcanzaría el límite global de pérdida diaria simulada."
+
+        active_contracts = sum(account.active_contracts for _, account in accounts)
+        projected_contracts = active_contracts + decision.contracts * len(selected_bot.accounts)
+        if projected_contracts > self.simulation_risk_limits["max_total_contracts"]:
+            return "Señal bloqueada: supera el límite global de contratos activos simulados."
+
+        current_exposure = sum(
+            account.entry_price * account.active_contracts * MNQ_POINT_VALUE
+            for _, account in accounts
+        )
+        new_exposure = decision.entry_price * decision.contracts * MNQ_POINT_VALUE * len(selected_bot.accounts)
+        if current_exposure + new_exposure > self.simulation_risk_limits["max_exposure"]:
+            return "Señal bloqueada: supera el límite global de exposición nocional simulada."
+        return None
 
     async def telemetry_loop(self, broadcast_fn):
         while True:
             try:
+                await self.refresh_if_changed()
                 # Micro-fluctuación realista de MNQ
                 tick_change = random.choice([-0.25, 0.0, 0.25, -0.50, 0.50])
                 self.market_price = round(self.market_price + tick_change, 2)
@@ -712,6 +970,12 @@ class BotManager:
 
         return {
             "type": "SNAPSHOT",
+            "execution_mode": "SIMULATED",
+            "paper_trading_available": False,
+            "risk_policy": {
+                "type": "DEMO_ONLY",
+                "limits": dict(self.simulation_risk_limits),
+            },
             "market_price_mnq": self.market_price,
             "ny_time": ny_now,
             "global_stats": {

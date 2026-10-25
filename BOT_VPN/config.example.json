@@ -1,13 +1,9 @@
 {
   "server": {
     "host": "127.0.0.1",
-    "port": 8000,
-    "webhook_token": ""
+    "port": 8000
   },
   "auth": {
-    "username": "",
-    "password": "",
-    "session_token": "",
     "role": "ADMIN_TRADER"
   },
   "identities": [],
