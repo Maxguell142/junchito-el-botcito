@@ -83,12 +83,18 @@ La documentación pública oficial anuncia `Rithmic Test` para desarrollar antes
 
 Node y FastAPI exponen `GET /healthz`, una comprobación local que verifica el estado SQLite compartido por cada proceso. Responde `200` solo si la persistencia está accesible y el esquema de estado está presente; si SQLite falla, responde `503`. La respuesta indica explícitamente `SIMULATED`, broker `disabled` y datos de mercado `simulated`; no verifica ni afirma conectividad con el broker o con mercados reales. Estos endpoints son para diagnóstico local y no sustituyen monitoreo, métricas ni alertas de producción.
 
-Para instalar y arrancar FastAPI:
+Para arrancar FastAPI en Windows sin activar manualmente el entorno Python, abre otra ventana de PowerShell en `BOT_VPN` y ejecuta:
 
 ```powershell
-py -m venv .venv
+.\run_fastapi.ps1
+```
+
+El script crea `.venv` e instala `requirements.txt` si faltan el entorno o las dependencias. También puedes iniciar el gateway haciendo doble clic en `run_fastapi.bat`. No ejecutes `python main.py` directamente con el Python global: ese intérprete puede no tener FastAPI instalado. El servidor escucha en http://127.0.0.1:8000.
+
+Si prefieres usar npm, activa primero el entorno y luego ejecuta:
+
+```powershell
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
 npm run start:fastapi
 ```
 

@@ -13,6 +13,7 @@ Este documento resume el trabajo pendiente de forma práctica. No reemplaza el [
 - **Riesgo:** el motor local tiene límites de demostración, deduplicación de señales identificadas y controles de emergencia. Estos controles no han sido validados frente a un broker.
 - **Modos:** `SIMULATED` está implementado; `PAPER` sigue deshabilitado y responde `501`; `LIVE` no está implementado.
 - **Salud:** ambos procesos exponen `GET /healthz` para comprobar SQLite. Este endpoint no verifica el broker ni precios de mercado reales.
+- **Arranque FastAPI en Windows:** `run_fastapi.ps1` crea `.venv`, instala las dependencias faltantes y usa ese intérprete para iniciar el gateway; `run_fastapi.bat` permite arrancarlo desde el Explorador.
 - **Validación conocida:** la suite ejecutada más recientemente pasó 1 prueba de Node y 19 de Python. Debe repetirse tras cada cambio; no equivale a certificación de producción o de broker.
 - **Rithmic:** su documentación pública anuncia opciones de prueba, pero faltan el kit oficial y la confirmación de acceso, permisos y condiciones aplicables a este proyecto y a la cuenta asociada a Lucid.
 
@@ -68,6 +69,7 @@ Ya existe un `GET /healthz` básico en cada servidor que verifica SQLite. Falta:
 
 - crear Docker Compose solo para los servicios que realmente se desplieguen y documentar variables, volúmenes, puertos y apagado;
 - configurar health checks de contenedor usando `/healthz`, manteniendo los servicios enlazados a localhost en desarrollo;
+- probar el arranque reproducible de ambos servicios desde Windows en una instalación limpia;
 - añadir logs estructurados con niveles y contexto útil, sin secretos ni contenido sensible;
 - definir métricas y alertas para disponibilidad, errores, latencia, base de datos y fallos del adaptador cuando exista;
 - distinguir en cada comprobación la salud del proceso, persistencia, datos de mercado y broker; no marcar componentes externos como saludables si no se comprobaron;
