@@ -44,7 +44,7 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
         [
           'id', 'name', 'identity_id', 'strategy', 'outbound_ip', 'proxy_port',
           'isp_provider', 'node_location', 'geo_match_status', 'status',
-          'jitter_min_ms', 'jitter_max_ms', 'jitter_ms', 'schedule',
+          'jitter_min_ms', 'jitter_max_ms', 'jitter_ms', 'schedule', 'circuit_breaker',
           'net_pnl', 'today_pnl', 'total_trades', 'winning_trades',
           'losing_trades', 'max_drawdown', 'logs'
         ]

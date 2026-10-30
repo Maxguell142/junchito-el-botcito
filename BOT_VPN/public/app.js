@@ -30,10 +30,118 @@ let reconnectTimer = null;
 let confirmResolver = null;
 
 // ======================================================================
+// 1.1 MOTOR DE ALERTAS SONORAS (WEB AUDIO API) & GUÍA LANDING
+// ======================================================================
+
+let audioCtx = null;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+    }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function playAudioCue(type) {
+  if (state.audioMuted) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    if (type === 'fill') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } else if (type === 'alarm') {
+      [0, 0.15].forEach(delay => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.12);
+      });
+    } else if (type === 'chime') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch (err) {
+    console.warn('Audio Cue warning:', err);
+  }
+}
+
+function toggleAudioMute() {
+  state.audioMuted = !state.audioMuted;
+  localStorage.setItem('quantum_audio_muted', state.audioMuted);
+  updateAudioButtonUI();
+  showToast(state.audioMuted ? 'Alertas sonoras silenciadas' : 'Alertas sonoras activadas', 'info');
+  if (!state.audioMuted) {
+    playAudioCue('chime');
+  }
+}
+
+function updateAudioButtonUI() {
+  const btn = document.getElementById('audio-toggle-btn');
+  const icon = document.getElementById('audio-icon');
+  const label = document.getElementById('audio-label');
+  if (!btn) return;
+  btn.classList.toggle('muted', state.audioMuted);
+  if (icon) icon.textContent = state.audioMuted ? '🔇' : '🔊';
+  if (label) label.textContent = state.audioMuted ? 'Audio OFF' : 'Audio ON';
+}
+
+function toggleLandingView() {
+  if (state.activeTab === 'landing') {
+    switchTab(state.previousTab || 'dashboard');
+  } else {
+    state.previousTab = state.activeTab;
+    switchTab('landing');
+  }
+}
+
+function enterTerminalWorkspace() {
+  const overlay = document.getElementById('login-overlay');
+  if (!state.token) {
+    if (overlay) overlay.classList.remove('hidden');
+  } else {
+    switchTab('dashboard');
+  }
+}
+
+
+// ======================================================================
 // 1. SISTEMA DE AUTENTICACIÓN Y LOGIN
 // ======================================================================
 
 function initAuth() {
+  updateAudioButtonUI();
   const overlay = document.getElementById('login-overlay');
   if (state.token) {
     if (overlay) overlay.classList.add('hidden');
@@ -833,6 +941,7 @@ function updateDetailModalContent(botId) {
   document.getElementById('modal-win-loss').textContent = `${bot.winning_trades || 0} Ganados / ${bot.losing_trades || 0} Perdidos`;
   document.getElementById('modal-consistency-val').textContent = `${bot.consistency_pct || 0}%`;
   document.getElementById('modal-max-dd').textContent = formatCurrency(bot.max_drawdown || 0);
+  populateCircuitBreakerInModal(bot);
 
   // Tabla Cuentas
   const tbody = document.getElementById('modal-accounts-tbody');
@@ -1021,6 +1130,403 @@ function escapeHtml(text) {
 }
 
 // Inicialización de la aplicación
+
+// ======================================================================
+// 16. MÓDULO TRADINGVIEW LIGHTWEIGHT CHARTS (CANVAS 60FPS)
+// ======================================================================
+
+async function initLightweightChart() {
+  const container = document.getElementById('tradingview-chart-box');
+  if (!container || !window.LightweightCharts) return;
+
+  if (state.chartInstance) {
+    state.chartInstance.remove();
+    state.chartInstance = null;
+    state.candleSeries = null;
+  }
+
+  container.innerHTML = '';
+
+  const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth || 900,
+    height: 520,
+    layout: {
+      background: { color: '#0D0D0D' },
+      textColor: '#A0A0A0'
+    },
+    grid: {
+      vertLines: { color: '#1A1A1A' },
+      horzLines: { color: '#1A1A1A' }
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#404040', labelBackgroundColor: '#1E1E1E' },
+      horzLine: { color: '#404040', labelBackgroundColor: '#1E1E1E' }
+    },
+    rightPriceScale: {
+      borderColor: '#262626',
+      scaleMargins: { top: 0.1, bottom: 0.2 }
+    },
+    timeScale: {
+      borderColor: '#262626',
+      timeVisible: true,
+      secondsVisible: false
+    }
+  });
+
+  const candleSeries = chart.addCandlestickSeries({
+    upColor: '#00E676',
+    downColor: '#FF5252',
+    borderUpColor: '#00E676',
+    borderDownColor: '#FF5252',
+    wickUpColor: '#00E676',
+    wickDownColor: '#FF5252'
+  });
+
+  state.chartInstance = chart;
+  state.candleSeries = candleSeries;
+
+  // Actualizar selector de bots en gráficos
+  const chartBotSel = document.getElementById('chart-bot-selector');
+  if (chartBotSel && state.bots.length) {
+    const prev = chartBotSel.value;
+    chartBotSel.innerHTML = `<option value="ALL">Todos los Bots (Ejecuciones Globales)</option>` +
+      state.bots.map(b => `<option value="${b.id}">${escapeHtml(b.name)} (${b.id})</option>`).join('');
+    chartBotSel.value = prev || 'ALL';
+  }
+
+  // Manejador de leyenda dinámica flotante (OHLC)
+  chart.subscribeCrosshairMove(param => {
+    if (!param || !param.time || !param.seriesData) return;
+    const bar = param.seriesData.get(candleSeries);
+    if (!bar) return;
+    const openEl = document.getElementById('leg-open');
+    const highEl = document.getElementById('leg-high');
+    const lowEl = document.getElementById('leg-low');
+    const closeEl = document.getElementById('leg-close');
+    const volEl = document.getElementById('leg-vol');
+    if (openEl) openEl.textContent = bar.open?.toFixed(2) || '--';
+    if (highEl) highEl.textContent = bar.high?.toFixed(2) || '--';
+    if (lowEl) lowEl.textContent = bar.low?.toFixed(2) || '--';
+    if (closeEl) closeEl.textContent = bar.close?.toFixed(2) || '--';
+    if (volEl && bar.volume) volEl.textContent = bar.volume;
+  });
+
+  window.addEventListener('resize', () => {
+    if (state.chartInstance && container) {
+      state.chartInstance.applyOptions({ width: container.clientWidth });
+    }
+  });
+
+  await loadChartCandleData();
+}
+
+async function loadChartCandleData() {
+  try {
+    const resp = await apiFetch(`/api/market/candles?tf=${state.chartTimeframe}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (state.candleSeries && data.candles && data.candles.length) {
+      state.candleSeries.setData(data.candles);
+      state.chartMarkers = data.markers || [];
+      updateChartMarkers();
+      state.chartInstance?.timeScale().fitContent();
+
+      const last = data.candles[data.candles.length - 1];
+      const curPriceEl = document.getElementById('chart-current-price');
+      if (curPriceEl && last) curPriceEl.textContent = `${last.close.toFixed(2)}`;
+    }
+  } catch (err) {
+    console.warn('Error cargando velas:', err);
+  }
+}
+
+function updateChartMarkers() {
+  if (!state.candleSeries) return;
+  let markers = state.chartMarkers || [];
+  if (state.chartBotFilter !== 'ALL') {
+    markers = markers.filter(m => m.text?.includes(state.chartBotFilter));
+  }
+  state.candleSeries.setMarkers(markers);
+  const countEl = document.getElementById('chart-markers-count');
+  if (countEl) countEl.textContent = `${markers.length} Ejecuciones`;
+}
+
+function setChartTimeframe(tf) {
+  state.chartTimeframe = tf;
+  document.querySelectorAll('.timeframe-buttons .btn-tf').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${tf}'`));
+  });
+  loadChartCandleData();
+}
+
+function onChartBotFilterChange() {
+  const sel = document.getElementById('chart-bot-selector');
+  if (sel) state.chartBotFilter = sel.value;
+  updateChartMarkers();
+}
+
+function updateChartRealtimeCandle(candle) {
+  if (state.candleSeries && candle) {
+    state.candleSeries.update(candle);
+    const curPriceEl = document.getElementById('chart-current-price');
+    if (curPriceEl) curPriceEl.textContent = `${candle.close.toFixed(2)}`;
+  }
+}
+
+// ======================================================================
+// 17. MÓDULO LEDGER FINANCIERO & REPARTO A TITULARES KYC
+// ======================================================================
+
+async function loadLedgerData() {
+  try {
+    const url = state.ledgerIdentityFilter === 'ALL'
+      ? '/api/ledger/summary'
+      : `/api/ledger/summary?identity=${state.ledgerIdentityFilter}`;
+    const resp = await apiFetch(url);
+    if (!resp.ok) return;
+    state.ledgerData = await resp.json();
+    renderLedgerView();
+  } catch (err) {
+    console.warn('Error cargando ledger:', err);
+  }
+}
+
+function renderLedgerView() {
+  if (!state.ledgerData) return;
+  const { summary, identity_breakdown, transactions } = state.ledgerData;
+
+  const invEl = document.getElementById('ledger-total-invested');
+  const grossEl = document.getElementById('ledger-gross-payouts');
+  const accruedEl = document.getElementById('ledger-titular-accrued');
+  const pendingEl = document.getElementById('ledger-pending-titulares');
+  const netEl = document.getElementById('ledger-operator-net');
+
+  if (invEl) invEl.textContent = formatCurrency(-summary.total_invested);
+  if (grossEl) grossEl.textContent = formatCurrency(summary.total_gross_payouts);
+  if (accruedEl) accruedEl.textContent = formatCurrency(summary.total_titular_share);
+  if (pendingEl) pendingEl.textContent = formatCurrency(summary.pending_to_titulares);
+  if (netEl) netEl.textContent = formatCurrency(summary.operator_net_profit);
+
+  const filterSel = document.getElementById('ledger-identity-filter');
+  if (filterSel && state.identities.length) {
+    const currentVal = filterSel.value;
+    filterSel.innerHTML = `<option value="ALL">Vista Consolidada (Todos los Titulares)</option>` +
+      state.identities.map(i => `<option value="${i.id}" ${currentVal === i.id ? 'selected' : ''}>${escapeHtml(i.full_name)} (${i.flag || '🇺🇸'})</option>`).join('');
+  }
+
+  const idTbody = document.getElementById('ledger-identities-tbody');
+  if (idTbody) {
+    idTbody.innerHTML = (identity_breakdown || []).map(row => `
+      <tr>
+        <td><strong>${escapeHtml(row.identity_name)}</strong></td>
+        <td>${row.flag || '🇺🇸'} ${escapeHtml(row.country || 'US')}</td>
+        <td class="text-mono text-danger">${formatCurrency(-row.total_invested)}</td>
+        <td class="text-mono text-neon">${formatCurrency(row.gross_payouts)}</td>
+        <td class="text-mono">${row.split_rate_pct}%</td>
+        <td class="text-mono text-amber">${formatCurrency(row.share_accrued)}</td>
+        <td class="text-mono">${formatCurrency(row.paid_to_date)}</td>
+        <td class="text-mono font-bold ${row.pending_payout > 0 ? 'text-amber' : 'text-muted'}">${formatCurrency(row.pending_payout)}</td>
+        <td>
+          <button class="btn btn-outline btn-xs" onclick="quickPayoutForIdentity('${row.identity_id}', ${row.pending_payout})">
+            Pagar Split ➔
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const txTbody = document.getElementById('ledger-transactions-tbody');
+  if (txTbody) {
+    txTbody.innerHTML = (transactions || []).map(tx => {
+      const isPositive = tx.amount > 0;
+      const typeLabels = {
+        PROP_FIRM_PAYOUT: 'Retiro Prop Firm (Ingreso)',
+        TITULAR_SPLIT_PAYOUT: 'Pago Transferido a Titular (Split 20%)',
+        INVESTMENT_EVAL: 'Compra Evaluación (Costo)',
+        INVESTMENT_PA_FEE: 'Fee Activación PA (Costo)'
+      };
+      return `
+        <tr>
+          <td class="text-mono">${escapeHtml(tx.date)}</td>
+          <td><strong>${escapeHtml(tx.identity_name)}</strong></td>
+          <td>${escapeHtml(tx.account_name)} <span class="text-muted">(${escapeHtml(tx.prop_firm)})</span></td>
+          <td><span class="badge-strat">${typeLabels[tx.type] || tx.type}</span></td>
+          <td class="text-mono font-bold ${isPositive ? 'text-neon' : 'text-danger'}">
+            ${isPositive ? '+' : ''}${formatCurrency(tx.amount)}
+          </td>
+          <td><span class="badge-status-dot active"></span> ${escapeHtml(tx.status)}</td>
+          <td class="text-mono text-muted" style="font-size: 0.72rem;">${escapeHtml(tx.notes || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+}
+
+function onLedgerFilterChange() {
+  const sel = document.getElementById('ledger-identity-filter');
+  if (sel) state.ledgerIdentityFilter = sel.value;
+  loadLedgerData();
+}
+
+function openAddLedgerModal() {
+  const sel = document.getElementById('ledger-modal-identity');
+  if (sel && state.identities.length) {
+    sel.innerHTML = state.identities.map(i => `<option value="${i.id}">${escapeHtml(i.full_name)} (${i.id})</option>`).join('');
+  }
+  document.getElementById('add-ledger-modal')?.classList.add('open');
+}
+
+function closeAddLedgerModal() {
+  document.getElementById('add-ledger-modal')?.classList.remove('open');
+}
+
+function quickPayoutForIdentity(identityId, pendingAmount) {
+  openAddLedgerModal();
+  const identSel = document.getElementById('ledger-modal-identity');
+  const typeSel = document.getElementById('ledger-modal-type');
+  const amountInput = document.getElementById('ledger-modal-amount');
+  if (identSel) identSel.value = identityId;
+  if (typeSel) typeSel.value = 'TITULAR_SPLIT_PAYOUT';
+  if (amountInput) amountInput.value = Math.max(0, pendingAmount);
+}
+
+async function submitAddLedger(event) {
+  event.preventDefault();
+  const identityId = document.getElementById('ledger-modal-identity').value;
+  const type = document.getElementById('ledger-modal-type').value;
+  const account = document.getElementById('ledger-modal-account').value.trim();
+  const amount = Number(document.getElementById('ledger-modal-amount').value);
+  const notes = document.getElementById('ledger-modal-notes').value.trim();
+
+  try {
+    const resp = await apiFetch('/api/ledger/payout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identity_id: identityId,
+        type,
+        account_name: account,
+        prop_firm: 'Apex Trader Funding',
+        amount,
+        notes
+      })
+    });
+    if (!resp.ok) throw new Error('Error al registrar transacción');
+    closeAddLedgerModal();
+    showToast('Transacción registrada en el Ledger con éxito', 'success');
+    playAudioCue('chime');
+    loadLedgerData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ======================================================================
+// 18. MÓDULO CALENDARIO MACRO FOREXFACTORY
+// ======================================================================
+
+async function loadEconomicNews() {
+  try {
+    const resp = await apiFetch('/api/news/calendar');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    state.economicNews = data.events || [];
+    renderNewsView();
+  } catch (err) {
+    console.warn('Error cargando noticias:', err);
+  }
+}
+
+function renderNewsView() {
+  const tbody = document.getElementById('news-events-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = (state.economicNews || []).map(ev => {
+    const impactClass = ev.impact === 'HIGH' ? 'high' : (ev.impact === 'MEDIUM' ? 'medium' : 'low');
+    const impactLabel = ev.impact === 'HIGH' ? '🔴 ALTO' : (ev.impact === 'MEDIUM' ? '🟠 MEDIO' : '⚪ BAJO');
+
+    return `
+      <tr>
+        <td class="text-mono">${escapeHtml(ev.date)}</td>
+        <td class="text-mono font-bold">${escapeHtml(ev.time_est)}</td>
+        <td class="text-mono font-bold">${escapeHtml(ev.currency)}</td>
+        <td><span class="impact-badge ${impactClass}">${impactLabel}</span></td>
+        <td><strong>${escapeHtml(ev.event)}</strong></td>
+        <td class="text-mono">${escapeHtml(ev.forecast || '-')}</td>
+        <td class="text-mono">${escapeHtml(ev.previous || '-')}</td>
+        <td><span class="badge-status-dot ${ev.status === 'COMPLETED' ? '' : 'active'}"></span> ${escapeHtml(ev.status)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ======================================================================
+// 19. CIRCUIT BREAKER & CONSISTENCY LOCK
+// ======================================================================
+
+function populateCircuitBreakerInModal(bot) {
+  const cb = bot.circuit_breaker || {
+    daily_loss_limit: 1000,
+    consistency_target: 150,
+    auto_lock_consistency: true,
+    pause_on_red_news: true,
+    status: 'NORMAL'
+  };
+
+  const targetInput = document.getElementById('modal-cb-target');
+  const autoLockCheck = document.getElementById('modal-cb-auto-lock');
+  const dllInput = document.getElementById('modal-cb-dll');
+  const pauseNewsCheck = document.getElementById('modal-cb-pause-news');
+  const statusBadge = document.getElementById('modal-cb-status-badge');
+
+  if (targetInput) targetInput.value = cb.consistency_target || 150;
+  if (autoLockCheck) autoLockCheck.checked = cb.auto_lock_consistency !== false;
+  if (dllInput) dllInput.value = cb.daily_loss_limit || 1000;
+  if (pauseNewsCheck) pauseNewsCheck.checked = cb.pause_on_red_news !== false;
+
+  if (statusBadge) {
+    if (cb.status === 'LOCKED_PROFIT') {
+      statusBadge.textContent = '🎯 META DE CONSISTENCIA ASEGURADA (+$150)';
+      statusBadge.className = 'badge-strat text-neon';
+    } else if (cb.status === 'TRIPPED_STOP') {
+      statusBadge.textContent = '🛑 CIRCUIT BREAKER ACTIVADO (DLL STOP)';
+      statusBadge.className = 'badge-strat text-danger';
+    } else {
+      statusBadge.textContent = 'ESTADO: NORMAL (VIGILANDO)';
+      statusBadge.className = 'badge-strat';
+    }
+  }
+}
+
+async function saveCurrentModalCircuitBreaker() {
+  if (!state.selectedBotId) return;
+
+  const target = Number(document.getElementById('modal-cb-target').value);
+  const autoLock = document.getElementById('modal-cb-auto-lock').checked;
+  const dll = Number(document.getElementById('modal-cb-dll').value);
+  const pauseNews = document.getElementById('modal-cb-pause-news').checked;
+
+  try {
+    const resp = await apiFetch(`/api/bots/${state.selectedBotId}/circuit-breaker`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        consistency_target: target,
+        auto_lock_consistency: autoLock,
+        daily_loss_limit: dll,
+        pause_on_red_news: pauseNews
+      })
+    });
+    if (!resp.ok) throw new Error('Error guardando Circuit Breaker');
+    showToast('Circuit Breaker y Candado de Consistencia actualizados', 'success');
+    playAudioCue('chime');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   if (state.token) initWebSocket();

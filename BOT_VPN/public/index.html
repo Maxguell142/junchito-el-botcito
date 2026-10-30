@@ -115,6 +115,16 @@
         </button>
       </div>
 
+      <!-- Control de Audio Web Audio API y Guía Institucional -->
+      <div class="audio-landing-group">
+        <button class="btn btn-audio-toggle" id="audio-toggle-btn" onclick="toggleAudioMute()" title="Alertas Sonoras Sintetizadas">
+          <span id="audio-icon">🔊</span> <span id="audio-label">Audio ON</span>
+        </button>
+        <button class="btn btn-landing-toggle" id="landing-toggle-btn" onclick="toggleLandingView()" title="Página Principal & Arquitectura">
+          <span>🏠</span> Guía / Inicio
+        </button>
+      </div>
+
       <button class="btn btn-primary" onclick="openAddBotModal()">
         <span class="btn-icon">+</span> Nuevo Bot
       </button>
@@ -140,6 +150,18 @@
       <button class="tab-link active" onclick="switchTab('dashboard')">
         <span class="tab-icon">📊</span> Dashboard & Bots
       </button>
+      <button class="tab-link" onclick="switchTab('charts')">
+        <span class="tab-icon">📈</span> Gráficos MNQ & Trades
+      </button>
+      <button class="tab-link" onclick="switchTab('ledger')">
+        <span class="tab-icon">💰</span> Finanzas & Ledger
+      </button>
+      <button class="tab-link" onclick="switchTab('noticias')">
+        <span class="tab-icon">📰</span> Calendario Macro
+      </button>
+
+        <span class="tab-icon">📊</span> Dashboard & Bots
+      </button>
       <button class="tab-link" onclick="switchTab('titulares')">
         <span class="tab-icon">👤</span> Titulares & KYC (<span id="count-titulares">3</span>)
       </button>
@@ -160,6 +182,154 @@
        CONTENEDOR DE VISTAS PRINCIPALES
        ====================================================================== -->
   <main class="main-container">
+
+        <!-- 0. VISTA LANDING / ONBOARDING & ARQUITECTURA -->
+    <section class="tab-view" id="view-landing">
+      <div class="landing-hero">
+        <div class="landing-badge">
+          <span class="pulse-dot"></span>
+          <span>ARQUITECTURA INSTITUCIONAL // CME MNQ FUTURES</span>
+        </div>
+        <h1 class="landing-title">QUANTUM FX</h1>
+        <p class="landing-subtitle">
+          Sistema Centralizado de Orquestación y Monitoreo Multi-Bot con Aislamiento SOCKS5 Residencial por Titular Legal (KYC),
+          Anti-Mirroring Estocástico y Circuit Breakers de Seguridad para Cuentas de Fondeo (Prop Firms).
+        </p>
+        <div class="landing-cta-group">
+          <button class="btn btn-primary btn-lg" onclick="enterTerminalWorkspace()">
+            <span>🚀 Entrar a la Terminal de Trading</span> ➔
+          </button>
+          <button class="btn btn-outline btn-lg" onclick="document.getElementById('pillars-section').scrollIntoView({ behavior: 'smooth' })">
+            <span>📖 Conocer los 4 Pilares</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Métricas Clave del Ecosistema -->
+      <div class="landing-kpis-strip">
+        <div class="l-kpi-item">
+          <span class="l-kpi-val text-neon">MNQ (CME)</span>
+          <span class="l-kpi-lbl">Activo Operado</span>
+        </div>
+        <div class="l-kpi-item">
+          <span class="l-kpi-val text-neon">SOCKS5 ISP</span>
+          <span class="l-kpi-lbl">Aislamiento por Socket</span>
+        </div>
+        <div class="l-kpi-item">
+          <span class="l-kpi-val text-neon">50 - 350 ms</span>
+          <span class="l-kpi-lbl">Jitter Anti-Mirroring</span>
+        </div>
+        <div class="l-kpi-item">
+          <span class="l-kpi-val text-neon">+$150 USD</span>
+          <span class="l-kpi-lbl">Consistency Target Lock</span>
+        </div>
+      </div>
+
+      <!-- 4 Pilares de la Arquitectura -->
+      <div class="landing-pillars-section" id="pillars-section">
+        <div class="pillars-header">
+          <h2>Los 4 Pilares de Prevención de Baneos y Seguridad</h2>
+          <p>Diseñado para superar auditorías de Rithmic, Tradovate y Prop Firms (Apex, Topstep, Leelo Trading, Blue Guardian).</p>
+        </div>
+
+        <div class="pillars-grid">
+          <div class="pillar-card">
+            <div class="pillar-icon">🛡️</div>
+            <div class="pillar-num">PILAR 01</div>
+            <h3>Aislamiento SOCKS5 Dedicado</h3>
+            <p>
+              NO usamos VPNs comerciales que cambian la IP global de Windows. En su lugar, el socket HTTP/WebSocket de cada bot
+              se enlaza directamente a un proxy residencial estático (ISP Comcast, AT&T, Spectrum) geolocalizado en US.
+            </p>
+            <ul class="pillar-bullets">
+              <li>✓ IP local de Windows intacta sin colisiones.</li>
+              <li>✓ 0% detección de Data Center / VPN comercial.</li>
+              <li>✓ Latencia ultra-baja (~10-15ms a servidores CME).</li>
+            </ul>
+          </div>
+
+          <div class="pillar-card">
+            <div class="pillar-icon">👤</div>
+            <div class="pillar-num">PILAR 02</div>
+            <h3>Titulares Físicos & KYC Único</h3>
+            <p>
+              Regla estricta: Cada bot gestiona únicamente cuentas compradas a nombre de la MISMA persona física verificada.
+              Cuentas de distintos titulares jamás comparten nodo de salida ni proceso.
+            </p>
+            <ul class="pillar-bullets">
+              <li>✓ 1 Bot = 1 Persona Legal = 1 IP Residencial.</li>
+              <li>✓ Prevención absoluta de cuentas cruzadas.</li>
+              <li>✓ Trazabilidad de contratos y estados de fondeo.</li>
+            </ul>
+          </div>
+
+          <div class="pillar-card">
+            <div class="pillar-icon">⚡</div>
+            <div class="pillar-num">PILAR 03</div>
+            <h3>Anti-Mirroring con Jitter Asíncrono</h3>
+            <p>
+              Desfase estocástico aleatorio en milisegundos (50ms a 350ms) entre órdenes salientes enviadas a brokers.
+              Elimina la huella digital sincrónica que usan los brokers para detectar software de copy-trading no autorizado.
+            </p>
+            <ul class="pillar-bullets">
+              <li>✓ Distribución gaussiana de retardos por orden.</li>
+              <li>✓ Desincronización deliberada de fills en broker.</li>
+              <li>✓ Respeto a las políticas de evaluación y PA.</li>
+            </ul>
+          </div>
+
+          <div class="pillar-card">
+            <div class="pillar-icon">🎯</div>
+            <div class="pillar-num">PILAR 04</div>
+            <h3>Circuit Breakers & Consistency Lock</h3>
+            <p>
+              Protección algorítmica de capital: candado automático de +$150 USD para cumplir el requisito de días de consistencia
+              mínimos para retiros en prop firms, y Trailing Daily Loss Limit con cierre de emergencia.
+            </p>
+            <ul class="pillar-bullets">
+              <li>✓ Candado +$150 asegura el día y bloquea nuevas entradas.</li>
+              <li>✓ Auto-flatten ante drawdown anómalo.</li>
+              <li>✓ Filtro macroeconómico ante noticias de alto impacto.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flujo de Ejecución End-to-End -->
+      <div class="workflow-section">
+        <h3>Flujo Operativo de Ejecución</h3>
+        <div class="workflow-steps-row">
+          <div class="wf-step">
+            <div class="wf-step-idx">1</div>
+            <h4>Señal TradingView</h4>
+            <p>Webhook con token seguro emite señal algorítmica (ICT / SMT / Order Flow).</p>
+          </div>
+          <div class="wf-arrow">➔</div>
+          <div class="wf-step">
+            <div class="wf-step-idx">2</div>
+            <h4>Filtros y Horarios</h4>
+            <p>Motor verifica New York Killzone, límites de riesgo y filtro ForexFactory.</p>
+          </div>
+          <div class="wf-arrow">➔</div>
+          <div class="wf-step">
+            <div class="wf-step-idx">3</div>
+            <h4>Jitter y SOCKS5</h4>
+            <p>Inyección de retardo asíncrono y salida por el proxy ISP del titular.</p>
+          </div>
+          <div class="wf-arrow">➔</div>
+          <div class="wf-step">
+            <div class="wf-step-idx">4</div>
+            <h4>Broker y Circuit Breaker</h4>
+            <p>Ejecución en Tradovate/Rithmic y auto-bloqueo al alcanzar la meta de consistencia.</p>
+          </div>
+        </div>
+        <div class="text-center mt-4">
+          <button class="btn btn-primary btn-lg" onclick="enterTerminalWorkspace()">
+            Comenzar a Operar en la Terminal ➔
+          </button>
+        </div>
+      </div>
+    </section>
 
     <!-- 1. VISTA DASHBOARD (BOTS GRID) -->
     <section class="tab-view active" id="view-dashboard">
@@ -298,6 +468,258 @@
       </div>
     </section>
 
+    <!-- 2. VISTA TRADINGVIEW LIGHTWEIGHT CHARTS -->
+    <section class="tab-view" id="view-charts">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Gráficos Interactivos CME MNQ (Lightweight Charts 60fps)</h2>
+          <span class="section-sub">Renderizado nativo en Canvas/WebGL con marcadores de trades de bots, niveles de SL/TP y candado de consistencia.</span>
+        </div>
+        <div class="chart-controls-group">
+          <div class="select-wrapper">
+            <label class="control-label">Bot de Trading:</label>
+            <select id="chart-bot-selector" onchange="onChartBotFilterChange()">
+              <option value="ALL">Todos los Bots (Ejecuciones Globales)</option>
+            </select>
+          </div>
+          <div class="timeframe-buttons">
+            <button class="btn-tf active" onclick="setChartTimeframe('1m')">1M</button>
+            <button class="btn-tf" onclick="setChartTimeframe('5m')">5M</button>
+            <button class="btn-tf" onclick="setChartTimeframe('15m')">15M</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leyenda Dinámica Flotante OHLC -->
+      <div class="chart-card-wrapper">
+        <div class="chart-floating-legend" id="chart-floating-legend">
+          <span class="legend-symbol">MNQ-CME</span>
+          <span class="legend-stat">O: <strong id="leg-open">--</strong></span>
+          <span class="legend-stat">H: <strong id="leg-high">--</strong></span>
+          <span class="legend-stat">L: <strong id="leg-low">--</strong></span>
+          <span class="legend-stat">C: <strong id="leg-close">--</strong></span>
+          <span class="legend-stat">Vol: <strong id="leg-vol">--</strong></span>
+          <span class="legend-stat"><span class="badge-status-dot active"></span> En Vivo</span>
+        </div>
+
+        <div id="tradingview-chart-box" class="tradingview-chart-box">
+          <!-- Renderizado por TradingView Lightweight Charts -->
+        </div>
+
+        <!-- Barra Inferior de Métricas de Posición del Gráfico -->
+        <div class="chart-metrics-footer">
+          <div class="chart-metric">
+            <span class="cm-label">PRECIO CME ACTUAL:</span>
+            <span class="cm-val text-neon font-bold" id="chart-current-price">$18,245.50</span>
+          </div>
+          <div class="chart-metric">
+            <span class="cm-label">CANDADO DE CONSISTENCIA:</span>
+            <span class="cm-val text-neon">🎯 +$150.00 USD Lock</span>
+          </div>
+          <div class="chart-metric">
+            <span class="cm-label">TRAILING STOP SEGURIDAD:</span>
+            <span class="cm-val text-danger">🛑 -$1,000.00 USD DLL</span>
+          </div>
+          <div class="chart-metric">
+            <span class="cm-label">TRADES MARCADOS:</span>
+            <span class="cm-val" id="chart-markers-count">2 Ejecuciones</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 3. VISTA FINANZAS & LEDGER DE REPARTO A TITULARES -->
+    <section class="tab-view" id="view-ledger">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Ledger Financiero & Reparto de Ganancias a Titulares KYC</h2>
+          <span class="section-sub">Control estricto de inversión en cuentas, retiros aprobados de prop firms y cálculo de splits (80/20) por persona.</span>
+        </div>
+        <div class="section-actions-group">
+          <select id="ledger-identity-filter" onchange="onLedgerFilterChange()">
+            <option value="ALL">Vista Consolidada (Todos los Titulares)</option>
+          </select>
+          <button class="btn btn-primary" onclick="openAddLedgerModal()">
+            <span class="btn-icon">+</span> Registrar Retiro / Pago
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIs Ejecutivos Financieros -->
+      <div class="ledger-kpis-grid">
+        <div class="ledger-kpi-card">
+          <span class="l-kpi-icon">💼</span>
+          <div class="l-kpi-meta">
+            <span class="l-kpi-title">TOTAL INVERTIDO EN CUENTAS</span>
+            <span class="l-kpi-amount text-danger" id="ledger-total-invested">-$0.00</span>
+            <span class="l-kpi-hint">Evaluaciones + Activación PA</span>
+          </div>
+        </div>
+
+        <div class="ledger-kpi-card">
+          <span class="l-kpi-icon">🏦</span>
+          <div class="l-kpi-meta">
+            <span class="l-kpi-title">RETIROS BRUTOS PROP FIRMS</span>
+            <span class="l-kpi-amount text-neon" id="ledger-gross-payouts">+$0.00</span>
+            <span class="l-kpi-hint">Apex, Topstep, Leelo Payouts</span>
+          </div>
+        </div>
+
+        <div class="ledger-kpi-card">
+          <span class="l-kpi-icon">👤</span>
+          <div class="l-kpi-meta">
+            <span class="l-kpi-title">SPLIT ACUMULADO TITULARES (20%)</span>
+            <span class="l-kpi-amount text-amber" id="ledger-titular-accrued">$0.00</span>
+            <span class="l-kpi-hint">Devengado a pagar a los titulares</span>
+          </div>
+        </div>
+
+        <div class="ledger-kpi-card">
+          <span class="l-kpi-icon">⏳</span>
+          <div class="l-kpi-meta">
+            <span class="l-kpi-title">SALDO PENDIENTE A TITULARES</span>
+            <span class="l-kpi-amount text-amber font-bold" id="ledger-pending-titulares">$0.00</span>
+            <span class="l-kpi-hint">Por transferir a billeteras/bancos</span>
+          </div>
+        </div>
+
+        <div class="ledger-kpi-card highlight">
+          <span class="l-kpi-icon">💰</span>
+          <div class="l-kpi-meta">
+            <span class="l-kpi-title">GANANCIA NETA OPERADOR (80%)</span>
+            <span class="l-kpi-amount text-neon font-bold" id="ledger-operator-net">+$0.00</span>
+            <span class="l-kpi-hint">Ganancia limpia tras deducir costos</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla 1: Desglose por Persona Titular -->
+      <div class="table-card mb-4">
+        <div class="table-card-header">
+          <h3>Balance y Repartos por Persona Titular (KYC)</h3>
+          <span class="table-sub">Comisión institucional por préstamo de identidad: 20% de cada retiro neto</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>PERSONA TITULAR</th>
+                <th>PAÍS</th>
+                <th>INVERSIÓN EN SUS CUENTAS</th>
+                <th>RETIROS GENERADOS</th>
+                <th>SPLIT (%)</th>
+                <th>DEVENGADO TITULAR</th>
+                <th>PAGADO HASTA LA FECHA</th>
+                <th>PENDIENTE DE PAGO</th>
+                <th>ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-identities-tbody">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tabla 2: Journal Financiero / Historial de Movimientos -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3>Journal de Transacciones Financieras</h3>
+          <span class="table-sub">Registro auditado de compras de evaluaciones, fees PA y pagos a titulares</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>FECHA</th>
+                <th>TITULAR</th>
+                <th>CUENTA / PROP FIRM</th>
+                <th>TIPO DE MOVIMIENTO</th>
+                <th>MONTO USD</th>
+                <th>ESTADO</th>
+                <th>DETALLES / TXID</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-transactions-tbody">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 4. VISTA CALENDARIO MACRO & FILTRO FOREXFACTORY -->
+    <section class="tab-view" id="view-noticias">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Calendario Macroeconómico & Filtro de Noticias ForexFactory</h2>
+          <span class="section-sub">Protección contra volatilidad anómala en aperturas de CPI, FOMC y NFP con control configurable por bot.</span>
+        </div>
+      </div>
+
+      <div class="news-layout-grid">
+        <!-- Tabla de Eventos Macroeconómicos -->
+        <div class="table-card news-table-card">
+          <div class="table-card-header">
+            <h3>Eventos de Alto y Medio Impacto (Semana en Curso)</h3>
+            <span class="table-sub">Alimentación sincronizada para CME MNQ (USD)</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>FECHA / DÍA</th>
+                  <th>HORA (EST)</th>
+                  <th>DIVISA</th>
+                  <th>IMPACTO</th>
+                  <th>EVENTO MACRO</th>
+                  <th>PREVISIÓN</th>
+                  <th>PREVIO</th>
+                  <th>ESTADO</th>
+                </tr>
+              </thead>
+              <tbody id="news-events-tbody">
+                <!-- Renderizado dinámico -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Panel de Configuración de Filtro de Noticias por Bot -->
+        <div class="news-settings-card">
+          <h3>🛡️ Reglas Institucionales de Noticias</h3>
+          <p class="card-desc">Define cómo deben responder los bots ante noticias rojas (Alto Impacto).</p>
+
+          <div class="news-rule-item">
+            <div class="news-rule-text">
+              <strong>Pausar Bots 5 min antes de Noticias Rojas</strong>
+              <span>Evita que se abran órdenes durante el deslizamiento inicial del spread.</span>
+            </div>
+            <span class="badge-status-dot active"></span>
+          </div>
+
+          <div class="news-rule-item">
+            <div class="news-rule-text">
+              <strong>Mantener Pausa 10 min después del impacto</strong>
+              <span>Permite que el libro de órdenes recupere liquidez institucional.</span>
+            </div>
+            <span class="badge-status-dot active"></span>
+          </div>
+
+          <div class="news-prop-notice">
+            <h4>⚠️ Reglas de Prop Firms sobre Noticias</h4>
+            <p>
+              <strong>Apex Trader Funding:</strong> Permite operar noticias sin restricción.<br>
+              <strong>Topstep:</strong> Prohíbe tener órdenes abiertas 1 minuto antes y 1 minuto después de noticias rojas seleccionadas.<br>
+              <strong>Leelo Trading:</strong> Permite operar noticias en evaluaciones pero exige cuidado en cuentas de fondeo.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
 
@@ -369,6 +791,39 @@
             <span class="kpi-label">MAX DRAWDOWN</span>
             <span class="kpi-val text-danger" id="modal-max-dd">$0.00</span>
             <span class="kpi-sub">Trailing Stop de seguridad</span>
+          </div>
+        </div>
+
+                <!-- Controles Avanzados de Circuit Breaker & Consistencia -->
+        <div class="detail-section circuit-breaker-box">
+          <div class="section-sub-header">
+            <h3>⚡ Parámetros de Circuit Breaker & Candado de Consistencia</h3>
+            <span class="badge-strat" id="modal-cb-status-badge">ESTADO: NORMAL</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Candado Día de Consistencia (+USD Lock)</label>
+              <div class="input-with-toggle">
+                <input type="number" id="modal-cb-target" value="150" step="25" min="50">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="modal-cb-auto-lock" checked> Activar Bloqueo Automático
+                </label>
+              </div>
+              <small class="form-hint">Al tocar +$150, el bot cierra posiciones y se bloquea para asegurar el día de consistencia prop firm.</small>
+            </div>
+            <div class="form-group">
+              <label>Trailing Daily Loss Limit (-USD Stop)</label>
+              <input type="number" id="modal-cb-dll" value="1000" step="50" min="100">
+              <small class="form-hint">Cierre forzado inmediato (FLAT) si la pérdida del bot supera este límite.</small>
+            </div>
+          </div>
+          <div class="form-row align-center">
+            <label class="checkbox-inline">
+              <input type="checkbox" id="modal-cb-pause-news" checked> Pausar automáticamente durante noticias rojas (ForexFactory)
+            </label>
+            <button class="btn btn-primary btn-sm ml-auto" onclick="saveCurrentModalCircuitBreaker()">
+              💾 Guardar Circuit Breaker
+            </button>
           </div>
         </div>
 
@@ -640,6 +1095,7 @@
   <div class="toast-container" id="toast-container"></div>
 
 
+  <script src="/static/lightweight-charts.standalone.production.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

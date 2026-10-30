@@ -47,3 +47,13 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 
 ## [2026-10-17] query | Recomendación de nuevas arquitecturas de Frontend y Backend
 - Propuesta de patrones arquitectónicos avanzados: Event-Driven Queue (EDA/ZeroMQ), Circuit Breaker de riesgo institucional, graficación Canvas/WebGL (Lightweight Charts), aislamiento multi-proceso, sidecar de Telegram y PWA.
+
+
+## [2026-10-28] ingest | Implementación de Nuevas Arquitecturas Frontend y Backend (Landing, Lightweight Charts, Circuit Breaker, Web Audio API, Filtro ForexFactory, Profit Split Ledger)
+- **Análisis de Cambios Previos**: Se auditó la persistencia SQLite (`database.js`, `persistence.py`, `migrations/`) añadida recientemente en el proyecto; se verificó que no genera colisiones ni interferencias con el sistema multi-bot ni con las APIs WebSocket.
+- **Página de Inicio / Landing Institucional (`#view-landing`)**: Diseñada con explicación de los 4 pilares (SOCKS5 Residencial ISP, KYC Individual por Bot, Anti-Mirroring Jitter y Circuit Breakers de Riesgo) y navegación fluida hacia la terminal.
+- **TradingView Lightweight Charts (v4.x)**: Integración local offline en Canvas 60fps con velas históricas y en vivo de CME MNQ, marcadores de órdenes de bots (BUY/SELL) y leyenda flotante interactiva.
+- **Circuit Breaker & Candado de Consistencia ($150 Lock)**: Evaluador en tiempo real que asegura la meta diaria de +$150 USD bloqueando el bot para salvaguardar el día de retiro en empresas de fondeo (Apex/Topstep), además de control Trailing DLL.
+- **Web Audio API**: Módulo de sonido sintetizado por hardware sin dependencias externas (chime para fills, alarma doble para eventos críticos de riesgo) con control de muteo persistente.
+- **Filtro de Noticias Macroeconómicas (ForexFactory)**: Calendario de alta volatilidad (CPI, FOMC, NFP) con control configurable por bot para pausar antes y después de noticias de impacto rojo.
+- **Payout & Profit Split Ledger**: Dashboard financiero con desglose por persona titular (80% operador / 20% titular), cálculo de inversión acumulada, retiros de prop firms, saldos adeudados y journal de transacciones.

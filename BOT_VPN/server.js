@@ -214,6 +214,13 @@ function toRuntimeBot(b) {
     jitter_min_ms: b.jitter_min_ms || b.jitter_ms || 50,
     jitter_max_ms: b.jitter_max_ms || 350,
     status: b.status || 'ACTIVE',
+    circuit_breaker: b.circuit_breaker || {
+      daily_loss_limit: 1000.0,
+      consistency_target: 150.0,
+      auto_lock_consistency: true,
+      pause_on_red_news: true,
+      status: 'NORMAL'
+    },
     schedule: b.schedule || { start_time: '09:30', end_time: '12:00', timezone: 'America/New_York' },
     accounts: (b.accounts || []).map(a => ({
       id: a.id,
@@ -280,6 +287,310 @@ loadConfig();
 
 let marketPrice = 18245.50;
 
+// ======================================================================
+// 1. MOTOR DE VELAS DE MERCADO (CME MNQ) & MARCADORES
+// ======================================================================
+
+const marketCandles = [];
+const chartExecutionMarkers = [];
+
+function initMarketCandles() {
+  const nowSec = Math.floor(Date.now() / 1000);
+  let basePrice = 18230.00;
+  for (let i = 120; i >= 1; i--) {
+    const time = nowSec - (i * 60);
+    const candleDelta = (Math.sin(i / 5) * 4) + ((Math.random() - 0.48) * 3);
+    const open = Number(basePrice.toFixed(2));
+    const close = Number((basePrice + candleDelta).toFixed(2));
+    const high = Number((Math.max(open, close) + Math.random() * 2.5).toFixed(2));
+    const low = Number((Math.min(open, close) - Math.random() * 2.5).toFixed(2));
+    const volume = Math.floor(40 + Math.random() * 120);
+    marketCandles.push({ time, open, high, low, close, volume });
+    basePrice = close;
+  }
+  marketPrice = basePrice;
+
+  if (marketCandles.length > 30) {
+    chartExecutionMarkers.push({
+      time: marketCandles[marketCandles.length - 25].time,
+      position: 'belowBar',
+      color: '#00E676',
+      shape: 'arrowUp',
+      text: 'Bot 1 (ICT): BUY @ ' + marketCandles[marketCandles.length - 25].close
+    });
+    chartExecutionMarkers.push({
+      time: marketCandles[marketCandles.length - 12].time,
+      position: 'aboveBar',
+      color: '#FF5252',
+      shape: 'arrowDown',
+      text: 'Bot 2 (SMT): SELL @ ' + marketCandles[marketCandles.length - 12].close
+    });
+  }
+}
+initMarketCandles();
+
+function updateCandleOnTick(price) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const currentCandleTime = nowSec - (nowSec % 60);
+
+  if (marketCandles.length === 0) {
+    marketCandles.push({
+      time: currentCandleTime,
+      open: price,
+      high: price,
+      low: price,
+      close: price,
+      volume: 1
+    });
+    return;
+  }
+
+  const lastCandle = marketCandles[marketCandles.length - 1];
+  if (lastCandle.time === currentCandleTime) {
+    lastCandle.high = Math.max(lastCandle.high, price);
+    lastCandle.low = Math.min(lastCandle.low, price);
+    lastCandle.close = price;
+    lastCandle.volume += 1;
+  } else {
+    const newCandle = {
+      time: currentCandleTime,
+      open: lastCandle.close,
+      high: Math.max(lastCandle.close, price),
+      low: Math.min(lastCandle.close, price),
+      close: price,
+      volume: 1
+    };
+    marketCandles.push(newCandle);
+    if (marketCandles.length > 500) {
+      marketCandles.shift();
+    }
+  }
+}
+
+// ======================================================================
+// 2. CALENDARIO DE NOTICIAS MACRO (FOREXFACTORY FEED)
+// ======================================================================
+
+const economicEvents = [
+  {
+    id: 'ev_cpi_1',
+    event: 'CPI (Consumer Price Index) m/m',
+    currency: 'USD',
+    impact: 'HIGH',
+    time_est: '08:30 EST',
+    date: new Date().toISOString().slice(0, 10),
+    forecast: '0.2%',
+    previous: '0.2%',
+    actual: null,
+    status: 'UPCOMING'
+  },
+  {
+    id: 'ev_fomc_1',
+    event: 'FOMC Interest Rate Decision',
+    currency: 'USD',
+    impact: 'HIGH',
+    time_est: '14:00 EST',
+    date: new Date().toISOString().slice(0, 10),
+    forecast: '4.75%',
+    previous: '5.00%',
+    actual: null,
+    status: 'UPCOMING'
+  },
+  {
+    id: 'ev_powell_1',
+    event: 'Fed Chair Powell Press Conference',
+    currency: 'USD',
+    impact: 'HIGH',
+    time_est: '14:30 EST',
+    date: new Date().toISOString().slice(0, 10),
+    forecast: '-',
+    previous: '-',
+    actual: null,
+    status: 'UPCOMING'
+  },
+  {
+    id: 'ev_claims_1',
+    event: 'Initial Jobless Claims',
+    currency: 'USD',
+    impact: 'MEDIUM',
+    time_est: '08:30 EST',
+    date: new Date().toISOString().slice(0, 10),
+    forecast: '218K',
+    previous: '221K',
+    actual: '215K',
+    status: 'COMPLETED'
+  },
+  {
+    id: 'ev_nfp_1',
+    event: 'Non-Farm Employment Change (NFP)',
+    currency: 'USD',
+    impact: 'HIGH',
+    time_est: '08:30 EST',
+    date: 'Viernes',
+    forecast: '150K',
+    previous: '254K',
+    actual: null,
+    status: 'UPCOMING'
+  }
+];
+
+// ======================================================================
+// 3. LEDGER FINANCIERO Y REPARTO A TITULARES KYC
+// ======================================================================
+
+const ledgerTransactions = [
+  {
+    id: 'tx_101',
+    date: '2026-10-14',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #1',
+    prop_firm: 'Apex Trader Funding',
+    type: 'INVESTMENT_EVAL',
+    amount: -35.00,
+    status: 'COMPLETED',
+    notes: 'Compra de evaluación Apex 50k (80% off)'
+  },
+  {
+    id: 'tx_102',
+    date: '2026-10-16',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Scalp',
+    prop_firm: 'Topstep',
+    type: 'INVESTMENT_EVAL',
+    amount: -49.00,
+    status: 'COMPLETED',
+    notes: 'Suscripción Topstep 50k'
+  },
+  {
+    id: 'tx_103',
+    date: '2026-10-18',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #1',
+    prop_firm: 'Apex Trader Funding',
+    type: 'INVESTMENT_PA_FEE',
+    amount: -140.00,
+    status: 'COMPLETED',
+    notes: 'Activación de Performance Account (PA)'
+  },
+  {
+    id: 'tx_104',
+    date: '2026-10-22',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #1',
+    prop_firm: 'Apex Trader Funding',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 2500.00,
+    status: 'COMPLETED',
+    notes: 'Primer payout aprobado por Apex (100% primeros $25k)'
+  },
+  {
+    id: 'tx_105',
+    date: '2026-10-23',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #1',
+    prop_firm: 'Apex Trader Funding',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -500.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Carlos Mendoza. Hash: 0x8a...41f'
+  },
+  {
+    id: 'tx_106',
+    date: '2026-10-25',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Express',
+    prop_firm: 'Topstep',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 3200.00,
+    status: 'COMPLETED',
+    notes: 'Retiro bancario aprobado por Topstep'
+  },
+  {
+    id: 'tx_107',
+    date: '2026-10-26',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Express',
+    prop_firm: 'Topstep',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -640.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Valeria Ramos. Hash: 0x4f...99d'
+  }
+];
+
+function getLedgerSummary(identityFilter = null) {
+  let txs = ledgerTransactions;
+  if (identityFilter && identityFilter !== 'ALL') {
+    txs = txs.filter(t => t.identity_id === identityFilter);
+  }
+
+  let totalInvested = 0;
+  let totalGrossPayouts = 0;
+  let totalPaidToTitulares = 0;
+
+  txs.forEach(t => {
+    if (t.type === 'INVESTMENT_EVAL' || t.type === 'INVESTMENT_PA_FEE') {
+      totalInvested += Math.abs(t.amount);
+    } else if (t.type === 'PROP_FIRM_PAYOUT') {
+      totalGrossPayouts += t.amount;
+    } else if (t.type === 'TITULAR_SPLIT_PAYOUT') {
+      totalPaidToTitulares += Math.abs(t.amount);
+    }
+  });
+
+  const titularSplitRate = 0.20;
+  const totalTitularShareAccrued = Number((totalGrossPayouts * titularSplitRate).toFixed(2));
+  const pendingToTitulares = Number((totalTitularShareAccrued - totalPaidToTitulares).toFixed(2));
+  const operatorNetProfit = Number((totalGrossPayouts - totalInvested - totalPaidToTitulares).toFixed(2));
+
+  const identityBreakdown = identities.map(ident => {
+    const identTxs = ledgerTransactions.filter(t => t.identity_id === ident.id);
+    let inv = 0;
+    let gross = 0;
+    let paid = 0;
+    identTxs.forEach(t => {
+      if (t.type === 'INVESTMENT_EVAL' || t.type === 'INVESTMENT_PA_FEE') inv += Math.abs(t.amount);
+      else if (t.type === 'PROP_FIRM_PAYOUT') gross += t.amount;
+      else if (t.type === 'TITULAR_SPLIT_PAYOUT') paid += Math.abs(t.amount);
+    });
+    const share = Number((gross * titularSplitRate).toFixed(2));
+    const pending = Number((share - paid).toFixed(2));
+    return {
+      identity_id: ident.id,
+      identity_name: ident.full_name,
+      flag: ident.flag,
+      country: ident.country,
+      total_invested: inv,
+      gross_payouts: gross,
+      split_rate_pct: 20,
+      share_accrued: share,
+      paid_to_date: paid,
+      pending_payout: pending
+    };
+  });
+
+  return {
+    summary: {
+      total_invested: Number(totalInvested.toFixed(2)),
+      total_gross_payouts: Number(totalGrossPayouts.toFixed(2)),
+      total_titular_share: totalTitularShareAccrued,
+      total_paid_to_titulares: Number(totalPaidToTitulares.toFixed(2)),
+      pending_to_titulares: pendingToTitulares,
+      operator_net_profit: operatorNetProfit,
+      default_split_pct: 20
+    },
+    identity_breakdown: identityBreakdown,
+    transactions: txs
+  };
+}
+
 function saveConfigToDisk(event, operations = []) {
   const snapshot = {
     server: { host: '127.0.0.1', port: PORT },
@@ -292,6 +603,7 @@ function saveConfigToDisk(event, operations = []) {
         strategy: b.strategy,
         proxy_url: sanitizeProxyUrl(b.proxy_url),
         status: b.status,
+        circuit_breaker: b.circuit_breaker,
         jitter_ms: b.jitter_ms,
         jitter_min_ms: b.jitter_min_ms,
         jitter_max_ms: b.jitter_max_ms,
@@ -353,6 +665,7 @@ function getSystemSnapshot() {
     paper_trading_available: false,
     risk_policy: { type: 'DEMO_ONLY', limits: DEMO_RISK_LIMITS },
     market_price_mnq: marketPrice,
+    latest_candle: marketCandles.length ? marketCandles[marketCandles.length - 1] : null,
     ny_time: getNewYorkTimeString(),
     global_stats: {
       total_pnl: Number(totalPnl.toFixed(2)),
@@ -410,6 +723,7 @@ setInterval(() => {
   }
   const delta = (Math.random() - 0.49) * 0.75;
   marketPrice = Number((marketPrice + delta).toFixed(2));
+  updateCandleOnTick(marketPrice);
 
   // Actualizar flotante de cuentas activas
   bots.forEach(bot => {
@@ -426,6 +740,41 @@ setInterval(() => {
       }
     });
     bot.total_active_contracts = bot.accounts.reduce((s, a) => s + a.active_contracts, 0);
+
+    // Evaluación automática de Circuit Breaker (Consistencia +150$ y DLL)
+    if (bot.status === 'ACTIVE' && bot.circuit_breaker) {
+      if (bot.circuit_breaker.auto_lock_consistency && bot.today_pnl >= bot.circuit_breaker.consistency_target) {
+        bot.status = 'PAUSED';
+        bot.circuit_breaker.status = 'LOCKED_PROFIT';
+        bot.accounts.forEach(acc => {
+          if (acc.active_contracts > 0) {
+            acc.active_contracts = 0;
+            acc.current_position = 'FLAT';
+          }
+        });
+        const now = new Date().toLocaleTimeString();
+        bot.logs.unshift({
+          timestamp: now,
+          level: 'SUCCESS',
+          message: `🎯 CONSISTENCY TARGET ALCANZADO (+$${bot.today_pnl.toFixed(2)}): Bot asegurado a meta de +$${bot.circuit_breaker.consistency_target}. Retiro prop firm protegido.`
+        });
+      } else if (bot.today_pnl <= -bot.circuit_breaker.daily_loss_limit) {
+        bot.status = 'PAUSED';
+        bot.circuit_breaker.status = 'TRIPPED_STOP';
+        bot.accounts.forEach(acc => {
+          if (acc.active_contracts > 0) {
+            acc.active_contracts = 0;
+            acc.current_position = 'FLAT';
+          }
+        });
+        const now = new Date().toLocaleTimeString();
+        bot.logs.unshift({
+          timestamp: now,
+          level: 'EMERGENCY',
+          message: `🔴 CIRCUIT BREAKER ACTIVADO: Pérdida diaria (-$${Math.abs(bot.today_pnl).toFixed(2)}) superó el límite de seguridad ($${bot.circuit_breaker.daily_loss_limit}).`
+        });
+      }
+    }
   });
 
   broadcastSnapshot();
@@ -970,6 +1319,109 @@ app.post('/api/bots', (req, res) => {
   });
   broadcastSnapshot();
   res.status(201).json({ message: 'Bot creado', bot: newBot });
+});
+
+// ======================================================================
+// NUEVAS RUTAS DE ARQUITECTURA: MERCADO, NOTICIAS, CIRCUIT BREAKER, LEDGER
+// ======================================================================
+
+// 1. Datos de velas históricas y marcadores para Lightweight Charts
+app.get('/api/market/candles', (req, res) => {
+  const timeframe = req.query.tf || '1m';
+  res.json({
+    symbol: 'MNQ (Micro E-mini Nasdaq)',
+    timeframe,
+    candles: marketCandles,
+    markers: chartExecutionMarkers,
+    last_price: marketPrice
+  });
+});
+
+// 2. Calendario de noticias macroeconómicas
+app.get('/api/news/calendar', (req, res) => {
+  res.json({
+    source: 'ForexFactory Macro Feed (Simulated)',
+    events: economicEvents
+  });
+});
+
+// 3. Ajuste y activación de Circuit Breaker por Bot
+app.put('/api/bots/:id/circuit-breaker', (req, res) => {
+  const bot = bots.find(b => b.id === req.params.id);
+  if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
+
+  const { daily_loss_limit, consistency_target, auto_lock_consistency, pause_on_red_news } = req.body || {};
+
+  if (!bot.circuit_breaker) {
+    bot.circuit_breaker = {
+      daily_loss_limit: 1000.0,
+      consistency_target: 150.0,
+      auto_lock_consistency: true,
+      pause_on_red_news: true,
+      status: 'NORMAL'
+    };
+  }
+
+  if (daily_loss_limit !== undefined && typeof daily_loss_limit === 'number' && daily_loss_limit > 0) {
+    bot.circuit_breaker.daily_loss_limit = daily_loss_limit;
+  }
+  if (consistency_target !== undefined && typeof consistency_target === 'number' && consistency_target > 0) {
+    bot.circuit_breaker.consistency_target = consistency_target;
+  }
+  if (auto_lock_consistency !== undefined) {
+    bot.circuit_breaker.auto_lock_consistency = Boolean(auto_lock_consistency);
+  }
+  if (pause_on_red_news !== undefined) {
+    bot.circuit_breaker.pause_on_red_news = Boolean(pause_on_red_news);
+  }
+
+  const now = new Date().toLocaleTimeString();
+  bot.logs.unshift({
+    timestamp: now,
+    level: 'CONFIG',
+    message: `Circuit Breaker configurado: DLL=$${bot.circuit_breaker.daily_loss_limit} | Target Lock=+$${bot.circuit_breaker.consistency_target} (Auto: ${bot.circuit_breaker.auto_lock_consistency})`
+  });
+
+  saveConfigToDisk({
+    action: 'bot_circuit_breaker_updated',
+    entity_type: 'bot',
+    entity_id: bot.id,
+    details: { circuit_breaker: bot.circuit_breaker }
+  });
+
+  broadcastSnapshot();
+  res.json({ message: 'Circuit Breaker actualizado con éxito', circuit_breaker: bot.circuit_breaker });
+});
+
+// 4. Ledger Financiero y Reparto a Titulares
+app.get('/api/ledger/summary', (req, res) => {
+  const { identity } = req.query;
+  res.json(getLedgerSummary(identity));
+});
+
+// 5. Registrar Transacción o Retiro en el Ledger
+app.post('/api/ledger/payout', (req, res) => {
+  const { identity_id, account_name, prop_firm, type, amount, notes } = req.body || {};
+  if (!identity_id || !type || typeof amount !== 'number' || amount === 0) {
+    return res.status(400).json({ detail: 'Datos de transacción o monto inválidos' });
+  }
+
+  const ident = identities.find(i => i.id === identity_id);
+  const newTx = {
+    id: `tx_${Date.now()}`,
+    date: new Date().toISOString().slice(0, 10),
+    identity_id,
+    identity_name: ident ? ident.full_name : 'Titular Desconocido',
+    account_name: account_name || 'Cuenta General',
+    prop_firm: prop_firm || 'Apex Trader Funding',
+    type,
+    amount: (type === 'PROP_FIRM_PAYOUT') ? Math.abs(amount) : -Math.abs(amount),
+    status: 'COMPLETED',
+    notes: notes || 'Registro manual de pago / retiro'
+  };
+
+  ledgerTransactions.unshift(newTx);
+  res.status(201).json({ status: 'CREATED', transaction: newTx });
 });
 
 app.use((err, req, res, next) => {
