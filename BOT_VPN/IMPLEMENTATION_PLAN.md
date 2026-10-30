@@ -760,11 +760,23 @@ Al cierre de este primer cambio, el token y la contraseña aún dependían de co
 ### Fase 6 — Infraestructura y observabilidad (avance inicial)
 
 - Node y FastAPI exponen `GET /healthz`, que consulta el estado de SQLite y devuelve `503` si la persistencia no está disponible.
-- Las respuestas identifican `SIMULATED`, el broker como deshabilitado y los datos de mercado como simulados; no afirman conectividad externa.
+- Las respuestas identifican `SIMULATED` y el broker como deshabilitado. Node indica `historical_csv` si tiene CSV importado en memoria; FastAPI reporta datos simulados. Ninguno afirma conectividad externa.
 - Se añadieron pruebas para el estado sano y el fallo de persistencia.
 - Pendiente: Docker Compose reproducible, health checks de contenedor, logging/monitorización y métricas/alertas. No habilitar exposición fuera de localhost.
 
 ### Fase 7 — Interfaz y experiencia de operación
 
-- Pendiente: unificar el origen de datos del panel, estados de conexión y presentación de órdenes/confirmaciones.
+- Avance: el panel Node permite importar CSV OHLCV históricos para NQ y ES, configurar instrumento/estrategia/intervalos por bot y mostrar resultados por intervalo.
+- El precio de cabecera continúa marcado como simulado; los análisis CSV son históricos y permanecen en memoria hasta reiniciar Node.
+- Pendiente: unificar Node/FastAPI, persistir o volver a importar datos históricos y validar los cálculos/heurísticas con datasets de referencia.
 - Mantener visibles los modos `SIMULATED`/`PAPER` y no habilitar operaciones en vivo.
+
+### Fase 8 — Análisis de mercado histórico (avance inicial)
+
+- Implementada importación autenticada de CSV OHLCV para NQ/ES, con validación de zona horaria, calidad OHLCV, tamaño y cantidad de velas.
+- Soportados intervalos 1m, 5m, 15m, 30m, 1h, 4h y 1d; se agregan intervalos mayores desde el intervalo de origen, nunca se inventan velas de menor resolución.
+- Añadidos indicadores EMA 9/21/50, RSI 14, MACD, ATR 14 y VWAP UTC, además de lecturas técnicas, filtro ICT simplificado y divergencia SMT simplificada.
+- La pantalla muestra backtests históricos hipotéticos por estrategia: entrada al abrir la vela siguiente, stop en 1,5 × ATR, take profit en 2R y supuesto conservador stop-primero cuando una vela contiene ambos niveles.
+- La configuración por bot guarda instrumento, estrategia e intervalos. Order Flow se marca no disponible con OHLCV porque requiere datos bid/ask.
+- La importación no activa ejecución ni órdenes y los datos se borran al reiniciar el proceso Node.
+- Pendiente: integrar una fuente autorizada de datos, validar algoritmos y supuestos de entrada/salida frente a referencias independientes, incluir costos de transacción, modelar sesiones CME y decidir persistencia del histórico. No habilitar señales automáticas ni trading en vivo basándose solo en estas heurísticas.

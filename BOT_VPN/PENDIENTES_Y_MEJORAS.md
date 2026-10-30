@@ -1,6 +1,6 @@
 # Pendientes y mejoras del proyecto BOT_VPN
 
-**Actualizado:** 2026-10-25
+**Actualizado:** 2026-10-28
 **Estado general:** aplicación local en modo `SIMULATED`. No está conectada a Rithmic ni a otro broker y no está lista para operar con dinero real.
 
 Este documento resume el trabajo pendiente de forma práctica. No reemplaza el [plan detallado de implementación](./IMPLEMENTATION_PLAN.md) ni las instrucciones para ejecutar el sistema en el [README](./README.md).
@@ -13,8 +13,9 @@ Este documento resume el trabajo pendiente de forma práctica. No reemplaza el [
 - **Riesgo:** el motor local tiene límites de demostración, deduplicación de señales identificadas y controles de emergencia. Estos controles no han sido validados frente a un broker.
 - **Modos:** `SIMULATED` está implementado; `PAPER` sigue deshabilitado y responde `501`; `LIVE` no está implementado.
 - **Salud:** ambos procesos exponen `GET /healthz` para comprobar SQLite. Este endpoint no verifica el broker ni precios de mercado reales.
+- **Análisis de mercado:** el panel Node importa CSV históricos OHLCV para NQ/ES, calcula indicadores y presenta señales y operaciones hipotéticas con entrada/TP/stop por estrategia/intervalo. El backtest usa supuestos iniciales (entrada en vela siguiente, stop 1,5 ATR, TP 2R), sin comisiones/spread/slippage; requiere validación. No hay feed en vivo; los CSV se guardan en memoria hasta reiniciar el servidor.
 - **Arranque FastAPI en Windows:** `run_fastapi.ps1` crea `.venv`, instala las dependencias faltantes y usa ese intérprete para iniciar el gateway; `run_fastapi.bat` permite arrancarlo desde el Explorador.
-- **Validación conocida:** la suite ejecutada más recientemente pasó 1 prueba de Node y 19 de Python. Debe repetirse tras cada cambio; no equivale a certificación de producción o de broker.
+- **Validación conocida:** la suite ejecutada el 2026-10-28 pasó 6 pruebas de Node y 20 de Python. Debe repetirse tras cada cambio; no equivale a certificación de producción o de broker.
 - **Rithmic:** su documentación pública anuncia opciones de prueba, pero faltan el kit oficial y la confirmación de acceso, permisos y condiciones aplicables a este proyecto y a la cuenta asociada a Lucid.
 
 ## Prioridad 0 — Mantener la operación segura
@@ -80,13 +81,16 @@ Ya existe un `GET /healthz` básico en cada servidor que verifica SQLite. Falta:
 
 ## Prioridad 4 — Unificar la experiencia del panel
 
-Node y FastAPI siguen siendo servidores independientes con rutas y modelos distintos. Para evitar información contradictoria:
+Node y FastAPI siguen siendo servidores independientes con rutas y modelos distintos. El panel Node ya permite importar CSV y mostrar análisis históricos por bot; esa vista todavía no tiene cotizaciones en vivo y no está unificada con FastAPI. Para evitar información contradictoria:
 
 - elegir y documentar cuál servidor será la fuente principal para el panel;
 - definir contratos API compartidos para bots, cuentas, riesgos, auditoría, órdenes y estados;
 - mantener compatibilidad o retirar rutas duplicadas de forma gradual, con pruebas que detecten diferencias;
 - mostrar de forma visible `SIMULATED`, `PAPER` o el estado no disponible; nunca representar datos simulados como reales;
 - mostrar errores, antigüedad de datos, desconexiones y órdenes pendientes;
+- validar las heurísticas iniciales ICT/SMT con conjuntos etiquetados y revisar los cálculos contra una fuente independiente;
+- validar el simulador de entrada/stop/TP con datos de referencia, velas con huecos, calidad de fill, comisiones, spread y slippage antes de tomar en cuenta sus resultados;
+- decidir si el historial de velas se conservará en SQLite o se volverá a importar tras cada reinicio;
 - distinguir una acción solicitada de una acción confirmada por el simulador o el broker;
 - revisar que los controles de emergencia expliquen si son simulados o confirmados.
 

@@ -375,11 +375,35 @@ class OrderFlowStrategy(BaseStrategy):
         )
 
 
+class TechnicalAnalysisStrategy(BaseStrategy):
+    """Analysis-only mode for strategies evaluated from imported OHLCV candles."""
+
+    def __init__(self, parameters: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            name="TechnicalAnalysisStrategy",
+            description="Análisis histórico EMA, RSI, MACD, ATR y VWAP; no acepta señales de ejecución",
+            parameters=parameters,
+        )
+
+    def evaluate_signal(self, signal_data: Dict[str, Any]) -> SignalDecision:
+        return SignalDecision(
+            approved=False,
+            action="HOLD",
+            contracts=0,
+            entry_price=0.0,
+            stop_loss=0.0,
+            take_profit=0.0,
+            risk_reward_ratio=0.0,
+            reason="Esta estrategia solo analiza velas CSV y no convierte señales externas en operaciones.",
+        )
+
+
 # Diccionario / Registro dinámico de estrategias disponibles
 STRATEGY_REGISTRY = {
     "ICTStrategy": ICTStrategy,
     "SMTStrategy": SMTStrategy,
-    "OrderFlowStrategy": OrderFlowStrategy
+    "OrderFlowStrategy": OrderFlowStrategy,
+    "TechnicalAnalysisStrategy": TechnicalAnalysisStrategy,
 }
 
 

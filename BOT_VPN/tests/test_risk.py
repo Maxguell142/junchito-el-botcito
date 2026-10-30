@@ -86,6 +86,17 @@ def test_demo_risk_policy_enforces_global_caps_and_resets_daily_counters():
     assert account.orders_today == 0
 
 
+def test_technical_analysis_strategy_does_not_approve_execution_signals():
+    decision = get_strategy("TechnicalAnalysisStrategy").evaluate_signal({
+        "action": "BUY",
+        "price": 18000.0,
+    })
+    assert decision.approved is False
+    assert decision.action == "HOLD"
+    assert decision.contracts == 0
+    assert "no convierte señales externas" in decision.reason
+
+
 def test_invalid_signal_targets_fail_closed_without_broadcasting():
     manager, _ = make_manager_with_accounts()
 

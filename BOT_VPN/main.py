@@ -107,7 +107,7 @@ class AddIdentityPayload(RequestPayload):
     country: str = Field(default="US", min_length=2, max_length=2)
     city: Optional[str] = Field(default="", max_length=120)
     flag: Optional[str] = Field(default="🌐", max_length=8)
-    kyc_status: Optional[str] = Field(default="VERIFIED", pattern="^(VERIFIED|PENDING|REJECTED)$")
+    kyc_status: Optional[str] = Field(default="PENDING", pattern="^(VERIFIED|PENDING|REJECTED)$")
     email: Optional[str] = Field(default="", max_length=254)
     notes: Optional[str] = Field(default="", max_length=1000)
 
@@ -155,13 +155,26 @@ class CreateBotAccountPayload(RequestPayload):
 class CreateBotPayload(RequestPayload):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=160)
-    strategy: str = Field(min_length=1, max_length=64)
+    strategy: Literal["ICTStrategy", "SMTStrategy", "OrderFlowStrategy", "TechnicalAnalysisStrategy"]
+    analysis_symbol: Literal["NQ", "ES"] = "NQ"
+    analysis_timeframes: List[Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"]] = Field(
+        default_factory=lambda: ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
+        min_length=1,
+        max_length=7,
+    )
     identity_id: Optional[str] = Field(default=None, max_length=64)
     proxy_url: Optional[str] = Field(default="", max_length=2048)
     jitter_ms: Optional[int] = Field(default=120, ge=0, le=5000)
     start_time: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     end_time: str = Field(default="12:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     accounts: List[CreateBotAccountPayload] = Field(default_factory=list, max_length=20)
+
+    @field_validator("analysis_timeframes")
+    @classmethod
+    def validate_analysis_timeframes(cls, value: List[str]) -> List[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("No se pueden repetir intervalos de análisis.")
+        return value
 
 
 class AddAccountPayload(RequestPayload):
@@ -378,7 +391,7 @@ async def create_identity(payload: AddIdentityPayload):
         country=payload.country,
         city=payload.city or "",
         flag=payload.flag or "🌐",
-        kyc_status=payload.kyc_status or "VERIFIED",
+        kyc_status=payload.kyc_status or "PENDING",
         email=payload.email or "",
         notes=payload.notes
     )
@@ -520,12 +533,14 @@ async def create_bot(payload: CreateBotPayload):
         strategy=strat,
         identity=identity,
         proxy_url=payload.proxy_url,
-        jitter_ms=payload.jitter_ms or 120,
+        jitter_min_ms=payload.jitter_ms or 120,
         schedule={
             "start_time": payload.start_time,
             "end_time": payload.end_time,
             "timezone": "America/New_York"
         },
+        analysis_symbol=payload.analysis_symbol,
+        analysis_timeframes=payload.analysis_timeframes,
         accounts=new_accounts,
         status="ACTIVE"
     )

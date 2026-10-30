@@ -75,6 +75,7 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
 
   fs.copyFileSync(path.join(projectRoot, 'server.js'), path.join(tempRoot, 'server.js'));
   fs.copyFileSync(path.join(projectRoot, 'database.js'), path.join(tempRoot, 'database.js'));
+  fs.copyFileSync(path.join(projectRoot, 'market_analysis.js'), path.join(tempRoot, 'market_analysis.js'));
   fs.cpSync(path.join(projectRoot, 'migrations'), path.join(tempRoot, 'migrations'), { recursive: true });
   fs.cpSync(path.join(projectRoot, 'public'), path.join(tempRoot, 'public'), { recursive: true });
   fs.writeFileSync(path.join(tempRoot, 'config.json'), JSON.stringify({
@@ -177,6 +178,18 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   assert.equal(snapshot.bots[0].proxy_url, 'socks5://proxy.example:1080');
   assert.equal(JSON.stringify(snapshot).includes('proxy-password'), false);
   assert.equal(JSON.stringify(snapshot).includes('legacy-broker-login'), false);
+  assert.equal((await fetch(`${baseUrl}/api/analysis/status`)).status, 401, 'analysis routes should require a session');
+  const identityResponse = await fetch(`${baseUrl}/api/identities`, {
+    method: 'POST',
+    headers: { Authorization: ['Bearer', token].join(' '), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'demo-pending-identity',
+      full_name: 'Demo identity',
+      country: 'US'
+    })
+  });
+  assert.equal(identityResponse.status, 201);
+  assert.equal((await identityResponse.json()).identity.kyc_status, 'PENDING');
   const proxyTest = await fetch(`${baseUrl}/api/bots/legacy-secret-bot/proxy-test`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` }
@@ -218,9 +231,89 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   const createBotResponse = await fetch(`${baseUrl}/api/bots`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: 'security-test-bot', name: 'Security test bot' })
+    body: JSON.stringify({
+      id: 'security-test-bot',
+      name: 'Security test bot',
+      strategy: 'TechnicalAnalysisStrategy',
+      analysis_symbol: 'ES',
+      analysis_timeframes: ['5m', '1h']
+    })
   });
   assert.equal(createBotResponse.status, 201);
+  const createdBot = await createBotResponse.json();
+  assert.equal(createdBot.bot.analysis_symbol, 'ES');
+  assert.deepEqual(createdBot.bot.analysis_timeframes, ['5m', '1h']);
+
+  const historicalBars = Array.from({ length: 60 }, (_, index) => {
+    const close = 20000 + index * 0.25;
+    return [
+      new Date(Date.parse('2025-01-02T14:01:00Z') + index * 60_000).toISOString(),
+      close - 0.1,
+      close + 0.1,
+      close - 0.2,
+      close,
+      100 + index
+    ].join(',');
+  });
+  const csv = ['timestamp,open,high,low,close,volume', ...historicalBars].join('\n');
+  const csvResponse = await fetch(`${baseUrl}/api/analysis/csv?symbol=NQ&timeframe=1m`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'text/csv' },
+    body: csv
+  });
+  assert.equal(csvResponse.status, 200);
+  const csvResult = await csvResponse.json();
+  assert.equal(csvResult.data_type, 'HISTORICAL');
+  assert.equal(csvResult.candles, 60);
+  assert.equal(csvResult.results.some(result => result.bot_id === 'legacy-secret-bot'), true);
+  assert.ok(Array.isArray(csvResult.results.find(
+    result => result.bot_id === 'legacy-secret-bot'
+  ).historical_simulated_trades));
+  const chartResult = csvResult.results.find(result => result.bot_id === 'legacy-secret-bot');
+  assert.ok(chartResult.chart.bars.length > 0);
+  assert.ok(chartResult.chart.bars.length <= 120);
+  assert.ok(Object.hasOwn(chartResult.chart.bars[0], 'ema9'));
+
+  const esCsv = [
+    'timestamp,open,high,low,close,volume',
+    ...historicalBars.map((_, index) => {
+      const close = 5000 + index * 0.25;
+      return [
+        new Date(Date.parse('2025-01-02T14:01:00Z') + index * 60_000).toISOString(),
+        close - 0.1,
+        close + 0.1,
+        close - 0.2,
+        close,
+        100 + index
+      ].join(',');
+    })
+  ].join('\n');
+  const esCsvResponse = await fetch(`${baseUrl}/api/analysis/csv?symbol=ES&timeframe=1m`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'text/csv' },
+    body: esCsv
+  });
+  assert.equal(esCsvResponse.status, 200);
+  const esCsvResult = await esCsvResponse.json();
+  assert.equal(esCsvResult.results.filter(result => result.bot_id === 'security-test-bot').length, 2);
+
+  const statusResponse = await fetch(`${baseUrl}/api/analysis/status`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  assert.equal(statusResponse.status, 200);
+  const analysisStatus = await statusResponse.json();
+  assert.equal(analysisStatus.datasets.NQ.candles, 60);
+  assert.equal(analysisStatus.datasets.ES.candles, 60);
+  assert.equal(analysisStatus.data_type, 'HISTORICAL');
+  const analysisHealth = await fetch(`${baseUrl}/healthz`).then(response => response.json());
+  assert.equal(analysisHealth.components.market_data, 'historical_csv');
+
+  const invalidCsvResponse = await fetch(`${baseUrl}/api/analysis/csv?symbol=NQ&timeframe=1m`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'text/csv' },
+    body: 'timestamp,open,high,low,close,volume\n2025-01-02 14:00:00,1,2,0.5,1.5,10'
+  });
+  assert.equal(invalidCsvResponse.status, 400);
   const invalidSchedule = await fetch(`${baseUrl}/api/bots/security-test-bot/schedule`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

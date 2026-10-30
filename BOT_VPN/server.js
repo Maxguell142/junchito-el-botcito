@@ -5,6 +5,14 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { SQLiteStore } = require('./database');
+const {
+  TIMEFRAMES,
+  STRATEGIES,
+  parseCsv,
+  analyzeDataset,
+  simulateHistoricalTrades,
+  buildChartData
+} = require('./market_analysis');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +22,9 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
 const sessions = new Map();
 const loginAttempts = new Map();
+const analysisDatasets = new Map();
+let latestAnalysisResults = [];
+const DEFAULT_ANALYSIS_TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 const DEMO_RISK_DEFAULTS = {
   max_contracts_per_account: 1,
   max_total_contracts: 2,
@@ -98,6 +109,14 @@ function isValidTimeZone(value) {
   } catch {
     return false;
   }
+}
+
+function validAnalysisTimeframes(value) {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= Object.keys(TIMEFRAMES).length
+    && new Set(value).size === value.length
+    && value.every(timeframe => Object.hasOwn(TIMEFRAMES, timeframe));
 }
 
 function secureEqual(value, expected) {
@@ -198,6 +217,10 @@ function toRuntimeBot(b) {
     id: b.id,
     name: b.name,
     strategy: b.strategy,
+    analysis_symbol: ['NQ', 'ES'].includes(b.analysis_symbol) ? b.analysis_symbol : 'NQ',
+    analysis_timeframes: validAnalysisTimeframes(b.analysis_timeframes)
+      ? [...b.analysis_timeframes]
+      : [...DEFAULT_ANALYSIS_TIMEFRAMES],
     strategy_description: 'Estrategia algorítmica optimizada para CME MNQ',
     identity: ident,
     proxy_url: b.proxy_url || '',
@@ -280,6 +303,37 @@ loadConfig();
 
 let marketPrice = 18245.50;
 
+function getAnalysisResultsForConfiguredBots() {
+  const results = [];
+  const analysisCache = new Map();
+  for (const bot of bots) {
+    const dataset = analysisDatasets.get(bot.analysis_symbol);
+    if (!dataset) continue;
+    const pairedSymbol = bot.analysis_symbol === 'NQ' ? 'ES' : 'NQ';
+    const pairedDataset = analysisDatasets.get(pairedSymbol) || null;
+    for (const timeframe of bot.analysis_timeframes) {
+      const cacheKey = `${bot.analysis_symbol}:${bot.strategy}:${timeframe}`;
+      if (!analysisCache.has(cacheKey)) {
+        const analysis = analyzeDataset(dataset, bot.strategy, timeframe, pairedDataset);
+        const backtest = simulateHistoricalTrades(dataset, bot.strategy, timeframe, pairedDataset);
+        analysisCache.set(cacheKey, {
+          ...analysis,
+          chart: buildChartData(dataset, timeframe, backtest.trades[0] || null),
+          historical_simulated_trade_count: backtest.total_signals,
+          historical_simulation_bars_tested: backtest.bars_tested,
+          historical_simulated_trades: backtest.trades
+        });
+      }
+      results.push({
+        bot_id: bot.id,
+        bot_name: bot.name,
+        ...analysisCache.get(cacheKey)
+      });
+    }
+  }
+  return results;
+}
+
 function saveConfigToDisk(event, operations = []) {
   const snapshot = {
     server: { host: '127.0.0.1', port: PORT },
@@ -290,6 +344,8 @@ function saveConfigToDisk(event, operations = []) {
         name: b.name,
         identity_id: b.identity ? b.identity.id : null,
         strategy: b.strategy,
+        analysis_symbol: b.analysis_symbol,
+        analysis_timeframes: b.analysis_timeframes,
         proxy_url: sanitizeProxyUrl(b.proxy_url),
         status: b.status,
         jitter_ms: b.jitter_ms,
@@ -490,6 +546,50 @@ app.get('/api/system/snapshot', (req, res) => {
   res.json(getSystemSnapshot());
 });
 
+app.get('/api/analysis/status', (req, res) => {
+  latestAnalysisResults = getAnalysisResultsForConfiguredBots();
+  res.json({
+    source: 'CSV histórico importado',
+    data_type: 'HISTORICAL',
+    datasets: Object.fromEntries([...analysisDatasets].map(([symbol, dataset]) => [
+      symbol,
+      {
+        source_timeframe: dataset.sourceTimeframe,
+        candles: dataset.bars.length,
+        imported_at: dataset.importedAt
+      }
+    ])),
+    results: latestAnalysisResults
+  });
+});
+
+app.post(
+  '/api/analysis/csv',
+  express.text({ type: ['text/csv', 'text/plain'], limit: '5mb' }),
+  (req, res) => {
+    const symbol = req.query.symbol;
+    const sourceTimeframe = req.query.timeframe;
+    let dataset;
+    try {
+      dataset = parseCsv(req.body, symbol, sourceTimeframe);
+    } catch (error) {
+      return res.status(400).json({ detail: error.message });
+    }
+
+    dataset.importedAt = new Date().toISOString();
+    analysisDatasets.set(symbol, dataset);
+    latestAnalysisResults = getAnalysisResultsForConfiguredBots();
+    return res.json({
+      symbol,
+      source_timeframe: sourceTimeframe,
+      candles: dataset.bars.length,
+      imported_at: dataset.importedAt,
+      data_type: 'HISTORICAL',
+      results: latestAnalysisResults
+    });
+  }
+);
+
 app.get('/healthz', (req, res, next) => {
   try {
     if (!database.healthCheck()) {
@@ -507,7 +607,7 @@ app.get('/healthz', (req, res, next) => {
       components: {
         persistence: 'healthy',
         broker: 'disabled',
-        market_data: 'simulated'
+        market_data: analysisDatasets.size ? 'historical_csv' : 'simulated'
       }
     });
   } catch (error) {
@@ -678,7 +778,7 @@ app.post('/api/identities', (req, res) => {
     country: country || 'US',
     city: city || '',
     flag: flag || '🌐',
-    kyc_status: kyc_status || 'VERIFIED',
+    kyc_status: kyc_status || 'PENDING',
     email: email || '',
     notes: notes || ''
   };
@@ -894,8 +994,15 @@ app.post('/api/bots', (req, res) => {
     return res.status(400).json({ detail: 'Crea las cuentas por separado sin incluir credenciales.' });
   }
   const selectedStrategy = strategy || 'ICTStrategy';
-  if (!['ICTStrategy', 'SMTStrategy', 'OrderFlowStrategy'].includes(selectedStrategy)) {
+  const analysisSymbol = body.analysis_symbol === undefined ? 'NQ' : body.analysis_symbol;
+  const analysisTimeframes = body.analysis_timeframes === undefined
+    ? DEFAULT_ANALYSIS_TIMEFRAMES
+    : body.analysis_timeframes;
+  if (!Object.hasOwn(STRATEGIES, selectedStrategy)) {
     return res.status(400).json({ detail: 'Estrategia no válida.' });
+  }
+  if (!['NQ', 'ES'].includes(analysisSymbol) || !validAnalysisTimeframes(analysisTimeframes)) {
+    return res.status(400).json({ detail: 'Instrumento o intervalos de análisis no válidos.' });
   }
   const parsedJitter = jitter_ms === undefined ? 120 : Number(jitter_ms);
   const requestedStart = start_time === undefined ? '09:30' : start_time;
@@ -928,6 +1035,8 @@ app.post('/api/bots', (req, res) => {
     name,
     identity: ident,
     strategy: selectedStrategy,
+    analysis_symbol: analysisSymbol,
+    analysis_timeframes: [...analysisTimeframes],
     strategy_description: 'Estrategia algorítmica para MNQ',
     proxy_url: proxy_url || '',
     proxy_ip: '',
@@ -985,7 +1094,7 @@ app.use((err, req, res, next) => {
   console.error(`Request processing failed (${status}).`);
   res.status(status).json({
     detail: status === 413
-      ? 'El cuerpo de la solicitud excede 32 KB.'
+      ? 'El cuerpo de la solicitud excede el límite permitido.'
       : status === 400
         ? 'JSON inválido.'
         : status === 409

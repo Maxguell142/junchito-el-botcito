@@ -280,7 +280,9 @@ class TradingBot:
         accounts: Optional[List[Account]] = None,
         status: str = "ACTIVE",
         jitter_min_ms: int = 50,
-        jitter_max_ms: int = 350
+        jitter_max_ms: int = 350,
+        analysis_symbol: str = "NQ",
+        analysis_timeframes: Optional[List[str]] = None
     ):
         self.bot_id = bot_id
         self.name = name
@@ -300,6 +302,21 @@ class TradingBot:
         self.status = status  # "ACTIVE", "PAUSED", "ERROR"
         self.jitter_min_ms = jitter_min_ms
         self.jitter_max_ms = jitter_max_ms
+        self.analysis_symbol = (
+            analysis_symbol if isinstance(analysis_symbol, str) and analysis_symbol in {"NQ", "ES"} else "NQ"
+        )
+        requested_timeframes = analysis_timeframes or ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+        allowed_timeframes = {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}
+        self.analysis_timeframes = (
+            list(requested_timeframes)
+            if isinstance(requested_timeframes, list)
+            and requested_timeframes
+            and len(requested_timeframes) <= len(allowed_timeframes)
+            and all(isinstance(timeframe, str) for timeframe in requested_timeframes)
+            and len(set(requested_timeframes)) == len(requested_timeframes)
+            and set(requested_timeframes).issubset(allowed_timeframes)
+            else ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+        )
 
         # Métricas de rendimiento
         self.net_pnl: float = 0.0
@@ -471,6 +488,8 @@ class TradingBot:
             "status": self.status,
             "strategy": self.strategy.name,
             "strategy_description": self.strategy.description,
+            "analysis_symbol": self.analysis_symbol,
+            "analysis_timeframes": self.analysis_timeframes,
             "identity": self.identity.to_dict() if self.identity else None,
             "proxy_url": self.public_proxy_url(),
             "outbound_ip": self.proxy_connector.detected_ip,
@@ -647,7 +666,9 @@ class BotManager:
                 accounts=accounts,
                 status=b_data.get("status", "ACTIVE"),
                 jitter_min_ms=b_data.get("jitter_min_ms", b_data.get("jitter_ms", 50)),
-                jitter_max_ms=b_data.get("jitter_max_ms", 350)
+                jitter_max_ms=b_data.get("jitter_max_ms", 350),
+                analysis_symbol=b_data.get("analysis_symbol", "NQ"),
+                analysis_timeframes=b_data.get("analysis_timeframes")
             )
             bot.net_pnl = float(b_data.get("net_pnl", 0.0))
             bot.today_pnl = float(b_data.get("today_pnl", 0.0))
@@ -687,6 +708,8 @@ class BotManager:
                     "name": bot.name,
                     "identity_id": bot.identity.id if bot.identity else None,
                     "strategy": bot.strategy.name,
+                    "analysis_symbol": bot.analysis_symbol,
+                    "analysis_timeframes": bot.analysis_timeframes,
                     "proxy_url": bot.public_proxy_url(),
                     "outbound_ip": bot.proxy_connector.detected_ip,
                     "proxy_port": bot.proxy_port,
