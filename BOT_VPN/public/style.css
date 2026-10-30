@@ -869,6 +869,355 @@ body {
 .id-val { color: #FFFFFF; font-family: var(--font-mono); }
 
 /* ======================================================================
+   ANÁLISIS DE MERCADO HISTÓRICO
+   ====================================================================== */
+.analysis-warning,
+.analysis-import-card,
+.analysis-result-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.analysis-warning {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  color: var(--color-warn);
+  font-size: 0.84rem;
+}
+
+.analysis-import-card {
+  padding: 18px;
+}
+
+.analysis-import-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.analysis-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.analysis-result-card {
+  min-width: 0;
+  padding: 16px;
+}
+
+.analysis-chart {
+  margin: 14px 0 16px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #101419;
+}
+
+.analysis-chart-heading,
+.analysis-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.analysis-chart-heading {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.analysis-chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.analysis-chart-svg {
+  display: block;
+  width: 100%;
+  min-width: 560px;
+  height: auto;
+  background: linear-gradient(180deg, #1d2329 0%, #11161a 100%);
+}
+
+.chart-background {
+  fill: transparent;
+}
+
+.chart-grid {
+  stroke: #394149;
+  stroke-width: 0.7;
+  stroke-dasharray: 3 5;
+}
+
+.chart-axis-label,
+.chart-time-label {
+  fill: #8d99a3;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.chart-wick {
+  stroke-width: 1;
+}
+
+.chart-candle {
+  stroke-width: 0.8;
+}
+
+.chart-wick.is-up,
+.chart-candle.is-up {
+  stroke: #35c99a;
+  fill: #35c99a;
+}
+
+.chart-wick.is-down,
+.chart-candle.is-down {
+  stroke: #f0626e;
+  fill: #f0626e;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-ema9 { stroke: #43d5c5; }
+.chart-ema21 { stroke: #e8c34a; }
+.chart-ema50 { stroke: #6296ff; }
+.chart-vwap { stroke: #b387fa; stroke-dasharray: 4 3; }
+
+.chart-reward-zone { fill: #22b886; opacity: 0.14; }
+.chart-risk-zone { fill: #f05260; opacity: 0.15; }
+.chart-level { stroke-width: 1.2; stroke-dasharray: 5 4; }
+.chart-level-target { stroke: #35c99a; }
+.chart-level-entry { stroke: #e8c34a; }
+.chart-level-stop { stroke: #f0626e; }
+.chart-entry-marker { stroke: #ffffff; stroke-width: 0.8; stroke-dasharray: 2 4; opacity: 0.55; }
+
+.chart-level-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.target-label { fill: #62e2b7; }
+.entry-label { fill: #f4d367; }
+.stop-label { fill: #ff828c; }
+
+.chart-trade-status {
+  fill: #e7edf2;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.analysis-chart-legend {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.analysis-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.analysis-chart-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+}
+
+.legend-ema9 { background: #43d5c5; }
+.legend-ema21 { background: #e8c34a; }
+.legend-ema50 { background: #6296ff; }
+.legend-vwap { background: #b387fa; }
+
+.analysis-chart-legend .chart-trade-summary {
+  margin-left: auto;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.analysis-chart-empty {
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.analysis-trades-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 16px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.analysis-trades-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analysis-trades-heading h3 {
+  font-size: 0.96rem;
+}
+
+.analysis-trades-heading p,
+.analysis-trades-heading strong {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.analysis-trades-heading strong {
+  color: var(--color-warn);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.analysis-trades-table {
+  min-width: 1000px;
+}
+
+.analysis-trades-table td small {
+  display: block;
+  max-width: 190px;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  overflow-wrap: anywhere;
+}
+
+.analysis-trade-count {
+  min-height: 0 !important;
+  color: var(--text-secondary) !important;
+}
+
+.analysis-trade-count strong {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+}
+
+.analysis-no-trades {
+  padding: 24px !important;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.analysis-result-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analysis-result-heading h3 {
+  font-size: 0.98rem;
+}
+
+.analysis-result-heading h3 span,
+.analysis-result-heading small,
+.analysis-result-source {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.analysis-result-heading strong {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.analysis-bullish { color: var(--color-neon); }
+.analysis-bearish { color: var(--color-danger); }
+.analysis-neutral { color: var(--color-warn); }
+
+.analysis-result-card p {
+  min-height: 42px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.analysis-indicators {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.74rem;
+}
+
+.analysis-indicators span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-secondary);
+}
+
+.analysis-indicators b {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.analysis-timeframes-field {
+  min-width: 0;
+  border: 0;
+}
+
+.analysis-timeframes-field legend {
+  margin-bottom: 8px;
+  color: var(--text-main);
+  font-size: 0.82rem;
+}
+
+.analysis-timeframe-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.analysis-timeframe-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .analysis-import-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analysis-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analysis-chart-svg {
+    min-width: 680px;
+  }
+
+  .analysis-chart-legend .chart-trade-summary {
+    margin-left: 0;
+  }
+}
+
+/* ======================================================================
    PESTAÑA CUENTAS PROP (TABLA GLOBAL)
    ====================================================================== */
 .table-card {

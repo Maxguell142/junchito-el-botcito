@@ -71,9 +71,9 @@
         <span class="brand-subtitle">SIMULACIÓN LOCAL · PAPER NO DISPONIBLE</span>
         </div>
       </div>
-      <div class="market-badge" title="Cotización Micro E-mini Nasdaq en CME">
+      <div class="market-badge" title="Precio de demostración simulado; no es una cotización en vivo">
         <span class="pulse-dot"></span>
-        <span class="ticker-label">MNQ-CME</span>
+        <span class="ticker-label">SIM-MNQ</span>
         <span class="market-price" id="market-price-val">18,245.50</span>
       </div>
     </div>
@@ -160,13 +160,14 @@
         <span class="tab-icon">📰</span> Calendario Macro
       </button>
 
-        <span class="tab-icon">📊</span> Dashboard & Bots
+      <button class="tab-link" onclick="switchTab('analysis')">
+        <span class="tab-icon">📈</span> Análisis de Mercado
       </button>
       <button class="tab-link" onclick="switchTab('titulares')">
-        <span class="tab-icon">👤</span> Titulares & KYC (<span id="count-titulares">3</span>)
+        <span class="tab-icon">👤</span> Titulares & KYC (<span id="count-titulares">0</span>)
       </button>
       <button class="tab-link" onclick="switchTab('cuentas')">
-        <span class="tab-icon">💼</span> Cuentas Prop (<span id="count-cuentas">6</span>)
+        <span class="tab-icon">💼</span> Cuentas Prop (<span id="count-cuentas">0</span>)
       </button>
       <button class="tab-link" onclick="switchTab('vpn')">
         <span class="tab-icon">🛡️</span> VPN & Proxies
@@ -347,6 +348,56 @@
 
       <div class="bot-grid" id="bot-grid">
         <!-- Renderizado dinámico desde app.js -->
+      </div>
+    </section>
+
+    <section class="tab-view" id="view-analysis">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <h2>Simulación histórica de operaciones NQ / ES</h2>
+          <span class="section-sub">Importa velas CSV para ver señales históricas y operaciones hipotéticas con entrada, TP, stop y estrategia.</span>
+        </div>
+      </div>
+      <div class="analysis-warning">
+        No es un feed en vivo ni una operación real. La simulación entra en la apertura de la vela siguiente a la señal,
+        usa stop basado en 1,5 × ATR y TP de 2R; si una vela toca TP y stop, cuenta primero el stop.
+        No incluye comisiones ni slippage. El precio del encabezado sigue siendo simulado. Usa CSV de 1 minuto para obtener todos los intervalos.
+      </div>
+      <form class="analysis-import-card" onsubmit="submitAnalysisCsv(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="analysis-symbol">Instrumento del CSV</label>
+            <select id="analysis-symbol" required>
+              <option value="NQ">NQ — Nasdaq-100 E-mini</option>
+              <option value="ES">ES — S&amp;P 500 E-mini</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="analysis-source-timeframe">Intervalo de origen</label>
+            <select id="analysis-source-timeframe" required>
+              <option value="1m">1 minuto</option>
+              <option value="5m">5 minutos</option>
+              <option value="15m">15 minutos</option>
+              <option value="30m">30 minutos</option>
+              <option value="1h">1 hora</option>
+              <option value="4h">4 horas</option>
+              <option value="1d">1 día</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="analysis-csv-file">Archivo CSV (máx. 5 MB)</label>
+            <input id="analysis-csv-file" type="file" accept=".csv,text/csv" required>
+          </div>
+        </div>
+        <p class="form-hint">Columnas requeridas: timestamp, open, high, low, close, volume. La fecha debe incluir zona horaria, por ejemplo 2026-10-28T13:30:00Z.</p>
+        <p class="form-hint">Señales disponibles: ICT simplificado (FVG/MSS/kilzone NY), técnica (EMA/RSI); SMT requiere ambos instrumentos. Order Flow necesita datos bid/ask y no se calcula con OHLCV. Los intervalos diarios/VWAP usan UTC.</p>
+        <div class="analysis-import-actions">
+          <span id="analysis-import-status" class="form-hint">Sin datos históricos cargados en esta sesión.</span>
+          <button type="submit" class="btn btn-primary" id="analysis-submit-btn">Cargar y simular</button>
+        </div>
+      </form>
+      <div id="analysis-results" class="analysis-results">
+        <div class="empty-state">Carga un CSV para ver los análisis por bot e intervalo.</div>
       </div>
     </section>
 
@@ -972,7 +1023,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>Persona Titular Asignada (KYC) *</label>
-            <select id="new-bot-identity" required>
+            <select id="new-bot-identity">
               <!-- Opciones de titulares cargadas dinámicamente -->
             </select>
           </div>
@@ -980,10 +1031,33 @@
             <label>Estrategia Inyectada *</label>
             <select id="new-bot-strategy" required>
               <option value="ICTStrategy">ICTStrategy (FVG, MSS, Killzones)</option>
+              <option value="TechnicalAnalysisStrategy">Análisis técnico (EMA, RSI, MACD, ATR, VWAP)</option>
               <option value="SMTStrategy">SMTStrategy (Smart Money Tool Divergences)</option>
-              <option value="OrderFlowStrategy">OrderFlowStrategy (Delta, CVD, Absorption)</option>
+              <option value="OrderFlowStrategy">OrderFlowStrategy (requiere datos bid/ask)</option>
             </select>
           </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="new-bot-analysis-symbol">Instrumento a analizar</label>
+            <select id="new-bot-analysis-symbol">
+              <option value="NQ">NQ — Nasdaq-100 E-mini</option>
+              <option value="ES">ES — S&amp;P 500 E-mini</option>
+            </select>
+          </div>
+          <fieldset class="form-group analysis-timeframes-field">
+            <legend>Intervalos de análisis</legend>
+            <div class="analysis-timeframe-options">
+              <label><input type="checkbox" name="new-bot-timeframe" value="1m" checked> 1m</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="5m" checked> 5m</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="15m" checked> 15m</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="30m" checked> 30m</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="1h" checked> 1h</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="4h" checked> 4h</label>
+              <label><input type="checkbox" name="new-bot-timeframe" value="1d" checked> 1d</label>
+            </div>
+          </fieldset>
         </div>
 
         <div class="form-row">
@@ -1053,8 +1127,9 @@
           <div class="form-group">
             <label>Estado de KYC</label>
             <select id="new-ident-kyc">
-              <option value="VERIFIED">Verificado (Aprobado)</option>
-              <option value="PENDING">En Revisión / Pendiente</option>
+              <option value="PENDING">Pendiente (sin verificar)</option>
+              <option value="VERIFIED">Verificado</option>
+              <option value="REJECTED">Rechazado</option>
             </select>
           </div>
         </div>
@@ -1064,7 +1139,7 @@
         </div>
         <div class="form-group">
           <label>Notas Internas</label>
-          <textarea id="new-ident-notes" rows="2" placeholder="Documento ID, fecha de nacimiento, contacto..."></textarea>
+          <textarea id="new-ident-notes" rows="2" placeholder="Notas no sensibles; no guardes documentos ni fecha de nacimiento."></textarea>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeAddIdentityModal()">Cancelar</button>

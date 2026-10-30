@@ -23,6 +23,8 @@ Ambos comparten `BOT_VPN/bot_vpn.sqlite3` como fuente persistente. Se puede camb
 
 La interfaz web se sirve desde Node. Iniciar FastAPI no inicia Node ni mueve el panel al puerto 8000.
 
+La lista **Titulares & KYC** no se precarga con personas ficticias. Registra manualmente titulares desde esa pestaña; el estado inicial queda `PENDING` y este registro local no verifica identidad. Para una prueba del análisis de mercado, puedes crear bots sin asignar un titular. No guardes documentos, fecha de nacimiento ni otros datos sensibles en las notas.
+
 ## Requisitos
 
 - Node.js 22.13 o posterior y npm (`node:sqlite` es el controlador local)
@@ -79,9 +81,21 @@ Las sesiones viven en memoria y se revocan al cerrar sesión, vencer o reiniciar
 
 La documentación pública oficial anuncia `Rithmic Test` para desarrollar antes de conformance y un Exchange Simulator para paper trading con fills simulados. La API Suite indica que los dev kits de R | API+ y R | Protocol API se solicitan a Rithmic; el acceso, los permisos y los detalles técnicos necesarios para este proyecto todavía no están confirmados. Por eso no hay adaptador ni conexión activa: `PAPER` sigue deshabilitado con `501` y `LIVE` no está implementado. No introduzcas credenciales ni endpoints de producción en el repositorio. Fuentes: [API Suite de Rithmic](https://www.rithmic.com/products/api-suite) y [Exchange Simulator de Rithmic](https://www.rithmic.com/products/exchange-simulator).
 
+## Análisis histórico NQ y ES
+
+El panel incluye una vista **Análisis de Mercado** que importa un CSV por instrumento y calcula lecturas históricas para cada bot configurado. No conecta a un feed ni a un broker y no genera órdenes. Los datos se mantienen en memoria y hay que importarlos de nuevo después de reiniciar Node.
+
+El CSV requiere las columnas `timestamp,open,high,low,close,volume`. Las fechas deben llevar zona horaria explícita (por ejemplo `2026-10-28T13:30:00Z`); el límite es 5 MB y 50.000 velas. Se admite seleccionar el intervalo de origen entre 1m, 5m, 15m, 30m, 1h, 4h y 1d. Se pueden agregar velas a intervalos mayores, pero no crear intervalos menores que el origen; 1m es el formato recomendado para generar todos los intervalos. Los agregados y el VWAP diario usan límites de día UTC, no la sesión de negociación CME.
+
+Cada bot guarda su instrumento (`NQ` o `ES`), estrategia y uno o más intervalos. El análisis técnico calcula EMA 9/21/50, RSI 14, MACD, ATR 14 y VWAP UTC. La detección ICT es una heurística inicial de FVG, ruptura de estructura de las 10 velas previas y killzone NY 09:30–11:30; no equivale a una implementación completa o validada de ICT. SMT compara extremos recientes y requiere que ambos instrumentos tengan velas sincronizadas. Order Flow queda como no disponible hasta contar con datos de transacciones y bid/ask; OHLCV no permite deducirlo.
+
+La pantalla también presenta un backtest histórico: cuando una estrategia encuentra señal, la entrada hipotética se ubica en la apertura de la vela siguiente; el stop se calcula como 1,5 × ATR (mínimo 0,25 puntos) y el TP como 2R. Recorre las velas posteriores hasta tocar uno de los niveles; si una sola vela contiene stop y TP, cuenta primero el stop como criterio conservador. Muestra un gráfico de velas con EMA 9/21/50, VWAP UTC y las zonas de riesgo/beneficio del trade hipotético más reciente; el gráfico usa como máximo 120 velas y se centra en el trade cuando existe. También muestra como máximo las 25 operaciones más recientes por bot e intervalo y prueba señales dentro de las 500 velas más recientes (con hasta 250 velas previas de calentamiento de indicadores); los resultados se recalculan a partir del histórico en memoria. Una operación sin salida al final del archivo queda marcada `NO_EXIT_IN_HISTORY` y su PnL es una valoración no realizada. No se incluyen comisiones, spread ni slippage. Estos supuestos son configuraciones iniciales de demostración, no parámetros validados.
+
+Usa solo CSV de una fuente cuyo uso tengas autorizado. Antes de usar cualquier resultado fuera de pruebas, revisa la calidad y zona horaria del archivo; las señales son informativas, no recomendaciones financieras.
+
 ## Salud de los servicios
 
-Node y FastAPI exponen `GET /healthz`, una comprobación local que verifica el estado SQLite compartido por cada proceso. Responde `200` solo si la persistencia está accesible y el esquema de estado está presente; si SQLite falla, responde `503`. La respuesta indica explícitamente `SIMULATED`, broker `disabled` y datos de mercado `simulated`; no verifica ni afirma conectividad con el broker o con mercados reales. Estos endpoints son para diagnóstico local y no sustituyen monitoreo, métricas ni alertas de producción.
+Node y FastAPI exponen `GET /healthz`, una comprobación local que verifica el estado SQLite compartido por cada proceso. Responde `200` solo si la persistencia está accesible y el esquema de estado está presente; si SQLite falla, responde `503`. El endpoint Node indica `historical_csv` mientras haya datos CSV cargados en memoria, o `simulated` si no los hay; FastAPI reporta `simulated`. Ningún endpoint verifica conexión a broker, feed en vivo ni precios de mercado en tiempo real. Estos endpoints son para diagnóstico local y no sustituyen monitoreo, métricas ni alertas de producción.
 
 Para arrancar FastAPI en Windows sin activar manualmente el entorno Python, abre otra ventana de PowerShell en `BOT_VPN` y ejecuta:
 

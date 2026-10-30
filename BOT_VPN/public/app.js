@@ -22,7 +22,9 @@ const state = {
   selectedBotId: null,
   activeFilter: 'ALL',
   marketPrice: 18245.50,
-  wsConnected: false
+  wsConnected: false,
+  analysisResults: [],
+  historicalTrades: []
 };
 
 let ws = null;
@@ -249,6 +251,7 @@ function switchTab(tabName) {
   if (tabName === 'cuentas') renderGlobalAccounts();
   if (tabName === 'vpn') renderVpnCenter();
   if (tabName === 'dashboard') renderBotGrid();
+  if (tabName === 'analysis') loadAnalysisStatus();
 }
 
 // ======================================================================
@@ -542,7 +545,11 @@ function renderIdentities() {
   if (!container) return;
 
   if (state.identities.length === 0) {
-    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 32px;">No hay personas titulares registradas aún.</div>`;
+    container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;">
+      <p>No hay titulares guardados. La demo no precarga ni inventa identidades KYC.</p>
+      <button class="btn btn-primary" type="button" onclick="openAddIdentityModal()">Registrar titular</button>
+      <p class="form-hint">El estado inicial será Pendiente. Este registro local no verifica identidad ni almacena documentos.</p>
+    </div>`;
     return;
   }
 
@@ -790,7 +797,7 @@ async function submitAddAccount(event) {
 function openAddBotModal() {
   const identSelect = document.getElementById('new-bot-identity');
   if (identSelect) {
-    identSelect.innerHTML = state.identities.map(i => {
+    identSelect.innerHTML = '<option value="">Sin titular — demo local</option>' + state.identities.map(i => {
       return `<option value="${i.id}">${i.flag} ${escapeHtml(i.full_name)} (${escapeHtml(i.country)})</option>`;
     }).join('');
   }
@@ -807,6 +814,10 @@ async function submitCreateBot(event) {
   const name = document.getElementById('new-bot-name').value.trim();
   const identityId = document.getElementById('new-bot-identity').value;
   const strategy = document.getElementById('new-bot-strategy').value;
+  const analysisSymbol = document.getElementById('new-bot-analysis-symbol').value;
+  const analysisTimeframes = Array.from(
+    document.querySelectorAll('input[name="new-bot-timeframe"]:checked')
+  ).map(input => input.value);
   const proxy = document.getElementById('new-bot-proxy').value.trim();
   const jitter = parseInt(document.getElementById('new-bot-jitter').value) || 120;
   const startTime = document.getElementById('new-bot-start').value;
@@ -817,11 +828,18 @@ async function submitCreateBot(event) {
     name: name,
     identity_id: identityId,
     strategy: strategy,
+    analysis_symbol: analysisSymbol,
+    analysis_timeframes: analysisTimeframes,
     proxy_url: proxy,
     jitter_ms: jitter,
     start_time: startTime,
     end_time: endTime
   };
+
+  if (!analysisTimeframes.length) {
+    showToast('Selecciona al menos un intervalo de análisis.', 'error');
+    return;
+  }
 
   try {
     const resp = await apiFetch('/api/bots', {
@@ -836,10 +854,312 @@ async function submitCreateBot(event) {
     }
 
     closeAddBotModal();
-    showToast(`Bot "${name}" desplegado con éxito.`, 'success');
+    showToast(`Bot "${name}" creado para análisis y simulación local.`, 'success');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
+}
+
+async function submitAnalysisCsv(event) {
+  event.preventDefault();
+  const input = document.getElementById('analysis-csv-file');
+  const file = input.files[0];
+  if (!file) {
+    showToast('Selecciona un archivo CSV.', 'error');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('El CSV supera el límite de 5 MB.', 'error');
+    return;
+  }
+
+  const button = document.getElementById('analysis-submit-btn');
+  const status = document.getElementById('analysis-import-status');
+  button.disabled = true;
+  status.textContent = 'Importando y calculando análisis histórico...';
+  try {
+    const symbol = document.getElementById('analysis-symbol').value;
+    const timeframe = document.getElementById('analysis-source-timeframe').value;
+    const csv = await file.text();
+    const response = await apiFetch(
+      `/api/analysis/csv?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv' },
+        body: csv
+      }
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || 'No se pudo analizar el archivo.');
+    state.analysisResults = payload.results || [];
+    status.textContent = `${payload.symbol}: ${payload.candles} velas ${payload.source_timeframe} importadas. Simulación histórica, no en vivo.`;
+    renderAnalysisResults(state.analysisResults);
+    showToast('Simulación histórica completada. No se envió ninguna orden a un broker.', 'success');
+  } catch (error) {
+    status.textContent = 'No se pudo importar el CSV.';
+    showToast(`Error: ${error.message}`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function loadAnalysisStatus() {
+  try {
+    const response = await apiFetch('/api/analysis/status');
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || 'No se pudo cargar el estado del análisis.');
+    state.analysisResults = payload.results || [];
+    state.historicalTrades = state.analysisResults.flatMap(result =>
+      (result.historical_simulated_trades || []).map(trade => ({
+        ...trade,
+        bot_id: result.bot_id,
+        bot_name: result.bot_name
+      }))
+    );
+    const datasets = Object.entries(payload.datasets || {});
+    const status = document.getElementById('analysis-import-status');
+    if (status && datasets.length) {
+      status.textContent = `CSV históricos en memoria: ${datasets.map(([symbol, dataset]) =>
+        `${symbol} ${dataset.source_timeframe} (${dataset.candles} velas)`
+      ).join(' · ')}. Simulaciones sin broker; se borran al reiniciar Node.`;
+    }
+    renderAnalysisResults(state.analysisResults);
+  } catch (error) {
+    showToast(`Error cargando análisis: ${error.message}`, 'error');
+  }
+}
+
+function renderAnalysisResults(results) {
+  const container = document.getElementById('analysis-results');
+  if (!container) return;
+  if (!results.length) {
+    container.innerHTML = '<div class="empty-state">No hay resultados todavía. Importa datos del instrumento configurado para uno o más bots.</div>';
+    return;
+  }
+
+  const analysisCards = results.map(result => {
+    const indicators = result.indicators || {};
+    const displayValue = value => value === null || value === undefined
+      ? 'N/D'
+      : Number.isFinite(Number(value)) ? Number(value).toFixed(2) : 'N/D';
+    const macd = indicators.macd
+      ? `${displayValue(indicators.macd.line)} / ${displayValue(indicators.macd.signal)}`
+      : 'N/D';
+    const signalClass = result.signal === 'BULLISH'
+      ? 'analysis-bullish'
+      : result.signal === 'BEARISH'
+        ? 'analysis-bearish'
+        : 'analysis-neutral';
+    const statusLabel = result.status === 'READY'
+      ? 'ANÁLISIS'
+      : result.status === 'INSUFFICIENT_DATA'
+        ? 'DATOS INSUFICIENTES'
+        : 'NO DISPONIBLE';
+    const hypotheticalCount = Number(result.historical_simulated_trade_count || 0);
+    const renderChart = () => {
+      const chartBars = result.chart?.bars || [];
+      if (!chartBars.length) {
+        return '<div class="analysis-chart-empty">No hay velas suficientes para dibujar el gráfico.</div>';
+      }
+
+      const chartWidth = 940;
+      const chartHeight = 360;
+      const plot = { left: 18, right: 830, top: 20, bottom: 312 };
+      const plotWidth = plot.right - plot.left;
+      const plotHeight = plot.bottom - plot.top;
+      const trade = result.chart.trade;
+      const tradeEntryIndex = trade
+        ? chartBars.findIndex(bar => bar.timestamp === Date.parse(trade.entry_time))
+        : -1;
+      const xAt = index => plot.left + (chartBars.length < 2
+        ? plotWidth / 2
+        : index * plotWidth / (chartBars.length - 1));
+      const values = chartBars.flatMap(bar =>
+        [bar.low, bar.high, bar.ema9, bar.ema21, bar.ema50, bar.vwap]
+          .filter(value => Number.isFinite(value))
+      );
+      if (trade) values.push(trade.entry_price, trade.stop_loss, trade.take_profit);
+      const rawMin = Math.min(...values);
+      const rawMax = Math.max(...values);
+      const padding = Math.max((rawMax - rawMin) * 0.1, Math.abs(rawMax) * 0.0005, 0.25);
+      const minPrice = rawMin - padding;
+      const maxPrice = rawMax + padding;
+      const yAt = price => plot.bottom - ((price - minPrice) / (maxPrice - minPrice)) * plotHeight;
+      const candleWidth = Math.max(2, Math.min(9, plotWidth / chartBars.length * 0.66));
+      const grid = Array.from({ length: 5 }, (_, index) => {
+        const price = maxPrice - (maxPrice - minPrice) * index / 4;
+        const y = yAt(price);
+        return `<line class="chart-grid" x1="${plot.left}" y1="${y}" x2="${plot.right}" y2="${y}"/>
+          <text class="chart-axis-label" x="${plot.right + 8}" y="${y + 4}">${displayValue(price)}</text>`;
+      }).join('');
+      const linePath = key => {
+        let isDrawing = false;
+        return chartBars.map((bar, index) => {
+          if (!Number.isFinite(bar[key])) {
+            isDrawing = false;
+            return '';
+          }
+          const command = isDrawing ? 'L' : 'M';
+          isDrawing = true;
+          return `${command}${xAt(index)},${yAt(bar[key])}`;
+        }).filter(Boolean).join(' ');
+      };
+      const candles = chartBars.map((bar, index) => {
+        const x = xAt(index);
+        const bullish = bar.close >= bar.open;
+        const bodyTop = yAt(Math.max(bar.open, bar.close));
+        const bodyBottom = yAt(Math.min(bar.open, bar.close));
+        const bodyHeight = Math.max(1.5, bodyBottom - bodyTop);
+        return `<line class="chart-wick ${bullish ? 'is-up' : 'is-down'}" x1="${x}" y1="${yAt(bar.high)}" x2="${x}" y2="${yAt(bar.low)}"/>
+          <rect class="chart-candle ${bullish ? 'is-up' : 'is-down'}" x="${x - candleWidth / 2}" y="${bodyTop}" width="${candleWidth}" height="${bodyHeight}" rx="0.6"/>`;
+      }).join('');
+      const timeLabels = [0, Math.floor((chartBars.length - 1) / 2), chartBars.length - 1]
+        .map(index => {
+          const x = xAt(index);
+          const timestamp = new Date(chartBars[index].timestamp).toISOString().slice(5, 16).replace('T', ' ');
+          return `<text class="chart-time-label" x="${x}" y="${plot.bottom + 22}" text-anchor="middle">${timestamp} UTC</text>`;
+        }).join('');
+      const tradeLevels = trade && tradeEntryIndex >= 0
+        ? (() => {
+          const startX = xAt(tradeEntryIndex);
+          const lineEnd = plot.right;
+          const entryY = yAt(trade.entry_price);
+          const stopY = yAt(trade.stop_loss);
+          const targetY = yAt(trade.take_profit);
+          const targetTop = Math.min(entryY, targetY);
+          const stopTop = Math.min(entryY, stopY);
+          const statusText = {
+            TP_HIT: 'OBJETIVO ALCANZADO',
+            STOP_HIT: 'STOP ALCANZADO',
+            NO_EXIT_IN_HISTORY: 'SIN SALIDA EN EL HISTÓRICO'
+          }[trade.status] || trade.status;
+          return `<rect class="chart-reward-zone" x="${startX}" y="${targetTop}" width="${lineEnd - startX}" height="${Math.max(1, Math.abs(entryY - targetY))}"/>
+            <rect class="chart-risk-zone" x="${startX}" y="${stopTop}" width="${lineEnd - startX}" height="${Math.max(1, Math.abs(entryY - stopY))}"/>
+            <line class="chart-level chart-level-target" x1="${startX}" y1="${targetY}" x2="${lineEnd}" y2="${targetY}"/>
+            <line class="chart-level chart-level-entry" x1="${startX}" y1="${entryY}" x2="${lineEnd}" y2="${entryY}"/>
+            <line class="chart-level chart-level-stop" x1="${startX}" y1="${stopY}" x2="${lineEnd}" y2="${stopY}"/>
+            <line class="chart-entry-marker" x1="${startX}" y1="${plot.top}" x2="${startX}" y2="${plot.bottom}"/>
+            <text class="chart-level-label target-label" x="${lineEnd + 7}" y="${targetY - 5}">TP ${displayValue(trade.take_profit)}</text>
+            <text class="chart-level-label entry-label" x="${lineEnd + 7}" y="${entryY - 5}">ENTRADA ${displayValue(trade.entry_price)}</text>
+            <text class="chart-level-label stop-label" x="${lineEnd + 7}" y="${stopY - 5}">STOP ${displayValue(trade.stop_loss)}</text>
+            <text class="chart-trade-status" x="${startX + 8}" y="${plot.top + 16}">${statusText}</text>`;
+        })()
+        : '';
+      return `<div class="analysis-chart">
+        <div class="analysis-chart-heading">
+          <span>Gráfico histórico · ${chartBars.length} velas</span>
+          <span>UTC · CSV, no tiempo real</span>
+        </div>
+        <div class="analysis-chart-scroll">
+          <svg class="analysis-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="Gráfico de velas históricas con indicadores y niveles simulados">
+            <rect class="chart-background" x="${plot.left}" y="${plot.top}" width="${plotWidth}" height="${plotHeight}"/>
+            ${grid}
+            ${tradeLevels}
+            ${candles}
+            <path class="chart-line chart-ema9" d="${linePath('ema9')}"/>
+            <path class="chart-line chart-ema21" d="${linePath('ema21')}"/>
+            <path class="chart-line chart-ema50" d="${linePath('ema50')}"/>
+            <path class="chart-line chart-vwap" d="${linePath('vwap')}"/>
+            ${timeLabels}
+          </svg>
+        </div>
+        <div class="analysis-chart-legend">
+          <span><i class="legend-ema9"></i>EMA 9</span>
+          <span><i class="legend-ema21"></i>EMA 21</span>
+          <span><i class="legend-ema50"></i>EMA 50</span>
+          <span><i class="legend-vwap"></i>VWAP UTC</span>
+          ${trade ? `<span class="chart-trade-summary">${escapeHtml(trade.side)} · ${escapeHtml(statusTextForTrade(trade.status))} · PnL ${displayValue(trade.pnl_points)} pts</span>` : '<span>Sin operaciones simuladas en este tramo</span>'}
+        </div>
+      </div>`;
+    };
+    return `
+      <article class="analysis-result-card">
+        <div class="analysis-result-heading">
+          <div>
+            <h3>${escapeHtml(result.bot_name)} <span>${escapeHtml(result.symbol)} · ${escapeHtml(result.timeframe)}</span></h3>
+            <small>${escapeHtml(result.strategy)} · ${escapeHtml(statusLabel)}</small>
+          </div>
+          <strong class="${signalClass}">${escapeHtml(result.signal)}</strong>
+        </div>
+        <p>${escapeHtml(result.reason)}</p>
+        <p class="analysis-trade-count">Señales simuladas en las últimas ${Number(result.historical_simulation_bars_tested || 0)} velas: <strong>${hypotheticalCount}</strong></p>
+        ${renderChart()}
+        <div class="analysis-indicators">
+          <span>Cierre <b>${displayValue(indicators.close)}</b></span>
+          <span>EMA 9/21/50 <b>${displayValue(indicators.ema9)} / ${displayValue(indicators.ema21)} / ${displayValue(indicators.ema50)}</b></span>
+          <span>RSI 14 <b>${displayValue(indicators.rsi14)}</b></span>
+          <span>MACD / señal <b>${macd}</b></span>
+          <span>ATR 14 <b>${displayValue(indicators.atr14)}</b></span>
+          <span>VWAP UTC <b>${displayValue(indicators.vwapUtcDay)}</b></span>
+          <span>Velas <b>${Number(result.bars_analyzed || 0)}</b></span>
+        </div>
+        <small class="analysis-result-source">CSV histórico · última vela ${escapeHtml(result.last_bar_at || '')} · no es una recomendación ni una orden.</small>
+      </article>`;
+  }).join('');
+
+  const trades = results.flatMap(result =>
+    (result.historical_simulated_trades || []).map(trade => ({
+      ...trade,
+      bot_id: result.bot_id,
+      bot_name: result.bot_name
+    }))
+  ).sort((left, right) => Date.parse(right.signal_time) - Date.parse(left.signal_time));
+  state.historicalTrades = trades;
+
+  const tradeRows = trades.length
+    ? trades.map(trade => {
+      const resultLabel = {
+        TP_HIT: 'TP alcanzado',
+        STOP_HIT: 'Stop alcanzado',
+        NO_EXIT_IN_HISTORY: 'Sin salida en el histórico'
+      }[trade.status] || trade.status;
+      const resultClass = trade.status === 'TP_HIT'
+        ? 'analysis-bullish'
+        : trade.status === 'STOP_HIT'
+          ? 'analysis-bearish'
+          : 'analysis-neutral';
+      return `<tr>
+        <td>${escapeHtml(trade.bot_name)}</td>
+        <td>${escapeHtml(trade.symbol)} · ${escapeHtml(trade.timeframe)}</td>
+        <td>${escapeHtml(trade.strategy)}</td>
+        <td class="${trade.side === 'BUY' ? 'analysis-bullish' : 'analysis-bearish'}">${escapeHtml(trade.side)}</td>
+        <td>${Number(trade.entry_price).toFixed(2)}<small>${escapeHtml(trade.entry_time)}</small></td>
+        <td>${Number(trade.stop_loss).toFixed(2)}</td>
+        <td>${Number(trade.take_profit).toFixed(2)}</td>
+        <td class="${resultClass}">${escapeHtml(resultLabel)}<small>${Number(trade.exit_price).toFixed(2)} · ${escapeHtml(trade.exit_time)}</small></td>
+        <td>${Number(trade.pnl_points).toFixed(2)} pts</td>
+      </tr>`;
+    }).join('')
+    : '<tr><td colspan="9" class="analysis-no-trades">Todavía no se detectaron operaciones con los CSV, estrategias e intervalos cargados.</td></tr>';
+
+  container.innerHTML = `${analysisCards}
+    <section class="analysis-trades-panel">
+      <div class="analysis-trades-heading">
+        <div>
+          <h3>Operaciones hipotéticas sobre el histórico</h3>
+          <p>Entrada en la apertura posterior a la señal; hasta 25 registros recientes por bot e intervalo.</p>
+        </div>
+        <strong>SOLO SIMULACIÓN</strong>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table analysis-trades-table">
+          <thead><tr>
+            <th>BOT</th><th>INSTRUMENTO / INTERVALO</th><th>ESTRATEGIA</th><th>OPERACIÓN</th>
+            <th>ENTRADA</th><th>STOP</th><th>TAKE PROFIT</th><th>RESULTADO</th><th>PnL (PUNTOS)</th>
+          </tr></thead>
+          <tbody>${tradeRows}</tbody>
+        </table>
+      </div>
+      <small class="analysis-result-source">OHLCV no muestra el orden de precios dentro de cada vela: si TP y stop aparecen tocados en la misma vela, se asume primero el stop. Sin comisiones, spread ni slippage; no es una operación real ni una recomendación.</small>
+    </section>`;
+}
+
+function statusTextForTrade(status) {
+  return {
+    TP_HIT: 'objetivo alcanzado',
+    STOP_HIT: 'stop alcanzado',
+    NO_EXIT_IN_HISTORY: 'sin salida en el histórico'
+  }[status] || status;
 }
 
 function openAddIdentityModal() {
@@ -885,7 +1205,7 @@ async function submitAddIdentity(event) {
     }
 
     closeAddIdentityModal();
-    showToast(`Titular "${name}" registrado correctamente.`, 'success');
+    showToast(`Titular "${name}" guardado como pendiente. Esto no verifica el KYC.`, 'info');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }

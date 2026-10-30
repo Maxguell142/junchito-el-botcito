@@ -74,6 +74,41 @@ def test_fastapi_startup_and_rest_authentication(client):
         "/api/strategies",
         headers={"Authorization": f"Bearer {token}"},
     ).status_code == 200
+    identity_response = client.post(
+        "/api/identities",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "id": "demo-pending-identity",
+            "full_name": "Demo identity",
+        },
+    )
+    assert identity_response.status_code == 200
+    assert identity_response.json()["identity"]["kyc_status"] == "PENDING"
+    bot_response = client.post(
+        "/api/bots",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "id": "analysis-bot",
+            "name": "Historical analysis bot",
+            "strategy": "TechnicalAnalysisStrategy",
+            "analysis_symbol": "ES",
+            "analysis_timeframes": ["5m", "1h"],
+        },
+    )
+    assert bot_response.status_code == 200
+    assert bot_response.json()["bot"]["analysis_symbol"] == "ES"
+    assert bot_response.json()["bot"]["analysis_timeframes"] == ["5m", "1h"]
+    duplicate_timeframes = client.post(
+        "/api/bots",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "id": "invalid-analysis-bot",
+            "name": "Invalid analysis bot",
+            "strategy": "ICTStrategy",
+            "analysis_timeframes": ["5m", "5m"],
+        },
+    )
+    assert duplicate_timeframes.status_code == 422
     assert "access-control-allow-origin" not in client.get("/").headers
 
     expired_token = "expired-session-test"
