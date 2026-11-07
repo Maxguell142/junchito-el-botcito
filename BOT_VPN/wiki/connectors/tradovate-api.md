@@ -48,6 +48,8 @@ sources: [raw/system-specifications.md, raw/prop-firms-comparison.md]
 En `bot_engine.py`, el `BrokerAdapter` utiliza la sesión aislada del `ProxyConnector`. Cada bot autentica y despacha peticiones HTTP a Tradovate saliendo estrictamente por la IP de su proxy asignado, previniendo advertencias de compliance por accesos cruzados.
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
+- [[system-overview]]
 - [[socket-level-proxy-isolation]]
 - [[rithmic-rapi]]
 - [[apex-topstep-leelo-blueguardian]]

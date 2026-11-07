@@ -29,6 +29,7 @@ Una **Divergencia SMT** ocurre cuando uno de los activos forma un nuevo extremo 
 - `correlated_index`: "ES"
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[ict-strategy]]
 - [[order-flow-strategy]]

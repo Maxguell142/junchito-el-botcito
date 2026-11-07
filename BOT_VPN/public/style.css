@@ -29,6 +29,19 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.45);
+  /* Variables Estilo Lucid Trading */
+  --bg-lucid-sidebar: #090A0E;
+  --bg-lucid-topbar: #0C0D12;
+  --bg-lucid-active: #171922;
+  --bg-lucid-hover: rgba(255, 255, 255, 0.04);
+  --border-lucid: #1A1D24;
+  --border-lucid-active: #262A36;
+  --text-lucid-muted: #8B90A0;
+  --text-lucid-active: #FFFFFF;
+  --emerald-lucid: #10B981;
+  --emerald-lucid-bg: rgba(16, 185, 129, 0.12);
+  --emerald-lucid-border: rgba(16, 185, 129, 0.45);
+  --emerald-lucid-hover: rgba(16, 185, 129, 0.22);
 }
 
 * {
@@ -559,10 +572,33 @@ body {
 /* ======================================================================
    GRID DE BOTS Y TARJETAS
    ====================================================================== */
+/* Grid Responsivo de Bots Inteligente (Garantiza mínimo 2 por fila) */
 .bot-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  width: 100%;
+}
+
+@media (min-width: 960px) {
+  .bot-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1480px) {
+  .bot-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 22px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .bot-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 24px;
+  }
 }
 
 .bot-card {
@@ -2283,4 +2319,1479 @@ input:focus, select:focus, textarea:focus {
 
 .align-center {
   align-items: center;
+}
+
+
+/* ======================================================================
+   ARQUITECTURA DE 3 PANTALLAS (LANDING -> LOGIN -> TERMINAL)
+   ====================================================================== */
+
+.app-screen {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-screen.hidden {
+  display: none !important;
+}
+
+/* Navbar público de la Landing */
+.public-landing-header {
+  height: 64px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.public-landing-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.public-nav-link {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+.public-nav-link:hover {
+  color: var(--color-neon);
+}
+
+.public-landing-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Contenedor scrolleable de la Landing */
+.landing-scroll-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 0 60px 0;
+}
+
+/* Sección de Reglas de Prop Firms en Landing */
+.landing-props-section {
+  max-width: 1200px;
+  margin: 0 auto 56px auto;
+  padding: 0 24px;
+}
+
+.props-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.prop-rule-box {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.prop-rule-box:hover {
+  border-color: var(--border-focus);
+  transform: translateY(-2px);
+}
+
+.prop-rule-box h4 {
+  margin: 0 0 10px 0;
+  font-size: 1.05rem;
+  color: var(--color-neon);
+  font-family: var(--font-mono);
+}
+
+.prop-rule-box p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* CTA Inferior de la Landing */
+.landing-bottom-cta {
+  max-width: 900px;
+  margin: 40px auto 60px auto;
+  background: linear-gradient(180deg, #161616 0%, #0E0E0E 100%);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  padding: 48px 32px;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+.landing-bottom-cta h2 {
+  font-size: 1.8rem;
+  margin: 0 0 12px 0;
+  color: #FFFFFF;
+}
+
+.landing-bottom-cta p {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  max-width: 620px;
+  margin: 0 auto 28px auto;
+  line-height: 1.6;
+}
+
+/* Footer Público */
+.public-landing-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  max-width: 1100px;
+  margin: 40px auto 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.public-landing-footer .footer-brand {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* Pantalla de Login */
+.login-page-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 30%, #151515 0%, #080808 100%);
+}
+
+.login-back-action {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.login-back-action .btn-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.login-back-action .btn-link:hover {
+  color: var(--color-neon);
+}
+
+/* ======================================================================
+   ARQUITECTURA DE PANTALLA TERMINAL ESTILO LUCID TRADING (SIDEBAR LATERAL)
+   ====================================================================== */
+
+.terminal-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--bg-main);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Orientación por defecto: Barra en la pared derecha (pedida por el usuario) */
+.terminal-layout.sidebar-right {
+  flex-direction: row;
+}
+
+.terminal-layout.sidebar-right .terminal-workspace {
+  order: 1;
+}
+
+.terminal-layout.sidebar-right .lucid-sidebar {
+  order: 2;
+  border-left: 1px solid var(--border-lucid);
+  border-right: none;
+}
+
+/* Alternativa de orientación: Barra en la pared izquierda */
+.terminal-layout.sidebar-left {
+  flex-direction: row;
+}
+
+.terminal-layout.sidebar-left .terminal-workspace {
+  order: 2;
+}
+
+.terminal-layout.sidebar-left .lucid-sidebar {
+  order: 1;
+  border-right: 1px solid var(--border-lucid);
+  border-left: none;
+}
+
+/* Espacio de trabajo principal (Workspace) */
+.terminal-workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-main);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Topbar Limpio y Despejado con Telemetría */
+.workspace-topbar {
+  height: 56px;
+  background-color: var(--bg-lucid-topbar);
+  border-bottom: 1px solid var(--border-lucid);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.topbar-left-zone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.topbar-telemetry-strip {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: #111319;
+  border: 1px solid var(--border-lucid);
+  padding: 6px 18px;
+  border-radius: 8px;
+}
+
+.telemetry-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.telemetry-chip .t-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--text-lucid-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.telemetry-chip .t-val {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.topbar-right-zone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.topbar-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #141720;
+  border: 1px solid var(--border-lucid-active);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: #E2E8F0;
+}
+
+.topbar-user-chip .user-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2563EB;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+/* ======================================================================
+   BARRA LATERAL LUCID TRADING (THEME & COMPONENTS)
+   ====================================================================== */
+.lucid-sidebar {
+  width: 260px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  background-color: var(--bg-lucid-sidebar);
+  display: flex;
+  flex-direction: column;
+  z-index: 90;
+  user-select: none;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estado Colapsado (Modo icono minimalista para ganar pantalla completa) */
+.lucid-sidebar.collapsed {
+  width: 72px;
+}
+
+.lucid-sidebar.collapsed .sidebar-brand-text,
+.lucid-sidebar.collapsed .cta-label,
+.lucid-sidebar.collapsed .sub-cta-label,
+.lucid-sidebar.collapsed .nav-label,
+.lucid-sidebar.collapsed .sidebar-pill-badge,
+.lucid-sidebar.collapsed .util-label,
+.lucid-sidebar.collapsed .collapse-label,
+.lucid-sidebar.collapsed .logout-label {
+  display: none !important;
+}
+
+.lucid-sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.lucid-sidebar.collapsed .sidebar-actions-wrapper {
+  padding: 0 8px;
+}
+
+.lucid-sidebar.collapsed .lucid-cta-btn {
+  padding: 10px 0;
+  justify-content: center;
+}
+
+.lucid-sidebar.collapsed .lucid-sub-cta-btn {
+  display: none;
+}
+
+.lucid-sidebar.collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.lucid-sidebar.collapsed .sidebar-footer-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+/* Cabecera de la Marca con Orbe Gradiente estilo Lucid */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px 14px 18px;
+  border-bottom: 1px solid var(--border-lucid);
+}
+
+.lucid-orb {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #A5B4FC 0%, #313A52 48%, #090C15 100%);
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4), inset 0 0 6px rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(165, 180, 252, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lucid-orb-inner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  box-shadow: 0 0 10px #FFFFFF;
+  opacity: 0.6;
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-brand-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.sidebar-brand-sub {
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  color: var(--text-lucid-muted);
+  text-transform: uppercase;
+}
+
+/* Acciones CTA Principales estilo Lucid [+ Add Account] */
+.sidebar-actions-wrapper {
+  padding: 14px 12px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lucid-cta-btn {
+  background-color: var(--emerald-lucid-bg);
+  border: 1px solid var(--emerald-lucid-border);
+  color: var(--emerald-lucid);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.15);
+  transition: all 0.18s ease;
+  width: 100%;
+}
+
+.lucid-cta-btn:hover {
+  background-color: var(--emerald-lucid-hover);
+  border-color: var(--emerald-lucid);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+}
+
+.lucid-cta-btn .cta-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.lucid-sub-cta-btn {
+  background: transparent;
+  border: 1px solid var(--border-lucid-active);
+  color: var(--text-lucid-muted);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.lucid-sub-cta-btn:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: #3B4254;
+  color: #FFFFFF;
+}
+
+/* Lista de Navegación Vertical */
+.sidebar-nav-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-nav-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav-list::-webkit-scrollbar-thumb {
+  background: #1C202C;
+  border-radius: 4px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-lucid-muted);
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.sidebar-nav-item:hover {
+  color: var(--text-lucid-active);
+  background-color: var(--bg-lucid-hover);
+}
+
+.sidebar-nav-item.active {
+  background-color: var(--bg-lucid-active);
+  border-color: var(--border-lucid-active);
+  color: var(--text-lucid-active);
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.sidebar-nav-item .nav-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item .nav-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-pill-badge {
+  background-color: #1A1F2C;
+  border: 1px solid var(--border-lucid-active);
+  color: #94A3B8;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item.active .sidebar-pill-badge {
+  background-color: #242B3D;
+  color: #E2E8F0;
+  border-color: #3B445B;
+}
+
+/* Pie de la Barra Lateral Estilo Lucid Trading */
+.sidebar-footer {
+  padding: 10px 12px 14px 12px;
+  border-top: 1px solid var(--border-lucid);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #07080B;
+}
+
+.sidebar-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.sidebar-util-btn {
+  background-color: #10121A;
+  border: 1px solid var(--border-lucid);
+  color: var(--text-lucid-muted);
+  padding: 6px 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-util-btn:hover {
+  background-color: #171B26;
+  border-color: var(--border-lucid-active);
+  color: #FFFFFF;
+}
+
+.sidebar-util-btn.muted {
+  color: #64748B;
+  opacity: 0.7;
+}
+
+.sidebar-footer-row2 {
+  display: flex;
+  gap: 6px;
+}
+
+.sidebar-collapse-btn {
+  background-color: #10121A;
+  border: 1px solid var(--border-lucid);
+  color: var(--text-lucid-muted);
+  padding: 7px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background-color: #171B26;
+  border-color: var(--border-lucid-active);
+  color: #FFFFFF;
+}
+
+.sidebar-logout-btn {
+  background-color: #12141C;
+  border: 1px solid var(--border-lucid-active);
+  color: var(--text-lucid-muted);
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.sidebar-logout-btn:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #EF4444;
+}
+
+/* ======================================================================
+   ESTILOS DECORATIVOS INSTITUCIONALES // TEMÁTICA LUCID TRADING
+   ====================================================================== */
+
+/* 1. Franja de Valores y Garantías (Value Prop Strip) */
+.lucid-value-strip {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  margin-bottom: 22px;
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.lucid-value-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #D1D5DB;
+}
+
+.lucid-check-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10B981;
+  color: #10B981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+/* 2. Cápsula de Filtros Redondeada estilo Lucid Trading */
+.lucid-filter-capsule {
+  display: inline-flex;
+  align-items: center;
+  background-color: #0F1218;
+  border: 1px solid #202636;
+  border-radius: 24px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.filter-capsule-item {
+  background: transparent;
+  border: none;
+  color: #8B90A0;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.filter-capsule-item:hover {
+  color: #FFFFFF;
+}
+
+.filter-capsule-item.active {
+  background-color: #10B981;
+  color: #000000;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);
+}
+
+/* 3. Banner de Operador Diamante Estilo Lucid (V8_NAHUEL) */
+.lucid-diamond-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px;
+  background: linear-gradient(135deg, #0D1322 0%, #151D30 100%);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.2), inset 0 0 8px rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lucid-diamond-banner:hover {
+  border-color: rgba(147, 197, 253, 0.6);
+  box-shadow: 0 0 22px rgba(59, 130, 246, 0.35);
+}
+
+.diamond-avatar-wrap {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diamond-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #2563EB;
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #60A5FA;
+}
+
+.diamond-badge-crown {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.diamond-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diamond-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diamond-handle {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #F8FAFC;
+  letter-spacing: 0.04em;
+}
+
+.diamond-tier-pill {
+  background: #1E293B;
+  border: 1px solid #334155;
+  color: #93C5FD;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.diamond-kpis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diamond-level-bar {
+  width: 60px;
+  height: 4px;
+  background: #1E293B;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.diamond-level-fill {
+  width: 75%;
+  height: 100%;
+  background: linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%);
+  border-radius: 2px;
+}
+
+.diamond-stat {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #94A3B8;
+  font-weight: 600;
+}
+
+/* 4. Estilo de Bot Card Estilo Lucid Trading */
+.bot-card {
+  background-color: #0E1016 !important;
+  border: 1px solid #1C212E !important;
+  border-radius: 10px !important;
+  padding: 18px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.bot-card:hover {
+  transform: translateY(-2px);
+  border-color: #2D3548 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Estrella de Favorito en Encabezado */
+.bot-star-btn {
+  background: none;
+  border: none;
+  color: #64748B;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
+  padding: 0;
+}
+
+.bot-star-btn:hover, .bot-star-btn.active {
+  color: #FBBF24;
+  transform: scale(1.15);
+}
+
+/* Switches estilo Lucid [ON / OFF] */
+.lucid-switch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #10B981;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+
+.lucid-switch-badge.off {
+  background: rgba(107, 114, 128, 0.12);
+  border-color: rgba(107, 114, 128, 0.35);
+  color: #9CA3AF;
+}
+
+/* Botonera de la tarjeta con estilo Lucid */
+.bot-card-actions .btn-secondary {
+  background: #141720 !important;
+  border: 1px solid #232938 !important;
+  color: #D1D5DB !important;
+  border-radius: 6px !important;
+}
+
+.bot-card-actions .btn-secondary:hover {
+  background: #1C212E !important;
+  border-color: #374151 !important;
+  color: #FFFFFF !important;
+}
+
+.bot-card-actions .btn-primary {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  color: #10B981 !important;
+  border-radius: 6px !important;
+}
+
+.bot-card-actions .btn-primary:hover {
+  background: rgba(16, 185, 129, 0.25) !important;
+  border-color: #10B981 !important;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* ======================================================================
+   ESTILOS DE ENTORNO DEMO Y GRÁFICOS DEDICADOS POR BOT
+   ====================================================================== */
+
+/* 1. Distintivo de Modo Demo en el Topbar */
+.demo-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #10B981;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+}
+
+.demo-mode-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10B981;
+  box-shadow: 0 0 8px #10B981;
+  animation: pulse-green 1.8s infinite;
+}
+
+/* 2. Sección de Gráfico en Modal del Bot */
+.modal-bot-chart-section {
+  background: #0B0D12;
+  border: 1px solid #1C212E;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.modal-position-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bot-position-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.bot-position-status-badge.flat {
+  background: #141721;
+  border: 1px solid #232938;
+  color: #94A3B8;
+}
+
+.bot-position-status-badge.in-position-long {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10B981;
+  color: #10B981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+}
+
+.bot-position-status-badge.in-position-short {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #EF4444;
+  color: #EF4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+}
+
+.bot-trade-simulator-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-chart-wrapper {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.modal-bot-chart-box {
+  width: 100%;
+  height: 280px;
+  background-color: #07090C;
+  border: 1px solid #181C26;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ======================================================================
+   ESTILOS DE CREADOR DE BOTS, CARGA DE ARCHIVO Y FOREXFACTORY CALENDAR
+   ====================================================================== */
+
+/* 1. Modal Creador de Bots & Carga Multilenguaje */
+.modal-bot-creator {
+  max-width: 780px !important;
+  width: 95%;
+}
+
+/* Custom Sleek Scrollbar for Modals (eliminates thick white bar) */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-content::-webkit-scrollbar-track {
+  background: #0B0E14;
+}
+.modal-content::-webkit-scrollbar-thumb {
+  background: #232B3D;
+  border-radius: 4px;
+}
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #10B981;
+}
+
+.form-row-full {
+  display: block;
+  width: 100%;
+}
+
+.form-row-full > * {
+  width: 100%;
+}
+
+.form-row-3col {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 14px;
+}
+
+.full-width-row {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.flex-2 { flex: 2; }
+.flex-1 { flex: 1; }
+
+.dropzone-header-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge-tag-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.file-supported-types {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.bot-file-dropzone {
+  box-sizing: border-box;
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  background-color: #0C0E14;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.bot-file-dropzone:hover {
+  border-color: #10B981;
+  background-color: rgba(16, 185, 129, 0.04);
+}
+
+.bot-file-dropzone.drag-over {
+  border-color: #10B981;
+  background-color: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2);
+  transform: scale(1.01);
+}
+
+.dropzone-content-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+}
+
+.dropzone-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.dropzone-text-block {
+  flex: 1;
+}
+
+.dropzone-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #F1F5F9;
+  margin-bottom: 4px;
+}
+
+.dropzone-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Card de Verificación de Archivo */
+.file-verification-card {
+  background: #090B10;
+  border: 1px solid #10B981;
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
+  margin-top: 6px;
+  animation: fadeIn 0.3s ease;
+}
+
+.verif-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.verif-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #10B981;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.verif-dot-glow {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 10px #10B981;
+  animation: pulse-green 1.5s infinite;
+}
+
+.verif-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.verif-remove-btn:hover {
+  color: #EF4444;
+}
+
+.verif-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+
+.verif-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.verif-sub-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.verif-value-text {
+  font-size: 0.8rem;
+  color: #F8FAFC;
+}
+
+.verif-lang-tag {
+  display: inline-block;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  width: fit-content;
+}
+
+.verif-preview-accordion details {
+  background: #060709;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.verif-preview-summary {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.verif-preview-summary:hover {
+  color: #E2E8F0;
+}
+
+.verif-preview-code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: #94A3B8;
+  padding: 8px 12px;
+  margin: 0;
+  overflow-x: auto;
+  max-height: 120px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* 2. Auto-Asignación de SOCKS5 Residencial (Sin fricción) */
+.demo-proxy-auto-card {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(11, 15, 22, 0.6) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.proxy-auto-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.proxy-auto-icon {
+  font-size: 1.4rem;
+}
+
+.proxy-auto-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.proxy-auto-texts strong {
+  font-size: 0.84rem;
+  color: #E2E8F0;
+  line-height: 1.4;
+}
+
+.proxy-auto-texts small {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.badge-proxy-auto {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  border: 1px solid #10B981;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* 3. Filtros ForexFactory y Tabla Institucional */
+.ff-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background-color: #0B0E14;
+  border: 1px solid #1E2433;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ff-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-filter-label {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.ff-pill-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ff-pill {
+  background-color: #141824;
+  border: 1px solid #242C3D;
+  color: #94A3B8;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.ff-pill:hover {
+  background-color: #1C2333;
+  color: #FFFFFF;
+}
+
+.ff-pill.active {
+  background-color: rgba(16, 185, 129, 0.18);
+  border-color: #10B981;
+  color: #10B981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.ff-pill.pill-red.active {
+  background-color: rgba(239, 68, 68, 0.18);
+  border-color: #EF4444;
+  color: #EF4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.ff-filter-search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.ff-filter-search input {
+  width: 100%;
+  padding: 7px 12px;
+  background-color: #11141F;
+  border: 1px solid #222938;
+  border-radius: 6px;
+  color: #FFFFFF;
+  font-size: 0.78rem;
+  transition: border-color 0.2s ease;
+}
+
+.ff-filter-search input:focus {
+  outline: none;
+  border-color: #10B981;
+}
+
+/* Badges de Divisas ForexFactory */
+.ff-curr-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.curr-badge-usd {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10B981;
+}
+
+.curr-badge-jpy {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #F87171;
+}
+
+.curr-badge-eur {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #60A5FA;
+}
+
+.curr-badge-gbp {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #C084FC;
 }

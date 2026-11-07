@@ -12,6 +12,8 @@ A diferencia de los sistemas RAG tradicionales (donde el modelo redescubre conoc
 - **La Wiki es la base de código de conocimiento**.
 - El usuario aporta fuentes primarias (`raw/`), formula preguntas complejas y dirige la investigación. El Agente realiza todo el trabajo mecánico: síntesis, referencias cruzadas, resolución de inconsistencias, indexación y bitácora cronológica.
 
+> 🧭 **Navegación en Obsidian:** [[wiki/stack-and-health|Stack y salud del sistema]] · [[wiki/index|Índice Maestro de la Wiki]] · [[wiki/system-overview|Arquitectura General]] · [[wiki/log|Bitácora Cronológica]] · [[README|Guía de Ejecución Local]]
+
 ---
 
 ## 2. Arquitectura de Tres Capas
@@ -29,6 +31,7 @@ BOT_VPN/
 │
 └── wiki/                     # [CAPA 2: LA WIKI PERSISTENTE COMPUESTA]
     ├── index.md              # Catálogo maestro de páginas por categoría
+    ├── stack-and-health.md   # Inventario verificado, límites y comprobaciones
     ├── log.md                # Bitácora cronológica append-only
     ├── system-overview.md    # Síntesis ejecutiva y arquitectura global
     │
@@ -79,10 +82,11 @@ Cuando el usuario introduzca un nuevo documento en `raw/` o solicite documentar 
 
 ### Protocolo B: Consulta y Compilación (`Query`)
 Cuando el usuario haga preguntas sobre el sistema o el mercado:
-1. Consultar primero `wiki/index.md` para ubicar las páginas más relevantes.
-2. Leer los archivos enlazados y sintetizar la respuesta con citas a los archivos de la wiki.
-3. **Retroalimentación**: Si la respuesta descubre una relación no documentada, una comparación valiosa o una solución arquitectónica novedosa, **redactarla como una nueva página en `wiki/` o integrarla a una existente**. Las buenas respuestas nunca deben perderse en el historial del chat.
-4. Registrar la consulta en `wiki/log.md`:
+1. Consultar `wiki/stack-and-health.md` para verificar el stack y diferenciar lo implementado de lo planificado; luego usar `wiki/index.md` para navegar.
+2. Confirmar las versiones y capacidades en manifiestos, código y pruebas antes de describirlas como activas.
+3. Leer los archivos enlazados y sintetizar la respuesta con citas a los archivos de la wiki.
+4. **Retroalimentación**: Si la respuesta descubre una relación no documentada, una comparación valiosa o una solución arquitectónica novedosa, **redactarla como una nueva página en `wiki/` o integrarla a una existente**. Las buenas respuestas nunca deben perderse en el historial del chat.
+5. Registrar la consulta en `wiki/log.md`:
    `## [YYYY-MM-DD] query | Pregunta o análisis realizado`
 
 ### Protocolo C: Auditoría y Salud (`Lint`)

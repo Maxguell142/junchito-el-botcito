@@ -29,6 +29,7 @@ La estrategia **Order Flow** analiza:
 - `max_contracts`: 5
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[ict-strategy]]
 - [[smt-strategy]]

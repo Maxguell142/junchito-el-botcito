@@ -3,7 +3,7 @@
 **Actualizado:** 2026-10-28
 **Estado general:** aplicación local en modo `SIMULATED`. No está conectada a Rithmic ni a otro broker y no está lista para operar con dinero real.
 
-Este documento resume el trabajo pendiente de forma práctica. No reemplaza el [plan detallado de implementación](./IMPLEMENTATION_PLAN.md) ni las instrucciones para ejecutar el sistema en el [README](./README.md).
+Este documento resume el trabajo pendiente de forma práctica. No reemplaza el [[IMPLEMENTATION_PLAN|plan detallado de implementación]], las instrucciones de ejecución en el [[README|README local]] ni la base de conocimiento en el [[wiki/index|Índice Maestro de la Wiki]].
 
 ## Estado actual resumido
 

@@ -1,22 +1,65 @@
 {
-  "collapse-filter": true,
-  "search": "",
+  "collapse-filter": false,
+  "search": "-path:node_modules -path:.venv -path:public",
   "showTags": false,
   "showAttachments": false,
   "hideUnresolved": false,
   "showOrphans": true,
-  "collapse-color-groups": true,
-  "colorGroups": [],
-  "collapse-display": true,
-  "showArrow": false,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:wiki/concepts",
+      "color": {
+        "a": 1,
+        "rgb": 45311
+      }
+    },
+    {
+      "query": "path:wiki/strategies",
+      "color": {
+        "a": 1,
+        "rgb": 59000
+      }
+    },
+    {
+      "query": "path:wiki/connectors",
+      "color": {
+        "a": 1,
+        "rgb": 16744448
+      }
+    },
+    {
+      "query": "path:wiki/prop-firms",
+      "color": {
+        "a": 1,
+        "rgb": 14696703
+      }
+    },
+    {
+      "query": "path:raw",
+      "color": {
+        "a": 1,
+        "rgb": 10066329
+      }
+    },
+    {
+      "query": "file:index OR file:system-overview OR file:README OR file:AGENTS",
+      "color": {
+        "a": 1,
+        "rgb": 16766720
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
   "textFadeMultiplier": 0,
-  "nodeSizeMultiplier": 1,
+  "nodeSizeMultiplier": 1.15,
   "lineSizeMultiplier": 1,
   "collapse-forces": true,
-  "centerStrength": 0.518713248970312,
-  "repelStrength": 10,
+  "centerStrength": 0.52,
+  "repelStrength": 12,
   "linkStrength": 1,
-  "linkDistance": 250,
-  "scale": 0.7922904311445867,
-  "close": true
+  "linkDistance": 220,
+  "scale": 0.85,
+  "close": false
 }

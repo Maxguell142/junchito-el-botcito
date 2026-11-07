@@ -38,6 +38,7 @@ Para evitar violar el drawdown de las firmas:
 3. **Consistencia de IP**: Cada bot mantiene su sesión fija mediante SOCKS5, evitando que las firmas invaliden la cuenta por detección de accesos no autorizados concurrentes.
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[socket-level-proxy-isolation]]
 - [[multi-account-order-replication]]

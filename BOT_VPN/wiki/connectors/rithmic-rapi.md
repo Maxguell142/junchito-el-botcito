@@ -24,6 +24,8 @@ sources: [raw/system-specifications.md, raw/prop-firms-comparison.md]
 Dado que Rithmic establece conexiones socket persistentes de baja latencia, el `ProxyConnector` de `bot_engine.py` establece el handshake SOCKS5 hacia el proxy del bot antes de iniciar el túnel TLS/Protobuf. Esto asegura que la sesión de Rithmic provenga siempre de la IP geolocalizada asignada a ese bot.
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
+- [[system-overview]]
 - [[socket-level-proxy-isolation]]
 - [[tradovate-api]]
 - [[apex-topstep-leelo-blueguardian]]

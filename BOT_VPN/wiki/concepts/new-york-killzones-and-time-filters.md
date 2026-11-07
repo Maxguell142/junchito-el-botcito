@@ -35,6 +35,7 @@ En el método `is_within_schedule()`:
 | **NY PM Killzone (Tarde)** | 13:30 - 16:00 | Continuación de tendencia o reversión previa al cierre de la sesión bursátil de Wall Street. |
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[ict-strategy]]
 - [[smt-strategy]]

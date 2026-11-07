@@ -1,6 +1,7 @@
 # BOT_VPN — ejecución local
 
-La lista priorizada de trabajo pendiente está en [Pendientes y mejoras](./PENDIENTES_Y_MEJORAS.md); el plan ampliado está en [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
+> 📚 **Base de Conocimiento y Wiki (Obsidian):** Empieza por el [[wiki/stack-and-health|Mapa del sistema, stack y salud]], sigue con el [[wiki/index|Índice Maestro de la Wiki]] y la [[wiki/system-overview|Arquitectura General del Sistema]]. El marco operativo del agente está en [[AGENTS]].
+> 📋 **Roadmap y Backlog:** Lista priorizada de trabajo en [[PENDIENTES_Y_MEJORAS|Pendientes y Mejoras]]; plan ampliado en [[IMPLEMENTATION_PLAN|Plan de Implementación]].
 
 El proyecto contiene dos servidores independientes. Comparten persistencia SQLite, pero mantienen APIs y estado de ejecución propios; no ofrecen exactamente las mismas rutas:
 

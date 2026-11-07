@@ -1,1 +1,21 @@
-{}
+{
+  "userIgnoreFilters": [
+    "node_modules",
+    "node_modules/**",
+    ".git",
+    ".git/**",
+    ".venv",
+    ".venv/**",
+    "public",
+    "public/**",
+    ".pytest_cache",
+    ".pytest_cache/**",
+    "__pycache__",
+    "__pycache__/**",
+    "backups",
+    "backups/**",
+    ".system_generated",
+    ".system_generated/**"
+  ],
+  "showUnsupportedFiles": false
+}

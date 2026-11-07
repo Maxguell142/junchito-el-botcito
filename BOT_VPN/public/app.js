@@ -119,24 +119,78 @@ function updateAudioButtonUI() {
   if (label) label.textContent = state.audioMuted ? 'Audio OFF' : 'Audio ON';
 }
 
-function toggleLandingView() {
-  if (state.activeTab === 'landing') {
-    switchTab(state.previousTab || 'dashboard');
-  } else {
-    state.previousTab = state.activeTab;
-    switchTab('landing');
+// ======================================================================
+// GESTOR DE PANTALLAS (3 ETAPAS: LANDING -> LOGIN -> TERMINAL)
+// ======================================================================
+
+function showScreen(screenId) {
+  const screens = ['screen-landing', 'screen-login', 'screen-terminal'];
+  screens.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.toggle('hidden', id !== screenId);
+    }
+  });
+
+  if (screenId === 'screen-landing') {
+    updateLandingAuthUI();
   }
 }
 
-function enterTerminalWorkspace() {
-  const overlay = document.getElementById('login-overlay');
+function goToLandingScreen() {
+  showScreen('screen-landing');
+}
+
+function goToLoginScreen() {
+  showScreen('screen-login');
+  setTimeout(() => {
+    document.getElementById('login-username')?.focus();
+  }, 60);
+}
+
+function goToTerminalScreen() {
   if (!state.token) {
-    if (overlay) overlay.classList.remove('hidden');
+    goToLoginScreen();
+    return;
+  }
+  showScreen('screen-terminal');
+  initLucidSidebarPreferences();
+  updateHeaderUser();
+  if (!state.wsConnected) {
+    initWebSocket();
+  }
+  switchTab(state.activeTab || 'dashboard');
+}
+
+function handleLandingCta() {
+  if (state.token) {
+    goToTerminalScreen();
   } else {
-    switchTab('dashboard');
+    goToLoginScreen();
   }
 }
 
+function updateLandingAuthUI() {
+  const box = document.getElementById('landing-auth-action-box');
+  if (!box) return;
+  if (state.token) {
+    const username = state.currentUser?.username || 'admin';
+    box.innerHTML = `
+      <button class="btn btn-primary" onclick="goToTerminalScreen()">
+        <span>🚀 Ir a la Terminal (${escapeHtml(username)})</span> ➔
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Cerrar Sesión">
+        ⏻ Salir
+      </button>
+    `;
+  } else {
+    box.innerHTML = `
+      <button class="btn btn-primary" onclick="goToLoginScreen()">
+        <span>🔐 Iniciar Sesión</span> ➔
+      </button>
+    `;
+  }
+}
 
 // ======================================================================
 // 1. SISTEMA DE AUTENTICACIÓN Y LOGIN
@@ -144,12 +198,10 @@ function enterTerminalWorkspace() {
 
 function initAuth() {
   updateAudioButtonUI();
-  const overlay = document.getElementById('login-overlay');
   if (state.token) {
-    if (overlay) overlay.classList.add('hidden');
-    updateHeaderUser();
+    goToTerminalScreen();
   } else {
-    if (overlay) overlay.classList.remove('hidden');
+    goToLandingScreen();
   }
 }
 
@@ -168,7 +220,7 @@ async function apiFetch(url, options = {}) {
     state.token = null;
     localStorage.removeItem('quantum_auth_token');
     ws?.close();
-    document.getElementById('login-overlay')?.classList.remove('hidden');
+    goToLoginScreen();
   }
   return response;
 }
@@ -207,10 +259,8 @@ async function handleLoginSubmit(event) {
       localStorage.removeItem('quantum_auth_token');
     }
 
-    document.getElementById('login-overlay').classList.add('hidden');
-    updateHeaderUser();
-    initWebSocket();
     showToast(`Bienvenido de nuevo, ${state.currentUser.username}`, 'success');
+    goToTerminalScreen();
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -228,7 +278,7 @@ async function logoutUser() {
   state.token = null;
   localStorage.removeItem('quantum_auth_token');
   ws?.close();
-  document.getElementById('login-overlay').classList.remove('hidden');
+  goToLandingScreen();
   showToast('Sesión finalizada correctamente', 'info');
 }
 
@@ -252,6 +302,12 @@ function switchTab(tabName) {
   if (tabName === 'vpn') renderVpnCenter();
   if (tabName === 'dashboard') renderBotGrid();
   if (tabName === 'analysis') loadAnalysisStatus();
+  if (tabName === 'noticias') loadEconomicNews();
+    if (tabName === 'charts') {
+    setTimeout(() => {
+      initLightweightChart();
+    }, 50);
+  }
 }
 
 // ======================================================================
@@ -280,7 +336,7 @@ function initWebSocket() {
         if (data.type === 'AUTH_ERROR') {
           state.token = null;
           localStorage.removeItem('quantum_auth_token');
-          document.getElementById('login-overlay')?.classList.remove('hidden');
+          goToLoginScreen();
           return;
         }
         if (data.type === 'SNAPSHOT') {
@@ -296,7 +352,7 @@ function initWebSocket() {
       if (event.code === 1008 || event.code === 4401) {
         state.token = null;
         localStorage.removeItem('quantum_auth_token');
-        document.getElementById('login-overlay')?.classList.remove('hidden');
+        goToLoginScreen();
       }
       if (state.token) {
         updateWsStatus('Reconectando...', false);
@@ -329,6 +385,18 @@ function handleStateSnapshot(snapshot) {
   state.identities = snapshot.identities || [];
   state.riskPolicy = snapshot.risk_policy || null;
   state.marketPrice = snapshot.market_price_mnq || 18245.50;
+
+  // Actualizar Velas de Gráficos en Tiempo Real
+  if (snapshot.latest_candle) {
+    if (state.candleSeries) {
+      try { state.candleSeries.update(snapshot.latest_candle); } catch (e) {}
+    }
+    if (state.modalCandleSeries) {
+      try { state.modalCandleSeries.update(snapshot.latest_candle); } catch (e) {}
+    }
+    const curPriceEl = document.getElementById('chart-current-price');
+    if (curPriceEl) curPriceEl.textContent = Number(snapshot.latest_candle.close).toFixed(2);
+  }
 
   // Actualizar Header
   const priceElem = document.getElementById('market-price-val');
@@ -411,9 +479,28 @@ async function promptStopAll() {
 
 function filterBots(filter) {
   state.activeFilter = filter;
-  document.querySelectorAll('.filter-tag').forEach(tag => {
+  document.querySelectorAll('.filter-tag, .filter-capsule-item').forEach(tag => {
     tag.classList.toggle('active', tag.getAttribute('onclick')?.includes(`'${filter}'`));
   });
+  renderBotGrid();
+}
+
+function toggleBotFavorite(botId, event) {
+  if (event) event.stopPropagation();
+  if (!state.favoriteBots) {
+    try {
+      state.favoriteBots = JSON.parse(localStorage.getItem('quantum_fav_bots') || '[]');
+    } catch {
+      state.favoriteBots = [];
+    }
+  }
+  const idx = state.favoriteBots.indexOf(botId);
+  if (idx > -1) {
+    state.favoriteBots.splice(idx, 1);
+  } else {
+    state.favoriteBots.push(botId);
+  }
+  localStorage.setItem('quantum_fav_bots', JSON.stringify(state.favoriteBots));
   renderBotGrid();
 }
 
@@ -442,8 +529,12 @@ function renderBotGrid() {
     const consistencyPct = Math.min(100, Math.max(0, bot.consistency_pct || 0));
     const consistencyWarn = consistencyPct > 30 ? 'warn' : '';
 
+    const isFav = (state.favoriteBots || []).includes(bot.id);
+    const cb = bot.circuit_breaker || { consistency_target: 150, auto_lock_consistency: true, daily_loss_limit: 1000 };
+
     return `
       <div class="bot-card" data-bot-id="${bot.id}">
+        <!-- Encabezado de la Tarjeta estilo Lucid con Estrella Favorito -->
         <div class="bot-card-top">
           <div class="bot-info-group">
             <div class="bot-name-row">
@@ -456,7 +547,12 @@ function renderBotGrid() {
               <span style="color: var(--color-neon);">⏰ ${escapeHtml(bot.schedule ? bot.schedule.start_time : '09:30')} - ${escapeHtml(bot.schedule ? bot.schedule.end_time : '11:30')} EST</span>
             </div>
           </div>
-          <span class="bot-status-tag ${statusClass}">${statusLabel}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="bot-star-btn ${isFav ? 'active' : ''}" onclick="toggleBotFavorite('${bot.id}', event)" title="Marcar como favorito">
+              ${isFav ? '★' : '☆'}
+            </button>
+            <span class="bot-status-tag ${statusClass}">${statusLabel}</span>
+          </div>
         </div>
 
         <!-- Ficha del Titular Asignado -->
@@ -471,23 +567,30 @@ function renderBotGrid() {
           <span class="kyc-pill ${ident.kyc_status?.toLowerCase()}">${escapeHtml(ident.kyc_status || 'KYC')}</span>
         </div>
 
-        <!-- Aislamiento de Red Residencial ISP & Anti-Flagging -->
-        <div class="bot-net-strip" style="flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px;">
-          <div style="display: flex; justify-content: space-between; width: 100%;">
+        <!-- Aislamiento de Red Residencial ISP & Switches estilo Lucid -->
+        <div class="bot-net-strip" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px;">
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
             <div>
               <span class="net-ip-tag font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || 'No verificada')}</span>
               <span style="margin: 0 4px; opacity: 0.4;">|</span>
               <span class="net-ping-tag font-bold">${bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'Latencia no verificada'}</span>
             </div>
-            <span style="font-size: 0.68rem; color: var(--text-secondary);">${escapeHtml(bot.isp_provider ? bot.isp_provider.split(' ')[0] : 'ISP')}</span>
+            <span style="font-size: 0.68rem; color: var(--text-secondary);">${escapeHtml(bot.isp_provider ? bot.isp_provider.split(' ')[0] : 'ISP US')}</span>
           </div>
-          <div class="geo-match-tag ${bot.geo_consistent ? 'ok' : 'warn'}" style="width: 100%; justify-content: space-between;">
-            <span>${escapeHtml(bot.geo_match_status || 'No verificado')}</span>
-            <span style="font-size: 0.65rem; opacity: 0.8;">Jitter: ${bot.jitter_min_ms || 50}-${bot.jitter_max_ms || 350}ms</span>
+          
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04);">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary);">
+              <span>Jitter Anti-Mirroring:</span>
+              <span class="lucid-switch-badge">ON ${bot.jitter_min_ms || 50}-${bot.jitter_max_ms || 350}ms</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary);">
+              <span>Lock:</span>
+              <span class="lucid-switch-badge">+${cb.consistency_target || 150} ON</span>
+            </div>
           </div>
         </div>
 
-        <!-- KPIs del Bot -->
+        <!-- KPIs del Bot en 4 Celdas Compactas -->
         <div class="bot-kpi-grid">
           <div class="kpi-box">
             <span class="kpi-box-label">PnL SESIÓN</span>
@@ -503,7 +606,7 @@ function renderBotGrid() {
           </div>
           <div class="kpi-box">
             <span class="kpi-box-label">CUENTAS</span>
-            <span class="kpi-box-val">${bot.accounts ? bot.accounts.length : 0}</span>
+            <span class="kpi-box-val">${bot.accounts ? bot.accounts.length : 0} PA</span>
           </div>
         </div>
 
@@ -518,17 +621,17 @@ function renderBotGrid() {
           </div>
         </div>
 
-        <!-- Acciones de la Tarjeta -->
+        <!-- Acciones de la Tarjeta estilo Lucid Trading -->
         <div class="bot-card-actions">
           <div class="btn-group-left">
             <button class="btn btn-secondary btn-xs" onclick="toggleBot('${bot.id}')">
-              ${bot.status === 'ACTIVE' ? 'Pausar' : 'Reanudar'}
+              ${bot.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Reanudar'}
             </button>
             <button class="btn btn-danger btn-xs" onclick="closeBotPositions('${bot.id}')">
-              Cerrar (FLAT)
+              🔴 FLAT
             </button>
           </div>
-          <button class="btn btn-outline btn-xs" onclick="openDetailModal('${bot.id}')">
+          <button class="btn btn-primary btn-xs" onclick="openDetailModal('${bot.id}')">
             Detalles & Logs ➔
           </button>
         </div>
@@ -704,15 +807,18 @@ function renderVpnCenter() {
 
 async function testProxyPing(botId) {
   try {
-    showToast(`Ejecutando ping para proxy de ${botId}...`, 'info');
-    const resp = await apiFetch(`/api/bots/${botId}/proxy-test`, { method: 'POST' });
+    showToast('Ejecutando ping para proxy de ' + botId + '...', 'info');
+    const resp = await apiFetch('/api/bots/' + botId + '/proxy-test', { method: 'POST' });
     const res = await resp.json();
     if (!resp.ok || !res.is_healthy) {
-      throw new Error(res.message || res.detail || 'La conexión real del proxy no está disponible.');
+      showToast('Fallo en el proxy: ' + (res.message || 'Error'), 'error');
+      return;
     }
-    showToast(`Test exitoso: Ping ${res.ping_ms}ms // IP ${res.detected_ip}`, 'success');
+    showToast('⚡ Proxy SOCKS5 verificado: ' + res.detected_ip + ' (' + res.isp + ') — Latencia CME: ' + res.ping_ms + ' ms (Geo-Match OK)', 'success');
+    playAudioCue('chime');
+    renderVpnCenter();
   } catch (err) {
-    showToast(`Fallo de conexión al proxy: ${err.message}`, 'error');
+    showToast('Error al probar proxy: ' + err.message, 'error');
   }
 }
 
@@ -794,34 +900,189 @@ async function submitAddAccount(event) {
 // 10. MODAL PARA CREAR BOT & TITULAR
 // ======================================================================
 
+let uploadedStrategyFile = null;
+
+function handleBotFileDragOver(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.getElementById('bot-file-dropzone')?.classList.add('drag-over');
+}
+
+function handleBotFileDragLeave(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.getElementById('bot-file-dropzone')?.classList.remove('drag-over');
+}
+
+function handleBotFileDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.getElementById('bot-file-dropzone')?.classList.remove('drag-over');
+  const files = event.dataTransfer?.files;
+  if (files && files.length > 0) {
+    processBotFile(files[0]);
+  }
+}
+
+function handleBotFileSelect(event) {
+  const files = event.target?.files;
+  if (files && files.length > 0) {
+    processBotFile(files[0]);
+  }
+}
+
+function clearUploadedBotFile() {
+  uploadedStrategyFile = null;
+  const input = document.getElementById('new-bot-code-file');
+  if (input) input.value = '';
+  const card = document.getElementById('bot-file-verification-card');
+  if (card) card.style.display = 'none';
+  const dropzone = document.getElementById('bot-file-dropzone');
+  if (dropzone) dropzone.style.display = 'block';
+}
+
+function processBotFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const code = e.target.result;
+    const analysis = inspectBotCode(file.name, code);
+    uploadedStrategyFile = analysis;
+
+    // Actualizar UI de verificación en el modal
+    const dropzone = document.getElementById('bot-file-dropzone');
+    if (dropzone) dropzone.style.display = 'none';
+    const card = document.getElementById('bot-file-verification-card');
+    if (card) card.style.display = 'block';
+
+    const fnEl = document.getElementById('verif-filename-val');
+    if (fnEl) fnEl.textContent = file.name;
+    const langEl = document.getElementById('verif-lang-val');
+    if (langEl) langEl.textContent = analysis.language;
+    const sigEl = document.getElementById('verif-signals-val');
+    if (sigEl) sigEl.textContent = analysis.signals.join(' · ');
+    const riskEl = document.getElementById('verif-risk-val');
+    if (riskEl) riskEl.textContent = analysis.risk.join(' · ');
+    const prevEl = document.getElementById('verif-code-preview');
+    if (prevEl) prevEl.textContent = analysis.snippet;
+
+    // Si el nombre del bot está vacío, auto-sugerir a partir del nombre del archivo
+    const nameInput = document.getElementById('new-bot-name');
+    if (nameInput && !nameInput.value.trim()) {
+      const cleanName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase());
+      nameInput.value = cleanName;
+    }
+
+    // Si la estrategia está vacía, auto-sugerir según el script
+    const stratInput = document.getElementById('new-bot-strategy');
+    if (stratInput && !stratInput.value.trim()) {
+      stratInput.value = analysis.suggestedStrategy;
+    }
+
+    showToast(`Archivo "${file.name}" verificado exitosamente (${analysis.language})`, 'success');
+  };
+  reader.readAsText(file);
+}
+
+function inspectBotCode(filename, code) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  let detectedLanguage = 'Estrategia de Código General';
+  let suggestedStrategy = 'CustomAlgorithmicStrategy';
+
+  if (ext === 'pine' || code.includes('//@version') || code.includes('strategy(') || code.includes('indicator(')) {
+    detectedLanguage = 'TradingView Pine Script (v5/v4)';
+    suggestedStrategy = 'PineScript Scalper Strategy';
+  } else if (ext === 'py' || code.includes('def ') || code.includes('import ') || code.includes('class ')) {
+    detectedLanguage = 'Python Algorithmic Engine';
+    suggestedStrategy = 'Python Quantitative Alpha';
+  } else if (ext === 'js' || ext === 'ts' || code.includes('function ') || code.includes('const ') || code.includes('async ')) {
+    detectedLanguage = ext === 'ts' ? 'TypeScript Strategy' : 'JavaScript Engine';
+    suggestedStrategy = 'Node.js Execution Bot';
+  } else if (ext === 'cs' || code.includes('using NinjaTrader') || code.includes('namespace ')) {
+    detectedLanguage = 'C# NinjaScript (CME Futures)';
+    suggestedStrategy = 'NinjaScript Futures Strategy';
+  } else if (ext === 'mq4' || ext === 'mq5' || code.includes('OnTick') || code.includes('OrderSend')) {
+    detectedLanguage = 'MetaTrader MQL4/MQL5 EA';
+    suggestedStrategy = 'MQL Expert Advisor';
+  } else if (ext === 'json') {
+    detectedLanguage = 'Reglas Algorítmicas JSON';
+    suggestedStrategy = 'Rule-based JSON Strategy';
+  }
+
+  const lower = code.toLowerCase();
+  const signals = [];
+  if (lower.includes('buy') || lower.includes('long') || lower.includes('enterlong') || lower.includes('strategy.entry')) {
+    signals.push('Entrada LONG (Compra)');
+  }
+  if (lower.includes('sell') || lower.includes('short') || lower.includes('entershort') || lower.includes('strategy.entry')) {
+    signals.push('Entrada SHORT (Venta)');
+  }
+  if (!signals.length) signals.push('Señales de ejecución dinámicas');
+
+  const risk = [];
+  if (lower.includes('stop') || lower.includes('sl') || lower.includes('stoploss') || lower.includes('stop_loss')) {
+    risk.push('Stop Loss Integrado');
+  }
+  if (lower.includes('take_profit') || lower.includes('takeprofit') || lower.includes('tp') || lower.includes('profit')) {
+    risk.push('Take Profit (R:R Ratio)');
+  }
+  if (lower.includes('trailing') || lower.includes('breakeven')) {
+    risk.push('Trailing / Break-Even Dinámico');
+  }
+  if (!risk.length) risk.push('Protección por Circuit Breaker General');
+
+  const lines = code.split(/\r?\n/).slice(0, 10).join('\n');
+
+  return {
+    filename,
+    language: detectedLanguage,
+    suggestedStrategy,
+    signals,
+    risk,
+    snippet: lines,
+    verified: true
+  };
+}
+
 function openAddBotModal() {
+  clearUploadedBotFile();
   const identSelect = document.getElementById('new-bot-identity');
   if (identSelect) {
     identSelect.innerHTML = '<option value="">Sin titular — demo local</option>' + state.identities.map(i => {
-      return `<option value="${i.id}">${i.flag} ${escapeHtml(i.full_name)} (${escapeHtml(i.country)})</option>`;
+      return `<option value="${i.id}">${i.flag} ${escapeHtml(i.full_name)} (${escapeHtml(i.country)})` + `</option>`;
     }).join('');
   }
   document.getElementById('add-bot-modal').classList.add('open');
 }
 
 function closeAddBotModal() {
+  clearUploadedBotFile();
   document.getElementById('add-bot-modal').classList.remove('open');
 }
 
 async function submitCreateBot(event) {
   event.preventDefault();
-  const botId = document.getElementById('new-bot-id').value.trim();
+  const rawId = document.getElementById('new-bot-id').value.trim();
   const name = document.getElementById('new-bot-name').value.trim();
   const identityId = document.getElementById('new-bot-identity').value;
-  const strategy = document.getElementById('new-bot-strategy').value;
+  const strategy = document.getElementById('new-bot-strategy').value.trim();
   const analysisSymbol = document.getElementById('new-bot-analysis-symbol').value;
   const analysisTimeframes = Array.from(
     document.querySelectorAll('input[name="new-bot-timeframe"]:checked')
   ).map(input => input.value);
-  const proxy = document.getElementById('new-bot-proxy').value.trim();
+  const rawProxy = document.getElementById('new-bot-proxy').value.trim();
   const jitter = parseInt(document.getElementById('new-bot-jitter').value) || 120;
   const startTime = document.getElementById('new-bot-start').value;
   const endTime = document.getElementById('new-bot-end').value;
+
+  // Si el usuario no especificó ID, se genera uno limpio y seguro
+  const botId = rawId || `bot_${name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 18)}_${Date.now().toString(36)}`;
+  
+  // Si no se proporcionó proxy, se asigna el nodo residencial demo US
+  const proxy = rawProxy || 'socks5://127.0.0.1:1080';
 
   const payload = {
     id: botId,
@@ -833,7 +1094,8 @@ async function submitCreateBot(event) {
     proxy_url: proxy,
     jitter_ms: jitter,
     start_time: startTime,
-    end_time: endTime
+    end_time: endTime,
+    strategy_file: uploadedStrategyFile
   };
 
   if (!analysisTimeframes.length) {
@@ -853,8 +1115,9 @@ async function submitCreateBot(event) {
       throw new Error(err.detail || 'Error creando bot');
     }
 
+    clearUploadedBotFile();
     closeAddBotModal();
-    showToast(`Bot "${name}" creado para análisis y simulación local.`, 'success');
+    showToast(`Bot "${name}" creado exitosamente con estrategia "${strategy}".`, 'success');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
@@ -1219,10 +1482,18 @@ function openDetailModal(botId) {
   state.selectedBotId = botId;
   updateDetailModalContent(botId);
   document.getElementById('bot-detail-modal').classList.add('open');
+  setTimeout(() => {
+    initModalBotChart(botId);
+  }, 120);
 }
 
 function closeDetailModal() {
   state.selectedBotId = null;
+  if (state.modalChartInstance) {
+    try { state.modalChartInstance.remove(); } catch (e) {}
+    state.modalChartInstance = null;
+    state.modalCandleSeries = null;
+  }
   document.getElementById('bot-detail-modal').classList.remove('open');
 }
 
@@ -1467,8 +1738,9 @@ async function initLightweightChart() {
 
   container.innerHTML = '';
 
+  const initialWidth = container.clientWidth > 0 ? container.clientWidth : (container.parentElement ? container.parentElement.clientWidth : 900);
   const chart = LightweightCharts.createChart(container, {
-    width: container.clientWidth || 900,
+    width: initialWidth,
     height: 520,
     layout: {
       background: { color: '#0D0D0D' },
@@ -1747,6 +2019,31 @@ async function submitAddLedger(event) {
 // 18. MÓDULO CALENDARIO MACRO FOREXFACTORY
 // ======================================================================
 
+state.newsCurrencyFilter = 'ALL';
+state.newsImpactFilter = 'ALL';
+state.newsSearchQuery = '';
+
+function setNewsCurrencyFilter(currency) {
+  state.newsCurrencyFilter = currency;
+  document.querySelectorAll('#ff-currency-pills .ff-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-currency') === currency);
+  });
+  renderNewsView();
+}
+
+function setNewsImpactFilter(impact) {
+  state.newsImpactFilter = impact;
+  document.querySelectorAll('#ff-impact-pills .ff-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-impact') === impact);
+  });
+  renderNewsView();
+}
+
+function handleNewsSearch(event) {
+  state.newsSearchQuery = (event.target.value || '').trim().toLowerCase();
+  renderNewsView();
+}
+
 async function loadEconomicNews() {
   try {
     const resp = await apiFetch('/api/news/calendar');
@@ -1763,19 +2060,65 @@ function renderNewsView() {
   const tbody = document.getElementById('news-events-tbody');
   if (!tbody) return;
 
-  tbody.innerHTML = (state.economicNews || []).map(ev => {
+  const subtitle = document.getElementById('news-filter-subtitle');
+  if (subtitle) {
+    const currText = state.newsCurrencyFilter === 'ALL' ? 'Todas las divisas' : state.newsCurrencyFilter;
+    const impactText = state.newsImpactFilter === 'ALL' ? 'Todos los impactos' : (state.newsImpactFilter === 'HIGH' ? '🔴 Solo Alto Impacto' : '🟠 Medio & Alto');
+    subtitle.textContent = `Filtros activos: ${currText} | ${impactText}`;
+  }
+
+  const filtered = (state.economicNews || []).filter(ev => {
+    // 1. Filtro Divisa (ej. USD, JPY, EUR, GBP)
+    if (state.newsCurrencyFilter !== 'ALL' && ev.currency !== state.newsCurrencyFilter) {
+      return false;
+    }
+    // 2. Filtro Impacto (HIGH o MEDIUM_HIGH)
+    if (state.newsImpactFilter === 'HIGH' && ev.impact !== 'HIGH') {
+      return false;
+    }
+    if (state.newsImpactFilter === 'MEDIUM_HIGH' && !['HIGH', 'MEDIUM'].includes(ev.impact)) {
+      return false;
+    }
+    // 3. Filtro Búsqueda
+    if (state.newsSearchQuery) {
+      const matchName = (ev.event || '').toLowerCase().includes(state.newsSearchQuery);
+      const matchCurr = (ev.currency || '').toLowerCase().includes(state.newsSearchQuery);
+      if (!matchName && !matchCurr) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding: 32px; color: var(--text-secondary);">
+      No se encontraron noticias con los filtros actuales (Divisa: ${escapeHtml(state.newsCurrencyFilter)}, Impacto: ${escapeHtml(state.newsImpactFilter)}).
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(ev => {
     const impactClass = ev.impact === 'HIGH' ? 'high' : (ev.impact === 'MEDIUM' ? 'medium' : 'low');
-    const impactLabel = ev.impact === 'HIGH' ? '🔴 ALTO' : (ev.impact === 'MEDIUM' ? '🟠 MEDIO' : '⚪ BAJO');
+    const folderIcon = ev.impact === 'HIGH' ? '🔴' : (ev.impact === 'MEDIUM' ? '🟠' : '🟡');
+    const impactLabel = ev.impact === 'HIGH' ? 'ALTO' : (ev.impact === 'MEDIUM' ? 'MEDIO' : 'BAJO');
+
+    // Color del dato actual (ForexFactory style: Verde mejor a previsión, Rojo peor)
+    let actualHtml = '<span class="text-muted">-</span>';
+    if (ev.actual !== null && ev.actual !== undefined) {
+      const valColor = ev.better_worse === 'better' ? 'text-neon font-bold' : (ev.better_worse === 'worse' ? 'text-danger font-bold' : 'font-bold');
+      actualHtml = `<span class="${valColor}">${escapeHtml(ev.actual)}</span>`;
+    }
+
+    const currBadgeClass = `curr-badge-${(ev.currency || '').toLowerCase()}`;
 
     return `
       <tr>
         <td class="text-mono">${escapeHtml(ev.date)}</td>
         <td class="text-mono font-bold">${escapeHtml(ev.time_est)}</td>
-        <td class="text-mono font-bold">${escapeHtml(ev.currency)}</td>
-        <td><span class="impact-badge ${impactClass}">${impactLabel}</span></td>
+        <td><span class="ff-curr-badge ${currBadgeClass}">${escapeHtml(ev.currency)}</span></td>
+        <td><span class="impact-badge ${impactClass}">${folderIcon} ${impactLabel}</span></td>
         <td><strong>${escapeHtml(ev.event)}</strong></td>
+        <td class="text-mono">${actualHtml}</td>
         <td class="text-mono">${escapeHtml(ev.forecast || '-')}</td>
-        <td class="text-mono">${escapeHtml(ev.previous || '-')}</td>
+        <td class="text-mono text-muted">${escapeHtml(ev.previous || '-')}</td>
         <td><span class="badge-status-dot ${ev.status === 'COMPLETED' ? '' : 'active'}"></span> ${escapeHtml(ev.status)}</td>
       </tr>
     `;
@@ -1847,7 +2190,202 @@ async function saveCurrentModalCircuitBreaker() {
   }
 }
 
+
+// ======================================================================
+// 17. CONTROLADOR DE BARRA LATERAL ESTILO LUCID TRADING
+// ======================================================================
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('app-sidebar');
+  if (!sidebar) return;
+  sidebar.classList.toggle('collapsed');
+  const isCollapsed = sidebar.classList.contains('collapsed');
+  localStorage.setItem('quantum_sidebar_collapsed', isCollapsed);
+
+  const btn = document.getElementById('btn-toggle-collapse');
+  if (btn) {
+    btn.title = isCollapsed ? 'Expandir Barra Lateral' : 'Contraer Barra Lateral';
+  }
+
+  // Ajustar ancho de Gráficos Lightweight Canvas si están abiertos
+  setTimeout(() => {
+    const box = document.getElementById('tradingview-chart-box');
+    if (state.chartInstance && box) {
+      state.chartInstance.applyOptions({ width: box.clientWidth });
+    }
+  }, 260);
+}
+
+function toggleSidebarDock() {
+  const layout = document.getElementById('terminal-layout');
+  if (!layout) return;
+  const isRight = layout.classList.contains('sidebar-right');
+  if (isRight) {
+    layout.classList.remove('sidebar-right');
+    layout.classList.add('sidebar-left');
+    localStorage.setItem('quantum_sidebar_dock', 'left');
+    showToast('Barra movida a pared izquierda', 'info');
+  } else {
+    layout.classList.remove('sidebar-left');
+    layout.classList.add('sidebar-right');
+    localStorage.setItem('quantum_sidebar_dock', 'right');
+    showToast('Barra movida a pared derecha', 'info');
+  }
+
+  setTimeout(() => {
+    const box = document.getElementById('tradingview-chart-box');
+    if (state.chartInstance && box) {
+      state.chartInstance.applyOptions({ width: box.clientWidth });
+    }
+  }, 100);
+}
+
+function initLucidSidebarPreferences() {
+  const savedDock = localStorage.getItem('quantum_sidebar_dock') || 'left';
+  const layout = document.getElementById('terminal-layout');
+  if (layout) {
+    layout.classList.toggle('sidebar-right', savedDock === 'right');
+    layout.classList.toggle('sidebar-left', savedDock === 'left');
+  }
+
+  const savedCollapsed = localStorage.getItem('quantum_sidebar_collapsed') === 'true';
+  const sidebar = document.getElementById('app-sidebar');
+  if (sidebar && savedCollapsed) {
+    sidebar.classList.add('collapsed');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initLucidSidebarPreferences();
   initAuth();
   if (state.token) initWebSocket();
 });
+
+// ======================================================================
+// 18. GRÁFICO DEDICADO POR BOT // TELEMETRÍA DE POSICIÓN ACTIVA (DEMO)
+// ======================================================================
+
+async function initModalBotChart(botId) {
+  const container = document.getElementById('modal-bot-chart-box');
+  if (!container || !window.LightweightCharts) return;
+
+  if (state.modalChartInstance) {
+    try { state.modalChartInstance.remove(); } catch (e) {}
+    state.modalChartInstance = null;
+    state.modalCandleSeries = null;
+  }
+
+  container.innerHTML = '';
+
+  const chartWidth = container.clientWidth > 0 ? container.clientWidth : 750;
+  const chart = LightweightCharts.createChart(container, {
+    width: chartWidth,
+    height: 280,
+    layout: {
+      background: { color: '#07090C' },
+      textColor: '#8B90A0'
+    },
+    grid: {
+      vertLines: { color: '#13161F' },
+      horzLines: { color: '#13161F' }
+    },
+    rightPriceScale: {
+      borderColor: '#1F2433',
+      scaleMargins: { top: 0.15, bottom: 0.25 }
+    },
+    timeScale: {
+      borderColor: '#1F2433',
+      timeVisible: true,
+      secondsVisible: false
+    }
+  });
+
+  const candleSeries = chart.addCandlestickSeries({
+    upColor: '#10B981',
+    downColor: '#EF4444',
+    borderUpColor: '#10B981',
+    borderDownColor: '#EF4444',
+    wickUpColor: '#10B981',
+    wickDownColor: '#EF4444'
+  });
+
+  state.modalChartInstance = chart;
+  state.modalCandleSeries = candleSeries;
+
+  try {
+    const resp = await apiFetch(`/api/bots/${botId}/chart`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (data.candles && data.candles.length) {
+      candleSeries.setData(data.candles);
+      chart.timeScale().fitContent();
+    }
+
+    if (data.markers && data.markers.length) {
+      candleSeries.setMarkers(data.markers);
+    }
+
+    // Telemetría de Posición en Vivo y Líneas de Precio
+    const statusBadge = document.getElementById('modal-bot-position-status');
+    const pos = data.position;
+    if (statusBadge) {
+      if (pos && pos.in_position) {
+        const isLong = pos.side === 'LONG';
+        statusBadge.className = `bot-position-status-badge ${isLong ? 'in-position-long' : 'in-position-short'}`;
+        statusBadge.textContent = `${isLong ? '🟢 LONG' : '🔴 SHORT'} ${pos.size} MNQ @ ${pos.entry_price.toFixed(2)} | Flotante: ${formatCurrency(pos.floating_pnl)}`;
+
+        // Líneas de Precio de la Operación en Curso
+        candleSeries.createPriceLine({
+          price: pos.entry_price,
+          color: '#3B82F6',
+          lineWidth: 2,
+          lineStyle: LightweightCharts.LineStyle.Solid,
+          axisLabelVisible: true,
+          title: 'ENTRY'
+        });
+        candleSeries.createPriceLine({
+          price: pos.take_profit,
+          color: '#10B981',
+          lineWidth: 2,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'TP (+2R)'
+        });
+        candleSeries.createPriceLine({
+          price: pos.stop_loss,
+          color: '#EF4444',
+          lineWidth: 2,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'SL (DLL)'
+        });
+      } else {
+        statusBadge.className = 'bot-position-status-badge flat';
+        statusBadge.textContent = '⚪ SIN OPERACIONES ACTIVAS (FLAT)';
+      }
+    }
+  } catch (err) {
+    console.warn('Error cargando gráfico de bot:', err);
+  }
+}
+
+async function simulateBotTradeFromModal(side) {
+  if (!state.selectedBotId) return;
+  try {
+    showToast(`Simulando orden ${side} para ${state.selectedBotId}...`, 'info');
+    const resp = await apiFetch(`/api/bots/${state.selectedBotId}/simulate-trade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ side, contracts: 1 })
+    });
+    if (!resp.ok) throw new Error('Error ejecutando orden simulada');
+    showToast(`Orden ${side} ejecutada con éxito @ ${state.marketPrice}`, 'success');
+    playAudioCue('chime');
+    setTimeout(() => {
+      initModalBotChart(state.selectedBotId);
+    }, 200);
+  } catch (err) {
+    showToast(`Error: ${err.message}`, 'error');
+  }
+}

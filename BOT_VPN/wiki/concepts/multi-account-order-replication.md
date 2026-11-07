@@ -46,6 +46,7 @@ $$\text{Drawdown} = \text{Peak Net PnL} - \text{Current Net PnL}$$
 Si el Drawdown acumulado se acerca al umbral crítico configurado en la cuenta (ej. $\$2,000$ o $\$2,500$ USD), el sistema registra alertas y habilita el botón de pánico `Cerrar Posiciones`.
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[apex-topstep-leelo-blueguardian]]
 - [[socket-level-proxy-isolation]]

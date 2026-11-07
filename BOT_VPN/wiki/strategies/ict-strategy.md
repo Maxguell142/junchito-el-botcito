@@ -41,6 +41,7 @@ sequenceDiagram
 - `max_contracts`: 4
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[new-york-killzones-and-time-filters]]
 - [[smt-strategy]]

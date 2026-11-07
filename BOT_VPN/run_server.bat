@@ -16,6 +16,9 @@ if not exist "node_modules\express" (
     )
 )
 
+echo [INFO] Credenciales configuradas:
+echo        Usuario:    admin
+echo        Password:   quantum2026
 echo [INFO] Servidor local disponible en http://127.0.0.1:3008
 call npm start
 

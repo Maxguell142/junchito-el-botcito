@@ -8,6 +8,8 @@ sources: [raw/system-specifications.md, raw/cme-mnq-specifications.md]
 
 # Arquitectura General del Sistema (QUANTUM FX)
 
+> **Estado y alcance:** este documento contiene una descripción conceptual y objetivos del diseño; algunos conectores y flujos del diagrama no equivalen a integraciones activas. Para conocer las dependencias realmente declaradas, el estado implementado, los límites de ejecución y cómo comprobar el sistema, consulta [[stack-and-health|Mapa del sistema, stack y salud]] y [[../README|README operativo]]. El código y las pruebas prevalecen sobre los diagramas de diseño.
+
 ## Resumen Ejecutivo
 **QUANTUM FX** es una infraestructura de trading algorítmico distribuido para futuros de CME (**Micro E-mini Nasdaq-100 / MNQ**), concebida para ejecutarse como un servicio nativo de alta disponibilidad en **Windows**.
 
@@ -82,6 +84,10 @@ graph TD
 ---
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
+- [[README|Guía Operativa y Ejecución Local]]
+- [[IMPLEMENTATION_PLAN|Plan de Implementación y Arquitectura]]
+- [[PENDIENTES_Y_MEJORAS|Pendientes y Mejoras del Proyecto]]
 - [[socket-level-proxy-isolation]] — Detalles del enrutamiento de red en Windows.
 - [[multi-account-order-replication]] — Mecánica de replicación y cálculo de PnL.
 - [[new-york-killzones-and-time-filters]] — Ventanas operativas y filtrado temporal.

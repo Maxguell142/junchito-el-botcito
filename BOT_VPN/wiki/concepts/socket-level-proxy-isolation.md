@@ -44,6 +44,7 @@ La clase `ProxyConnector` en `bot_engine.py` ejecuta periódicamente:
 4. Fallback automático a conexión directa TCP en entornos de desarrollo local (`127.0.0.1`) sin interrumpir la ejecución.
 
 ## Enlaces Relacionados
+- [[index|Índice Maestro de la Wiki]]
 - [[system-overview]]
 - [[tradovate-api]]
 - [[rithmic-rapi]]

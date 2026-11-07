@@ -15,6 +15,8 @@ Crear un sistema de trading automatizado multi-bot, seguro, aislado y escalable,
 El sistema no debe depender de una página web simple ni de estado en memoria. Debe estar diseñado como una plataforma robusta de producción con componentes aislados, permisos estrictos, persistencia, seguridad y monitoring.
 
 > **Estado real:** este documento conserva el objetivo arquitectónico propuesto, no describe funciones ya implementadas. Las afirmaciones históricas sobre ausencia de persistencia o auditoría quedan superadas por la Fase 3 de la sección 14. El producto continúa en desarrollo local: no está conectado a un broker ni autorizado para operar en vivo.
+> 
+> 📚 **Enlaces de la Base de Conocimiento (Obsidian):** [[wiki/index|Índice Maestro de la Wiki]] · [[wiki/system-overview|Arquitectura Global]] · [[README|Guía de Ejecución Local]] · [[PENDIENTES_Y_MEJORAS|Pendientes y Mejoras]]
 
 ---
 

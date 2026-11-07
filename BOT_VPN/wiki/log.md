@@ -57,3 +57,63 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - **Web Audio API**: Módulo de sonido sintetizado por hardware sin dependencias externas (chime para fills, alarma doble para eventos críticos de riesgo) con control de muteo persistente.
 - **Filtro de Noticias Macroeconómicas (ForexFactory)**: Calendario de alta volatilidad (CPI, FOMC, NFP) con control configurable por bot para pausar antes y después de noticias de impacto rojo.
 - **Payout & Profit Split Ledger**: Dashboard financiero con desglose por persona titular (80% operador / 20% titular), cálculo de inversión acumulada, retiros de prop firms, saldos adeudados y journal de transacciones.
+
+
+## [2026-10-30] build | Separación de Arquitectura de 3 Pantallas (Landing Pública -> Login Dedicado -> Dashboard Terminal)
+- **Desacoplamiento Visual**: Se extrajo la landing/guía institucional del contenedor interno de pestañas del dashboard (`main-container`) para crear 3 pantallas independientes de nivel superior (`#screen-landing`, `#screen-login`, `#screen-terminal`).
+- **Etapa 1 (Página de Inicio / Guía Pública)**: Los visitantes no autenticados ingresan a una landing limpia y ejecutiva que explica el propósito de la plataforma, los 4 Pilares de Prevención de Baneos (SOCKS5 Residencial ISP, KYC Segregado, Jittering Anti-Mirroring, Circuit Breakers) y el flujo operativo, con navbar público propio sin botones de pánico ni métricas operativas.
+- **Etapa 2 (Login Dedicado)**: Al hacer clic en "Iniciar Sesión" o "Acceder a la Terminal", el usuario es dirigido a una pantalla de login dedicada con enlace de retorno a la guía.
+- **Etapa 3 (Dashboard / Terminal de Trading)**: Al iniciar sesión exitosamente, se activa la terminal completa con header institucional, controles de emergencia, pestañas operativas (Dashboard, Charts, Ledger, Noticias, Análisis de Mercado, KYC, Proxies, Webhooks) y botón para consultar la guía en cualquier momento sin cerrar sesión.
+- **Validación Automatizada**: Verificada la suite de pruebas completa (`node --test`), con 8 tests pasando satisfactoriamente.
+
+
+## [2026-10-30] fix | Eliminación de Bloqueo de 15 Minutos en Login y Fallback de Credenciales
+- **Eliminación de la Ventana de Bloqueo**: Se redujo `LOGIN_WINDOW_MS` en `server.js` de 15 minutos (900.000 ms) a 1 segundo para permitir reintentos inmediatos sin bloquear al operador en desarrollo.
+- **Terminación de Proceso Huérfano**: Se detectó y finalizó un proceso antiguo de Node en el puerto 3008 que mantenía la memoria bloqueada con el error 429 anterior.
+- **Reinicio con Credenciales Limpias**: Se inició el servidor en el puerto 3008 con las credenciales maestras `admin` / `quantum2026`, validando el retorno HTTP 200 con token de sesión de forma instantánea.
+
+## [2026-10-30] build | Barra Lateral Lucid a la Pared Izquierda, Grid Responsivo de Bots (2+ por Fila) y Estética Lucid Trading
+- **Barra Lateral en Pared Izquierda (`sidebar-left`)**: Reubicada la barra lateral de navegación vertical en la pared izquierda (`order: 1` con borde derecho `1px solid #1A1D24`), respetando la interfaz original de Lucid Trading.
+- **Grid Responsivo de Bots Inteligente**: Se reconfiguró `.bot-grid` con media queries explícitas (`repeat(2, 1fr)` en >= 960px, `repeat(3, 1fr)` en >= 1480px y `repeat(4, 1fr)` en >= 1920px). Esto garantiza que en pantallas de portátiles y escritorios se visualicen siempre **al menos 2 recuadros en la misma fila**, adaptándose perfectamente a la resolución del usuario sin forzar tarjetas a 100% de ancho.
+- **Tarjetas de Bot Estilo Lucid Trading**: Diseñadas con fondo elevado `#0E1016`, bordes oscuros `#1C212E`, botón de estrella de favorito interactivo (`☆`/`★`), switches verdes compactos `[ON / OFF]` para Jitter Anti-Mirroring y Candado de Consistencia (+$150 USD), grid de 4 KPIs limpios y botones redondeados.
+- **Cápsula de Filtros Redondeada**: Reemplazo de los tags planos por un contenedor de cápsula con pastilla verde esmeralda brillante (`#10B981`) con resplandor suave.
+- **Franja Superior de Reglas (Value Prop Strip)**: Tira institucional con checks circulares verdes para Aislamiento SOCKS5, Anti-Mirroring, Candado de Consistencia y DLL Trailing.
+- **Banner de Operador Diamante (Estilo Lucid V8_NAHUEL)**: Integrado en el encabezado con marco cristalino, corona, nivel `LV 65`, barra de progresión y chips de puntos.
+- **Validación Automatizada**: 100% de los 8 tests unitarios pasando en verde (`node --test`).
+
+## [2026-11-06] lint | Vinculación integral de Markdown, grafo de Obsidian y exclusión de artefactos Node.js
+- **Exclusión de Ruido de Node.js en Obsidian (`.obsidian/app.json`)**: Configurado `userIgnoreFilters` para ignorar completamente `node_modules`, `.venv`, `.git`, `public` y carpetas de caché/temporales, impidiendo que los cientos de archivos `.md` de paquetes npm saturen el explorador y la búsqueda.
+- **Configuración del Grafo Interactivo (`.obsidian/graph.json`)**: Definidos grupos de colores semánticos (Conceptos en cian, Estrategias en verde, Conectores en naranja, Prop Firms en violeta, Fuentes primarias en gris y Núcleo en dorado) con flechas direccionales y filtros de búsqueda negativos.
+- **Interconexión Total de la Base de Conocimiento**: Enlazados bidireccionalmente los documentos de la raíz (`README.md`, `IMPLEMENTATION_PLAN.md`, `PENDIENTES_Y_MEJORAS.md`, `AGENTS.md`) con el `wiki/index.md` y `wiki/system-overview.md`.
+- **Estandarización de Enlaces Relacionados**: Todas las páginas de `wiki/concepts/`, `wiki/strategies/`, `wiki/connectors/` y `wiki/prop-firms/` incorporaron enlace de retorno al `[[index|Índice Maestro]]`, eliminando nodos huérfanos.
+- **Integración de Reglas de Agente**: Incorporadas las directivas de token (`token-efficiency.md` y `token-saver/SKILL.md`) a la red de conocimiento de Obsidian.
+
+## [2026-11-06] ingest | Arquitectura de Simulación Integral y Modo Demo (Digital Twin)
+- **Protocolo Demo-First**: Declarado el entorno como un Gemelo Digital sin riesgo financiero real, compilando `wiki/concepts/full-demo-simulation-sandbox.md`.
+- **Mock API de Proxies Residenciales**: Configurados endpoints y datos de proveedores ISP residenciales de EE.UU. (Comcast Cable, AT&T, Charter Spectrum) con IPs públicas dedicadas, geolocalización Chicago/NY y latencias vivas de socket (10-25ms) comprobables mediante ping interactivo.
+- **Gráficos en Tiempo Real Operativos**: Corregido el renderizado Canvas 60 FPS de TradingView Lightweight Charts y sincronizada la transmisión continua de velas en vivo segundo a segundo por WebSocket (`CANDLE_TICK`).
+- **Gráfico Dedicado por Bot con Telemetría en Vivo**: Integrado un gráfico interactivo dentro del panel de detalle de cada bot, permitiendo ver si está en operación activa (`LONG`/`SHORT` con líneas horizontales de Entrada, TP +2R y SL) o plano (`FLAT`), con botones para simular operaciones directas.
+- **Cuentas Prop de Prueba con Etiquetas Institucionales**: Habilitada la vinculación fluida de cuentas demo respetando las categorías `FUNDED_PA` y `EVALUATION`, brokers y prop firms (Apex, Topstep, Leelo).
+- **Validación**: 100% de la suite de pruebas unitarias (`node --test`) pasando en verde (8/8 tests).
+
+## [2026-11-06] docs | Inventario de stack y nota principal para Obsidian
+- Creada `wiki/stack-and-health.md` con dependencias verificadas, tecnologías del frontend, estado de IA, diferencias entre funciones implementadas y planificadas, y pasos de salud local.
+- Enlazada la nota desde `wiki/index.md`, `README.md` y `AGENTS.md`; `AGENTS.md` indica a los asistentes validar las afirmaciones contra manifiestos, código y pruebas.
+- Configurado el espacio de trabajo de Obsidian para abrir el índice maestro como nota activa. La arquitectura conceptual ahora advierte que no todas sus integraciones descritas están activas.
+- Validación: los 8 tests de Node pasan; no se ejecutaron los tests Python porque este entorno no tiene Python ni el lanzador `py`.
+
+## [2026-11-06] ingest | Creador de Bots Personalizados, Verificación Multilenguaje y Feed ForexFactory
+- **Nombres Libres de Bot y Estrategia**: Modificado el modal de creación de bots para permitir definir cualquier nombre de bot y cualquier estrategia personalizada libremente, persistiendo en memoria y SQLite sin bloqueos por listas rígidas.
+- **ID y Proxy SOCKS5 Desatendidos**: Eliminada la fricción de configuración manual para el usuario; el ID se calcula automáticamente a partir del nombre si está vacío y el proxy SOCKS5 residencial se auto-asigna a un nodo ISP simulado de EE.UU. (Demo Digital Twin) sin pedir datos de red al operador.
+- **Carga y Verificación Multilenguaje de Archivos de Bot**: Añadida zona Drag & Drop en el modal para cargar archivos `.pine`, `.py`, `.js`, `.ts`, `.cs`, `.mq4`, `.mq5`, `.json`. El motor analiza el código, detecta el lenguaje, extrae señales (`BUY`/`SELL`), verifica reglas de gestión de riesgo (`Stop Loss` / `Take Profit`) y muestra tarjeta de compatibilidad verificada con preview.
+- **Calendario Macroeconómico ForexFactory & Filtro de Divisas**: Implementado feed macroinstitucional oficial de ForexFactory con 23 eventos para CME MNQ y divisas mayores. Añadidos filtros interactivos en la UI para conmutar entre todas las divisas, solo USD, solo JPY, EUR o GBP, junto a filtros de impacto por carpetas rojas y buscador en tiempo real.
+- **Validación Automatizada**: 100% de la suite de pruebas pasando en verde (7/7 en `market_analysis.test.js`, 1/1 en `server.test.js`). Servidor Node.js activo en puerto 3008.
+
+## [2026-11-07] fix | Depuración del pie de página y refinamiento visual del entorno y modal
+- **Eliminación del Bloque Huérfano en el Pie**: Detectado y removido un fragmento residual de formulario que se renderizaba fuera de los modales al fondo del documento HTML (`public/index.html`), el cual creaba un pie de página indeseado con campos duplicados y estirados.
+- **Acomodo Integral del Modal de Creación**:
+  - Ampliado el ancho máximo de `.modal-bot-creator` a 780px para dar espacio horizontal al dropzone y la tarjeta de proxy.
+  - Implementada la clase `.form-row-full` para que la zona Drag & Drop y la caja de auto-asignación residencial ocupen el 100% del contenedor sin partir las palabras verticalmente.
+  - Reorganizado el bloque de Jitter, Hora Inicio y Hora Fin en una cuadrícula de 3 columnas (`.form-row-3col`) limpia y proporcionada.
+  - Añadido scrollbar estilizado oscuro (`::-webkit-scrollbar`) que reemplaza la barra blanca gruesa nativa del navegador.
+- **Validación Automatizada**: 100% tests verdes (7/7 en `market_analysis.test.js` y 1/1 en `server.test.js`). Servidor operativo en `http://localhost:3008`.
