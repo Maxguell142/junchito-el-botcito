@@ -1,28 +1,47 @@
 ---
 name: token-saver
 description: >-
-  Optimiza y reduce drásticamente el consumo de tokens en conversaciones y operaciones.
-  Activar para aplicar respuestas ultra-concisas, lecturas de archivos quirúrgicas,
-  ediciones mínimas y gestión eficiente del contexto.
+  Reduce repeated investigation and token use while working on QUANTUM FX in BOT_VPN.
+  Use for project questions, code changes, wiki maintenance, or when the user asks to
+  save context or tokens. Start from this skill and inspect only the relevant source.
 ---
 
-# Token Saver: Guía de Eficiencia y Reducción de Tokens
+# QUANTUM FX project context
 
-Este protocolo establece directivas estrictas para minimizar el consumo de tokens tanto de entrada (contexto) como de salida (generación).
+Use this skill as the compact entry point. Do not reread the whole repository by default.
 
-## 1. Reglas de Salida (Output Tokens)
-- **Cero relleno (No Fluff):** Omitir introducciones genéricas, cortesías repetitivas o conclusiones obvias. Ir directo a la solución o código solicitado.
-- **Respuestas Quirúrgicas:** Si el usuario pide un cambio de código, mostrar únicamente las líneas modificadas o el bloque relevante, nunca el archivo completo a menos que se pida explícitamente.
-- **Explicaciones Concretas:** Explicar decisiones técnicas en viñetas cortas de 1 o 2 líneas.
+## Verified project facts
 
-## 2. Reglas de Entrada e Inspección (Input / Context Tokens)
-- **Lectura Selectiva (`read_file`):** Nunca volcar archivos de más de 100 líneas al contexto completo si solo se requiere una sección. Usar siempre `StartLine` y `EndLine`.
-- **Búsqueda Enfocada:** Utilizar patrones precisos en comandos de búsqueda para evitar respuestas extensas en el terminal que saturen la ventana de contexto.
-- **Gestión de Historial:** Cuando el hilo de conversación acumule múltiples tareas o supere los 15-20 turnos, recomendar al usuario ejecutar `/compact` para resumir la memoria y liberar tokens.
+- Product: local multi-bot futures dashboard and simulation project, focused on MNQ/NQ and ES.
+- The app has two independent services sharing SQLite: Node.js 22.13+ / Express 5 on port 3008 (primary UI), and optional Python / FastAPI on port 8000. Their APIs differ; verify the relevant server before changing an endpoint.
+- Frontend: plain HTML/CSS/JS in `public/`; Node dependencies are Express and `ws`. Node uses built-in `node:sqlite`; Python uses `sqlite3`.
+- Execution is `SIMULATED` / historical CSV analysis. No live broker connection, live market feed, or real order execution is implemented. Treat broker and prop-firm documents as design/reference material unless code proves otherwise.
+- `BOT_VPN/` is the project root and Obsidian vault. `AGENTS.md` defines wiki workflow. `raw/` is immutable source material; `wiki/` is maintained synthesis.
+- Keep credentials and secrets out of source, wiki, logs, and output.
 
-## 3. Estrategias de Desarrollo Económico
-- **Modelos Flash vs Pro:** Para tareas de soporte, refactorización puntual o lectura, preferir modelos ligeros (como la familia Flash).
-- **Subagentes Ligeros:** Si se delegan tareas secundarias de búsqueda, delegar en subagentes con modelo `flash_lite` o `flash` para aislar el contexto.
+## Fast navigation
 
----
-- Relacionado: [[.agents/rules/token-efficiency|Directiva de Ahorro de Tokens]] · [[AGENTS|Esquema del Agente]] · [[wiki/index|Índice Maestro de la Wiki]]
+- Current stack and verified behavior: `wiki/stack-and-health.md`.
+- Setup and service differences: `README.md`.
+- Wiki navigation: `wiki/index.md`.
+- Wiki maintenance rules: `AGENTS.md`.
+- Roadmap: `PENDIENTES_Y_MEJORAS.md` and `IMPLEMENTATION_PLAN.md`.
+- Node server and persistence: `server.js`, `database.js`, `migrations/`.
+- Python service and persistence: `main.py`, `persistence.py`, `bot_engine.py`, `strategies.py`.
+- Browser behavior: `public/app.js`, `public/index.html`, `public/style.css`.
+- Tests, only when verification is requested or needed for the change: `tests/`.
+
+## Work efficiently
+
+1. Read this file, then inspect only the relevant source file and its directly related tests/docs. Search symbols before opening large files; read bounded sections where possible.
+2. Establish whether a requested feature belongs to Node, FastAPI, the frontend, or the wiki. Do not assume the two APIs are interchangeable.
+3. Distinguish implemented, simulated, optional, and planned behavior. Source code and tests outrank conceptual diagrams and wiki claims; update the wiki when implementation facts change.
+4. For wiki work, follow `AGENTS.md`: never edit `raw/`; update the relevant wiki page, `wiki/index.md` when adding a page, and append a dated entry to `wiki/log.md` when required by the requested ingest/query/lint workflow.
+5. Make the smallest complete change. Avoid dumping full files or repeating the project overview in replies. Summarize changes and verification briefly.
+6. Do not run tests unless the user asks for tests/verification or the task requires a specific check to establish correctness.
+
+## Important boundaries
+
+- MNQ tick facts in existing documentation: 0.25 points and $0.50 per tick. Confirm against the source documentation when calculations are part of the task.
+- A successful `/healthz` only checks service/database availability; it does not prove broker, feed, proxy, or live trading connectivity.
+- Do not describe design diagrams, strategy notes, or broker docs as implemented integrations without code-level evidence.
