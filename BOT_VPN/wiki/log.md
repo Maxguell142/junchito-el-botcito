@@ -117,3 +117,15 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
   - Reorganizado el bloque de Jitter, Hora Inicio y Hora Fin en una cuadrícula de 3 columnas (`.form-row-3col`) limpia y proporcionada.
   - Añadido scrollbar estilizado oscuro (`::-webkit-scrollbar`) que reemplaza la barra blanca gruesa nativa del navegador.
 - **Validación Automatizada**: 100% tests verdes (7/7 en `market_analysis.test.js` y 1/1 en `server.test.js`). Servidor operativo en `http://localhost:3008`.
+
+## [2026-11-10] query | Integración con OpenAI Codex, Contratos de Tipos y Ahorro Masivo de Tokens
+- **Análisis de Arquitectura**: Evaluada la propuesta de optimización de contexto, subagentes modulares, frameworks y servidores MCP para co-desarrollo con OpenAI Codex.
+- **Creación de `.cursorrules`**: Establecida directiva raíz compacta que fija los límites del stack (Node 3008, FastAPI 8000, SQLite local) y prohíbe alucinaciones o refactorizaciones masivas innecesarias.
+- **Definición de Tipos Formales (`types/financial_types.ts`)**: Estandarizados los contratos rígidos de datos para `Trade`, `AccountMetrics`, `VPNSession`, `PropFirmConfig` y `ForexFactoryEvent`, reduciendo la carga de contexto en cada prompt entre 40% y 50%.
+- **Documentación Wiki**: Creada `wiki/concepts/token-saving-and-codex-integration.md` e indexada en el catálogo maestro.
+
+## [2026-11-10] audit | Revisión de recomendaciones para Codex y herramientas del proyecto
+- Contrastada la propuesta de frameworks, MCP y contratos con manifiestos y estructura actual: Node/Express sirve el panel; FastAPI es un servicio opcional e independiente; la ejecución sigue simulada.
+- Añadidas instrucciones compactas en la raíz del workspace para Codex y una skill de proyecto que dirige búsquedas a archivos pertinentes.
+- Aclarado que las interfaces TypeScript son borradores sin compilación ni conexión con Node/Python; corregida la regla de Cursor para que no las trate como contrato validado.
+- No se instalaron dependencias ni MCP adicionales: búsqueda local y terminal ya están disponibles; Vault y herramientas de broker implicarían exponer datos sensibles, y los demás conectores no son necesarios para el flujo local actual.

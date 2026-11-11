@@ -32,6 +32,7 @@ Empieza por [[stack-and-health|Mapa del sistema, stack y salud]] para consultar 
 ## 💡 2. Conceptos de Ingeniería y Red
 | Página | Categoría | Resumen Ejecutivo | Fuentes |
 | :--- | :--- | :--- | :--- |
+| [[token-saving-and-codex-integration]] | Optimización / AI | Estrategia de ahorro masivo de tokens, servidores MCP y reglas de integración con OpenAI Codex. | `raw/system-specifications.md` |
 | [[custom-bot-engine-and-forexfactory]] | Bots / Macro | Creador de bots libre, verificación multilenguaje (Pine, Python, JS, C#), auto-proxy y feed ForexFactory con filtros de divisas. | `raw/system-specifications.md` |
 | [[full-demo-simulation-sandbox]] | Simulación / Demo | Arquitectura de Gemelo Digital, mock APIs residenciales y validación sin riesgo. | `raw/system-specifications.md` |
 | [[socket-level-proxy-isolation]] | Red / Networking | Aislamiento de sockets con proxies SOCKS5 en Windows sin alterar la IP anfitriona. | `raw/system-specifications.md` |

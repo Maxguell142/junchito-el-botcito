@@ -1,0 +1,20 @@
+# INVICTUS TRADING OS / QUANTUM FX — Codex & AI Operating Rules
+
+## 1. Stack & Architecture Boundaries (NEVER Hallucinate)
+- **Node.js (Primary Web Dashboard & REST API)**: Node 22.13+, Express 5, `ws` (WebSocket), native `node:sqlite`. Port `3008`.
+- **Python (Async Core Engine)**: Python 3.10+, FastAPI, Pydantic, asyncio, `aiohttp-socks`. Port `8000`.
+- **Frontend**: Lightweight Vanilla HTML5 / CSS3 / JavaScript in `public/` (Lucid Trading dark theme). DO NOT assume React, Next.js, or Tailwind unless explicitly commanded.
+- **Charts**: TradingView Lightweight Charts 5.2.1 standalone local build (`public/lightweight-charts.standalone.production.js`).
+- **Database**: Local SQLite `bot_vpn.sqlite3` shared between Node and Python with migration tracking.
+- **Execution Mode**: 100% `SIMULATED` / Demo Digital Twin. No real broker money or credentials.
+
+## 2. Token-Saving & Defensive Editing Rules
+1. **Targeted Edits Only**: Output ONLY modified functions or clean unified diffs. NEVER rewrite or output 300+ line files in chat.
+2. **Financial Interface Drafts**: `types/financial_types.ts` is not compiled or consumed by the Node/Python services. Treat its interfaces as drafts; verify fields against the actual API and SQLite migrations before relying on them or changing runtime code.
+3. **CME MNQ Contract Math**:
+   - 1 point = 4 ticks.
+   - 1 tick (0.25 pt) = $0.50 USD per contract ($2.00 per point).
+   - Daily Consistency Target protects payout eligibility; Daily Loss Limit (DLL) triggers emergency circuit breaker pause.
+4. **Credential Security**: NEVER output or persist plaintext passwords. Mask usernames (`APEX-***`).
+5. **No Broken HTML Tags**: Maintain DOM integrity; ensure modals remain within `.modal-overlay` and never leave orphaned form elements at document root.
+6. **Persistence Safety**: Never write SQLite raw queries without parameters. Use prepared statements.
