@@ -17,7 +17,7 @@ Read this first; do not scan the whole repository by default.
 - The current working tree adds a Node market-data module (`BOT_VPN/src/marketData.js`) for chart candles, with Yahoo/Finnhub/Alpha Vantage requests and synthetic fallback. This is separate from the simulated trading price and does not prove a live CME feed.
 - The global chart still uses `GET /api/market/candles` (simulated in-memory series); bot-specific charts call authenticated `GET /api/bot/:botId/candles`, with symbols from a static JSON map and a default of MNQ. Browser refresh is polling, about every 60 seconds, not a market stream.
 - Finnhub and Alpha Vantage map futures symbols to QQQ/SPY, which are ETF prices, not MNQ/NQ/ES futures prices. The UI does not clearly surface provider/fallback state. Do not use these chart values as execution prices.
-- `tests/marketData.test.js` asks for provider `synthetic`, but that is not an explicit mode in `getCandles`; unknown providers try Yahoo first. Treat that test as potentially network-dependent until fixed.
+- External provider requests now time out after eight seconds; per-bot cards load concurrently and show the reported source or simulated fallback. `synthetic` is an explicit provider mode.
 - `BOT_VPN/.cursorrules` is Cursor guidance. `BOT_VPN/types/financial_types.ts` is not wired into JavaScript/Python or checked by a TypeScript build; treat it as a draft/reference until aligned with actual API and database contracts.
 - Keep credentials out of prompts, source, wiki, logs, and output. Never put secrets in MCP or dotenv tools exposed to an assistant.
 

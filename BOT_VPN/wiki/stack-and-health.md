@@ -94,7 +94,7 @@ Obsidian usa `BOT_VPN/` como bóveda y su espacio de trabajo queda apuntando a `
 - La cuadrícula por bot consulta `/api/bot/:botId/candles` por HTTP y actualiza aproximadamente cada 60 segundos. El gráfico general usa `/api/market/candles`, que devuelve velas simuladas en memoria. No existe aquí un stream de precios de un broker.
 - Finnhub y Alpha Vantage mapean MNQ/NQ a QQQ y ES a SPY: son precios de ETFs, no precios equivalentes de los futuros CME. Si falla una fuente, el conector puede generar velas sintéticas; la UI no hace suficientemente visible el proveedor efectivo. No uses esas series para ejecutar ni evaluar trades reales.
 - El mapa `public/data/botSymbols.json` contiene asignaciones estáticas (`bot_1`/`bot_2`/`bot_3`) y usa MNQ como default; no obtiene necesariamente el instrumento configurado en la base para bots personalizados.
-- La prueba de `getCandles(..., 'synthetic')` no fuerza hoy una ruta sintética: un proveedor desconocido intenta Yahoo. Por eso esa prueba puede depender de red hasta que se corrija.
+- El proveedor `synthetic` genera velas ficticias de forma explícita; los proveedores externos tienen timeout y la cuadrícula muestra el origen/fallback indicado por la API.
 - Sus rutas y métodos no son totalmente intercambiables. Consulta [[README|README operativo]] antes de integrar un cliente con ambos.
 - El modo de ejecución documentado y declarado por el código es `SIMULATED`. La consulta externa de velas para gráficos no cambia el precio simulado usado por órdenes y no se debe presentar como ejecución real con broker.
 - Tradovate, Rithmic, reglas de prop firms y varias estrategias también aparecen en documentos de conocimiento; su documentación por sí sola no acredita una conexión o ejecución real.

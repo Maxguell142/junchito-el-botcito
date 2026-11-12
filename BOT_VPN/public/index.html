@@ -1467,6 +1467,70 @@
     </div>
   </div>
 
+  <!-- Modal Registrar Retiro o Pago en Ledger -->
+  <div class="modal-overlay" id="add-ledger-modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>💰 Registrar Retiro / Movimiento en Ledger</h2>
+        <button class="modal-close" type="button" onclick="closeAddLedgerModal()">&times;</button>
+      </div>
+      <form class="modal-body form-body" onsubmit="submitAddLedger(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ledger-modal-identity">Titular KYC Asignado *</label>
+            <select id="ledger-modal-identity" required>
+              <!-- Opciones dinámicas -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="ledger-modal-type">Tipo de Operación *</label>
+            <select id="ledger-modal-type" required>
+              <option value="PROP_FIRM_PAYOUT">🟢 Retiro Prop Firm (Ingreso Bruto de la Firma)</option>
+              <option value="TITULAR_SPLIT_PAYOUT">🟡 Pago Transferido a Titular (Split 20%)</option>
+              <option value="INVESTMENT_EVAL">🔴 Compra de Evaluación (Costo / Inversión)</option>
+              <option value="INVESTMENT_PA_FEE">🔴 Fee Activación PA / Funded (Costo)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ledger-modal-propfirm">Prop Firm / Firma *</label>
+            <select id="ledger-modal-propfirm">
+              <option value="Apex Trader Funding">Apex Trader Funding</option>
+              <option value="Topstep">Topstep</option>
+              <option value="Leelo Trading">Leelo Trading</option>
+              <option value="Blue Guardian">Blue Guardian</option>
+              <option value="TradeDay">TradeDay</option>
+              <option value="FunderPro">FunderPro</option>
+              <option value="Otro Broker / Prop Firm">Otro Broker / Prop Firm</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="ledger-modal-account">Nombre o Alias de la Cuenta *</label>
+            <input type="text" id="ledger-modal-account" placeholder="ej. Apex 50k PA #1" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="ledger-modal-amount">Monto en USD ($) *</label>
+          <input type="number" id="ledger-modal-amount" step="0.01" min="0.01" placeholder="ej. 2500.00" required>
+          <small class="form-hint">Ingresa el monto positivo. El sistema sumará los ingresos o restará los costos y splits automáticamente.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="ledger-modal-notes">Notas / Comprobante / Hash de Transacción</label>
+          <textarea id="ledger-modal-notes" rows="2" placeholder="ej. Transferencia bancaria procesada / Tx Hash USDT TRC20: 0x8a...41f"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddLedgerModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar en Ledger</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 5. Modal de Confirmación Institucional -->
   <div class="modal-overlay" id="confirm-modal">
     <div class="modal-content modal-confirm">

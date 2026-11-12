@@ -15,9 +15,9 @@ Node incorpora un conector multi-fuente (`src/marketData.js`) que obtiene velas 
 1. **Finnhub**: requiere `FINNHUB_API_KEY`; el código mapea MNQ/NQ a QQQ y ES a SPY. Esos símbolos son ETFs, no los futuros CME correspondientes.
 2. **Yahoo Finance**: usa símbolos mapeados como `MNQ=F`, `NQ=F` y `ES=F`; la disponibilidad, frescura y licencia no se verifican desde el código.
 3. **Alpha Vantage**: usa series intradía y mapea MNQ/NQ a QQQ y ES a SPY; requiere clave.
-4. **Sintético**: genera datos ficticios cuando la ruta de proveedor falla. El valor `provider` y `fallback_warning` viajan en la respuesta, pero la UI no los muestra claramente.
+4. **Sintético**: genera datos ficticios cuando la ruta de proveedor falla, o si se selecciona explícitamente `synthetic`. Las tarjetas muestran ahora si recibieron velas sintéticas o de una API.
 
-La interfaz vuelve a consultar los gráficos por bot aproximadamente cada 60 segundos. Es polling HTTP, no WebSocket de mercado. El endpoint global todavía consume velas simuladas en memoria; la nueva fuente externa solo aplica a los endpoints de velas generales y por bot añadidos en el cambio actual.
+La interfaz vuelve a consultar los gráficos por bot aproximadamente cada 60 segundos. Es polling HTTP, no WebSocket de mercado. Las consultas externas tienen un timeout de ocho segundos y las tarjetas cargan en paralelo. El endpoint global todavía consume velas simuladas en memoria; la fuente externa se usa en las tarjetas por bot y en `GET /api/candles`.
 
 ## Configuración en Entorno (.env)
 
@@ -41,7 +41,7 @@ Para conmutar de proveedor se actualiza `MARKET_DATA_PROVIDER` (`finnhub`, `yaho
 
 - `public/data/botSymbols.json` es una asignación estática con IDs de ejemplo y default MNQ; no lee el instrumento del bot en SQLite.
 - La gráfica general del panel usa `/api/market/candles`, que sigue siendo simulada. La selección de un bot cambia a la ruta de velas externa, y esa respuesta no incluye los marcadores de ejecución del endpoint global.
-- `getCandles` no define un modo explícito `synthetic`: un nombre de proveedor desconocido intenta Yahoo. La prueba que pasa `'synthetic'` puede hacer una solicitud de red y no es determinista.
+- Un nombre de proveedor desconocido intenta Yahoo; usa `synthetic` para solicitar velas ficticias de forma determinista.
 - No usar las cotizaciones de ETF ni el fallback sintético como precios de MNQ/NQ/ES para riesgo, backtesting o envío de órdenes.
 
 ## Compatibilidad TradingView Lightweight Charts v5

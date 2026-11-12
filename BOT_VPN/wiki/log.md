@@ -143,6 +143,11 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - Documentadas limitaciones detectadas: símbolos Finnhub/Alpha Vantage mapeados a ETFs, proveedor/fallback no visible con claridad, mapa de instrumentos estático, sin marcadores en la respuesta externa y prueba `synthetic` que puede intentar Yahoo/red.
 - Actualizadas la skill raíz y las notas del stack/proveedor para usar esta distinción en próximas tareas. No se ejecutó la suite durante esta auditoría.
 
+## [2026-11-12] fix | Carga confiable de gráficos por bot
+- Añadido timeout de ocho segundos a solicitudes de proveedores y modo explícito `synthetic` para que la ruta de respaldo no realice llamadas externas.
+- Cambiada la carga inicial de las tarjetas a solicitudes concurrentes para que una fuente lenta no deje esperando a todos los bots.
+- Añadidos estados visibles por tarjeta (`Cargando`, proveedor API, `SIMULADO` o `Sin datos`) y el precio recibido; los datos sintéticos quedan identificados como tales.
+
 ## [2026-11-11] fix | Actualización de precio a tiempo real (~28,245) y habilitación de cambio de temporalidad (1m, 5m, 15m, 1h, 1d)
 - **Diagnóstico de Precio Desactualizado (18k vs 28k)**: El endpoint `/api/market/candles` retornaba velas sintéticas simuladas fijadas a una base estática de 18,245.50 USD y el WebSocket sobrescribía el precio con dicho valor simulado. Finnhub arrojaba HTTP 403 Forbidden para series de velas en cuenta gratuita.
 - **Conmutación a Proveedor Nativo Real (Yahoo Finance)**: Configurado `MARKET_DATA_PROVIDER=yahoo` en `.env` para consultar directamente contratos oficiales de futuros CME (`MNQ=F`, `NQ=F`, `ES=F`) sin requerir API key ni cuotas restrictivas, obteniendo el precio real de mercado actual (~28,247 USD).

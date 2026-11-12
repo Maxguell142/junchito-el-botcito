@@ -5,6 +5,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const PROVIDER_TIMEOUT_MS = 8000;
+
+function fetchWithTimeout(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+  });
+}
 
 // Cargar variables de entorno si existe .env
 const envPath = path.join(__dirname, '..', '.env');
@@ -75,7 +83,7 @@ async function fetchYahoo(symbol, interval = '1m', limit = 100) {
 
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSymbol)}?interval=${safeInterval}&range=${range}`;
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -143,7 +151,7 @@ async function fetchFinnhub(symbol, interval = '1m', limit = 100) {
 
   const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(cleanSymbol)}&resolution=${resolution}&from=${from}&to=${now}&token=${apiKey}`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error(`Finnhub respondió HTTP ${res.status}: ${res.statusText}`);
   }
@@ -184,7 +192,7 @@ async function fetchAlphaVantage(symbol, interval = '1m', limit = 100) {
 
   const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(cleanSymbol)}&interval=${safeInterval}&outputsize=compact&apikey=${apiKey}`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error(`Alpha Vantage respondió HTTP ${res.status}: ${res.statusText}`);
   }
@@ -259,7 +267,10 @@ async function getCandles(symbol = 'MNQ', interval = '1m', limit = 100, customPr
   let providerError = null;
 
   try {
-    if (provider === 'yahoo') {
+    if (provider === 'synthetic') {
+      candles = generateSyntheticCandles(symbol, interval, maxBars);
+      activeProvider = 'synthetic';
+    } else if (provider === 'yahoo') {
       candles = await fetchYahoo(symbol, interval, maxBars);
     } else if (provider === 'alphavantage') {
       candles = await fetchAlphaVantage(symbol, interval, maxBars);

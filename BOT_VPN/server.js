@@ -759,6 +759,7 @@ const economicEvents = [
 // ======================================================================
 
 const ledgerTransactions = [
+  // --- CARLOS MENDOZA (id_carlos) ---
   {
     id: 'tx_101',
     date: '2026-10-14',
@@ -770,18 +771,6 @@ const ledgerTransactions = [
     amount: -35.00,
     status: 'COMPLETED',
     notes: 'Compra de evaluación Apex 50k (80% off)'
-  },
-  {
-    id: 'tx_102',
-    date: '2026-10-16',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Scalp',
-    prop_firm: 'Topstep',
-    type: 'INVESTMENT_EVAL',
-    amount: -49.00,
-    status: 'COMPLETED',
-    notes: 'Suscripción Topstep 50k'
   },
   {
     id: 'tx_103',
@@ -820,6 +809,68 @@ const ledgerTransactions = [
     notes: 'Transferencia split 20% a Carlos Mendoza. Hash: 0x8a...41f'
   },
   {
+    id: 'tx_108',
+    date: '2026-11-02',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #2',
+    prop_firm: 'Apex Trader Funding',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 3200.00,
+    status: 'COMPLETED',
+    notes: 'Retiro quincenal de PA #2 aprobado'
+  },
+  {
+    id: 'tx_109',
+    date: '2026-11-03',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #2',
+    prop_firm: 'Apex Trader Funding',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -640.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Carlos Mendoza. Hash: 0x9b...112'
+  },
+  {
+    id: 'tx_110',
+    date: '2026-11-09',
+    identity_id: 'id_carlos',
+    identity_name: 'Carlos Mendoza',
+    account_name: 'Apex 50k PA #1',
+    prop_firm: 'Apex Trader Funding',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 2000.00,
+    status: 'COMPLETED',
+    notes: 'Retiro quincenal noviembre aprobado'
+  },
+
+  // --- VALERIA RAMOS (id_valeria) ---
+  {
+    id: 'tx_102',
+    date: '2026-10-16',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Scalp',
+    prop_firm: 'Topstep',
+    type: 'INVESTMENT_EVAL',
+    amount: -49.00,
+    status: 'COMPLETED',
+    notes: 'Suscripción Topstep 50k'
+  },
+  {
+    id: 'tx_111',
+    date: '2026-10-20',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Express',
+    prop_firm: 'Topstep',
+    type: 'INVESTMENT_PA_FEE',
+    amount: -149.00,
+    status: 'COMPLETED',
+    notes: 'Activación Express Funded Account'
+  },
+  {
     id: 'tx_106',
     date: '2026-10-25',
     identity_id: 'id_valeria',
@@ -842,6 +893,166 @@ const ledgerTransactions = [
     amount: -640.00,
     status: 'COMPLETED',
     notes: 'Transferencia split 20% a Valeria Ramos. Hash: 0x4f...99d'
+  },
+  {
+    id: 'tx_112',
+    date: '2026-11-04',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Leelo Express #1',
+    prop_firm: 'Leelo Trading',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 4100.00,
+    status: 'COMPLETED',
+    notes: 'Payout aprobado en Leelo Trading'
+  },
+  {
+    id: 'tx_113',
+    date: '2026-11-05',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Leelo Express #1',
+    prop_firm: 'Leelo Trading',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -820.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Valeria Ramos. Hash: 0x1a...54c'
+  },
+  {
+    id: 'tx_114',
+    date: '2026-11-10',
+    identity_id: 'id_valeria',
+    identity_name: 'Valeria Ramos',
+    account_name: 'Topstep 50k Scalp',
+    prop_firm: 'Topstep',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 2750.00,
+    status: 'COMPLETED',
+    notes: 'Segundo retiro Topstep quincenal'
+  },
+
+  // --- DIEGO FERNÁNDEZ (id_diego) ---
+  {
+    id: 'tx_115',
+    date: '2026-10-15',
+    identity_id: 'id_diego',
+    identity_name: 'Diego Fernández',
+    account_name: 'Blue Guardian 100k',
+    prop_firm: 'Blue Guardian',
+    type: 'INVESTMENT_EVAL',
+    amount: -95.00,
+    status: 'COMPLETED',
+    notes: 'Compra evaluación Unlimited Challenge 100k'
+  },
+  {
+    id: 'tx_116',
+    date: '2026-10-21',
+    identity_id: 'id_diego',
+    identity_name: 'Diego Fernández',
+    account_name: 'Blue Guardian 100k',
+    prop_firm: 'Blue Guardian',
+    type: 'INVESTMENT_PA_FEE',
+    amount: -150.00,
+    status: 'COMPLETED',
+    notes: 'Fee activación cuenta fondeada Blue Guardian'
+  },
+  {
+    id: 'tx_117',
+    date: '2026-10-28',
+    identity_id: 'id_diego',
+    identity_name: 'Diego Fernández',
+    account_name: 'Blue Guardian 100k',
+    prop_firm: 'Blue Guardian',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 3850.00,
+    status: 'COMPLETED',
+    notes: 'Retiro aprobado y liquidado por Blue Guardian'
+  },
+  {
+    id: 'tx_118',
+    date: '2026-10-29',
+    identity_id: 'id_diego',
+    identity_name: 'Diego Fernández',
+    account_name: 'Blue Guardian 100k',
+    prop_firm: 'Blue Guardian',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -770.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Diego Fernández. Hash: 0x7c...88e'
+  },
+  {
+    id: 'tx_119',
+    date: '2026-11-06',
+    identity_id: 'id_diego',
+    identity_name: 'Diego Fernández',
+    account_name: 'Cuenta 2 de Asia',
+    prop_firm: 'Apex Trader Funding',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 2100.00,
+    status: 'COMPLETED',
+    notes: 'Payout Apex Asia aprobado'
+  },
+
+  // --- JUAN PABLO (juan pablo) ---
+  {
+    id: 'tx_120',
+    date: '2026-10-18',
+    identity_id: 'juan pablo',
+    identity_name: 'Juan Pablo',
+    account_name: 'TradeDay 50k PA',
+    prop_firm: 'TradeDay',
+    type: 'INVESTMENT_EVAL',
+    amount: -45.00,
+    status: 'COMPLETED',
+    notes: 'Evaluación TradeDay 50k con descuento'
+  },
+  {
+    id: 'tx_121',
+    date: '2026-10-24',
+    identity_id: 'juan pablo',
+    identity_name: 'Juan Pablo',
+    account_name: 'TradeDay 50k PA',
+    prop_firm: 'TradeDay',
+    type: 'INVESTMENT_PA_FEE',
+    amount: -130.00,
+    status: 'COMPLETED',
+    notes: 'Activación PA TradeDay Live-Sim'
+  },
+  {
+    id: 'tx_122',
+    date: '2026-10-31',
+    identity_id: 'juan pablo',
+    identity_name: 'Juan Pablo',
+    account_name: 'TradeDay 50k PA',
+    prop_firm: 'TradeDay',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 2600.00,
+    status: 'COMPLETED',
+    notes: 'Primer retiro aprobado TradeDay'
+  },
+  {
+    id: 'tx_123',
+    date: '2026-11-01',
+    identity_id: 'juan pablo',
+    identity_name: 'Juan Pablo',
+    account_name: 'TradeDay 50k PA',
+    prop_firm: 'TradeDay',
+    type: 'TITULAR_SPLIT_PAYOUT',
+    amount: -520.00,
+    status: 'COMPLETED',
+    notes: 'Transferencia split 20% a Juan Pablo. Hash: 0x3d...72b'
+  },
+  {
+    id: 'tx_124',
+    date: '2026-11-08',
+    identity_id: 'juan pablo',
+    identity_name: 'Juan Pablo',
+    account_name: 'Apex 25k PA',
+    prop_firm: 'Apex Trader Funding',
+    type: 'PROP_FIRM_PAYOUT',
+    amount: 1900.00,
+    status: 'COMPLETED',
+    notes: 'Payout Apex aprobado'
   }
 ];
 

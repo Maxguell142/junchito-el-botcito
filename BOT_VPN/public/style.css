@@ -3913,6 +3913,39 @@ input:focus, select:focus, textarea:focus {
   border-bottom: 1px solid #161A24;
 }
 
+.bot-chart-data-status {
+  flex: 0 0 auto;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.bot-chart-data-status.loading {
+  color: #94A3B8;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.bot-chart-data-status.external {
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.bot-chart-data-status.synthetic {
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.bot-chart-data-status.error {
+  color: #F87171;
+  background: rgba(248, 113, 113, 0.14);
+}
+
 .bot-chart-meta {
   display: flex;
   align-items: center;

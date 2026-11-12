@@ -2106,6 +2106,41 @@ function updateChartRealtimeCandle(candle) {
   }
 }
 
+function setMiniBotChartStatus(botId, label, kind = 'loading', detail = '') {
+  const status = document.getElementById(`bot-chart-status-${botId}`);
+  if (!status) return;
+  status.textContent = label;
+  status.className = `bot-chart-data-status ${kind}`;
+  status.title = detail || label;
+}
+
+function applyMiniBotCandles(botId, item, payload) {
+  if (!Array.isArray(payload?.candles) || payload.candles.length === 0) {
+    throw new Error('El proveedor no devolvió velas.');
+  }
+
+  item.series.setData(payload.candles);
+  item.chart.timeScale().fitContent();
+
+  const last = payload.candles[payload.candles.length - 1];
+  const price = document.getElementById(`mini-price-${botId}`);
+  if (price && Number.isFinite(Number(last?.close))) {
+    price.textContent = Number(last.close).toFixed(2);
+  }
+
+  const symbol = document.getElementById(`bot-symbol-badge-${botId}`);
+  if (symbol && payload.symbol) symbol.textContent = payload.symbol;
+
+  const provider = String(payload.provider || 'proveedor externo');
+  const synthetic = provider.toLowerCase().includes('synthetic');
+  setMiniBotChartStatus(
+    botId,
+    synthetic ? 'SIMULADO' : `API · ${provider}`,
+    synthetic ? 'synthetic' : 'external',
+    payload.fallback_warning || (synthetic ? 'Velas sintéticas; no son cotizaciones de mercado.' : provider)
+  );
+}
+
 async function renderMultiBotCharts() {
   const grid = document.getElementById('multi-bot-charts-grid');
   if (!grid || !window.LightweightCharts) return;
@@ -2126,7 +2161,7 @@ async function renderMultiBotCharts() {
             <span class="bot-chart-name">${escapeHtml(bot.name)}</span>
             <span class="bot-chart-symbol-badge" id="bot-symbol-badge-${bot.id}">MNQ</span>
           </div>
-          <span class="badge-status-dot active" title="Activo"></span>
+          <span class="bot-chart-data-status loading" id="bot-chart-status-${bot.id}" title="Consultando velas">Cargando…</span>
         </div>
         <div class="bot-chart-container" id="mini-chart-${bot.id}"></div>
         <div class="bot-chart-footer">
@@ -2180,24 +2215,23 @@ async function renderMultiBotCharts() {
 
     state.miniBotCharts[bot.id] = { chart: miniChart, series };
 
+  }
+
+  await Promise.all(state.bots.map(async bot => {
+    const item = state.miniBotCharts[bot.id];
+    if (!item) return;
+
     try {
       const resp = await apiFetch(`/api/bot/${bot.id}/candles?limit=60`);
-      if (resp.ok) {
-        const payload = await resp.json();
-        if (payload.candles && payload.candles.length) {
-          series.setData(payload.candles);
-          miniChart.timeScale().fitContent();
-          const last = payload.candles[payload.candles.length - 1];
-          const prEl = document.getElementById(`mini-price-${bot.id}`);
-          if (prEl && last) prEl.textContent = `$${last.close.toFixed(2)}`;
-        }
-        const symEl = document.getElementById(`bot-symbol-badge-${bot.id}`);
-        if (symEl && payload.symbol) symEl.textContent = payload.symbol;
+      if (!resp.ok) {
+        throw new Error(`Error del servidor (${resp.status})`);
       }
+      applyMiniBotCandles(bot.id, item, await resp.json());
     } catch (e) {
       console.warn(`Error cargando gráfico mini para ${bot.id}:`, e);
+      setMiniBotChartStatus(bot.id, 'Sin datos', 'error', e.message);
     }
-  }
+  }));
 }
 
 // Auto-refresh de gráficos cada 60s
@@ -2209,16 +2243,13 @@ if (!window._chartRefreshTimer) {
         Object.entries(state.miniBotCharts).forEach(async ([botId, item]) => {
           try {
             const resp = await apiFetch(`/api/bot/${botId}/candles?limit=60`);
-            if (resp.ok) {
-              const payload = await resp.json();
-              if (payload.candles && payload.candles.length && item.series) {
-                item.series.setData(payload.candles);
-                const last = payload.candles[payload.candles.length - 1];
-                const prEl = document.getElementById(`mini-price-${botId}`);
-                if (prEl && last) prEl.textContent = `$${last.close.toFixed(2)}`;
-              }
+            if (!resp.ok) {
+              throw new Error(`Error del servidor (${resp.status})`);
             }
-          } catch (e) {}
+            applyMiniBotCandles(botId, item, await resp.json());
+          } catch (e) {
+            setMiniBotChartStatus(botId, 'Sin datos', 'error', e.message);
+          }
         });
       }
     }
