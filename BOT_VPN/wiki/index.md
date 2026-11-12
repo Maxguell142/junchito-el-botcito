@@ -53,6 +53,7 @@ Empieza por [[stack-and-health|Mapa del sistema, stack y salud]] para consultar 
 ## 🔌 4. Conectores Financieros y Brokerages
 | Página | Categoría | Resumen Ejecutivo | Fuentes |
 | :--- | :--- | :--- | :--- |
+| [[market-data-providers]] | Conectores | Velas externas y fallback sintético para la cuadrícula gráfica; independiente del motor simulado. | `src/marketData.js` |
 | [[tradovate-api]] | Conectores | Integración REST y WebSocket de Tradovate, ciclo de autenticación y tickets de orden. | `raw/prop-firms-comparison.md` |
 | [[rithmic-rapi]] | Conectores | Arquitectura de baja latencia R\|API+ en Chicago, buffers Protobuf y túnel SOCKS5. | `raw/prop-firms-comparison.md` |
 

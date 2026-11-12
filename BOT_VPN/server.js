@@ -5,6 +5,30 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { SQLiteStore } = require('./database');
+const { getCandles } = require('./src/marketData');
+
+// Cargar .env de forma segura
+const envFile = path.join(__dirname, '.env');
+if (fs.existsSync(envFile)) {
+  try {
+    if (typeof process.loadEnvFile === 'function') {
+      process.loadEnvFile(envFile);
+    } else {
+      const envLines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
+      for (const line of envLines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const idx = trimmed.indexOf('=');
+          const k = trimmed.slice(0, idx).trim();
+          const v = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+          if (!process.env[k]) process.env[k] = v;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[WARN] Error cargando .env:', e.message);
+  }
+}
 const {
   TIMEFRAMES,
   STRATEGIES,
@@ -1895,6 +1919,49 @@ app.get('/api/market/candles', (req, res) => {
     markers: chartExecutionMarkers,
     last_price: marketPrice
   });
+});
+
+// Endpoints de Datos de Mercado en Tiempo Real (Yahoo / Finnhub / Alpha Vantage)
+app.get('/api/candles', async (req, res) => {
+  try {
+    const symbol = req.query.symbol || 'MNQ';
+    const interval = req.query.interval || process.env.CANDLE_INTERVAL || '1m';
+    const limit = Number(req.query.limit) || 100;
+    const provider = req.query.provider;
+
+    const data = await getCandles(symbol, interval, limit, provider);
+    res.json(data);
+  } catch (e) {
+    console.error('[ERROR] /api/candles:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/bot/:botId/candles', async (req, res) => {
+  try {
+    const botId = req.params.botId;
+    let symbolMap = { bot_1: 'MNQ', bot_2: 'NQ', bot_3: 'ES', default: 'MNQ' };
+    try {
+      const symbolsPath = path.join(__dirname, 'public', 'data', 'botSymbols.json');
+      if (fs.existsSync(symbolsPath)) {
+        symbolMap = JSON.parse(fs.readFileSync(symbolsPath, 'utf-8'));
+      }
+    } catch (err) {}
+
+    const symbol = symbolMap[botId] || symbolMap.default || 'MNQ';
+    const interval = req.query.interval || process.env.CANDLE_INTERVAL || '1m';
+    const limit = Number(req.query.limit) || 100;
+    const provider = req.query.provider;
+
+    const data = await getCandles(symbol, interval, limit, provider);
+    res.json({
+      botId,
+      ...data
+    });
+  } catch (e) {
+    console.error(`[ERROR] /api/bot/${req.params.botId}/candles:`, e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // 2. Calendario de noticias macroeconómicas

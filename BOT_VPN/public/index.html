@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
 
@@ -233,7 +234,7 @@
       <div class="login-card">
         <div class="login-header">
           <div class="login-brand">
-            <span class="logo-icon">▲</span>
+            <img src="/static/logo.png" alt="QUANTUM FX Logo" class="brand-logo-img">
             <div class="login-brand-text">
               <h1>QUANTUM FX</h1>
               <span>INSTITUTIONAL FUTURES TRADING // CME MNQ</span>
@@ -745,6 +746,17 @@
             <span class="cm-label">TRADES MARCADOS:</span>
             <span class="cm-val" id="chart-markers-count">2 Ejecuciones</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Cuadrícula Multi-Bot en Tiempo Real -->
+      <div class="multi-bot-charts-section">
+        <div class="section-sub-header">
+          <h3 style="font-size: 1.05rem; font-weight: 600; color: #FFFFFF; margin-bottom: 4px;">Cuadrícula Multi-Bot en Tiempo Real</h3>
+          <span class="section-sub">Gráficos sincronizados de velas (CME MNQ / NQ / ES) asignados a cada bot con actualización periódica.</span>
+        </div>
+        <div id="multi-bot-charts-grid" class="multi-bot-charts-grid">
+          <!-- Renderizado dinámico de tarjetas de gráficos por bot -->
         </div>
       </div>
     </section>

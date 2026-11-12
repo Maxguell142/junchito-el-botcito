@@ -2,7 +2,7 @@
 title: Mapa del sistema, stack y salud
 category: system
 tags: [stack, health, frontend, backend, ai, obsidian]
-last_updated: 2026-11-06
+last_updated: 2026-11-11
 ---
 
 # Mapa del sistema, stack y salud
@@ -17,6 +17,7 @@ last_updated: 2026-11-06
 | Backend alternativo | Python 3.10+, FastAPI, Pydantic y Uvicorn | Servicio separado y opcional en `http://127.0.0.1:8000`. |
 | Frontend | HTML, CSS y JavaScript sin framework | Archivos locales en `public/`; Node sirve el panel principal. |
 | Gráficos | TradingView Lightweight Charts 5.2.1 | Archivo local `public/lightweight-charts.standalone.production.js`. |
+| Datos para gráficos | `src/marketData.js` (Node) | Consultas HTTP a Yahoo/Finnhub/Alpha Vantage y velas sintéticas de fallback; separado de los precios simulados de ejecución. |
 | Tiempo real | WebSocket (`ws` en Node y soporte WebSocket de FastAPI) | Se usa para las funciones de telemetría implementadas por cada servidor. |
 | Persistencia | SQLite | Node usa `node:sqlite`; Python usa `sqlite3`. Ambos apuntan a la misma base local. |
 | IA de la aplicación | No hay proveedor ni modelo integrado | No se encontraron SDK de OpenAI, Anthropic, Gemini, Ollama u otro LLM en los manifiestos actuales. |
@@ -90,6 +91,10 @@ Obsidian usa `BOT_VPN/` como bóveda y su espacio de trabajo queda apuntando a `
 ## Estado funcional que no hay que confundir
 
 - Node y FastAPI son servicios independientes; la interfaz principal se sirve con Node.
+- La cuadrícula por bot consulta `/api/bot/:botId/candles` por HTTP y actualiza aproximadamente cada 60 segundos. El gráfico general usa `/api/market/candles`, que devuelve velas simuladas en memoria. No existe aquí un stream de precios de un broker.
+- Finnhub y Alpha Vantage mapean MNQ/NQ a QQQ y ES a SPY: son precios de ETFs, no precios equivalentes de los futuros CME. Si falla una fuente, el conector puede generar velas sintéticas; la UI no hace suficientemente visible el proveedor efectivo. No uses esas series para ejecutar ni evaluar trades reales.
+- El mapa `public/data/botSymbols.json` contiene asignaciones estáticas (`bot_1`/`bot_2`/`bot_3`) y usa MNQ como default; no obtiene necesariamente el instrumento configurado en la base para bots personalizados.
+- La prueba de `getCandles(..., 'synthetic')` no fuerza hoy una ruta sintética: un proveedor desconocido intenta Yahoo. Por eso esa prueba puede depender de red hasta que se corrija.
 - Sus rutas y métodos no son totalmente intercambiables. Consulta [[README|README operativo]] antes de integrar un cliente con ambos.
 - El modo de ejecución documentado y declarado por el código es `SIMULATED`. No se debe presentar como ejecución real con broker.
 - Tradovate, Rithmic, reglas de prop firms y varias estrategias también aparecen en documentos de conocimiento; su documentación por sí sola no acredita una conexión o ejecución real.

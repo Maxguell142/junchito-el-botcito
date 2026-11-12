@@ -94,6 +94,28 @@ La pantalla también presenta un backtest histórico: cuando una estrategia encu
 
 Usa solo CSV de una fuente cuyo uso tengas autorizado. Antes de usar cualquier resultado fuera de pruebas, revisa la calidad y zona horaria del archivo; las señales son informativas, no recomendaciones financieras.
 
+## Velas externas para los gráficos (.env)
+
+El servidor Node puede consultar proveedores externos para dibujar velas en gráficos. Este conector no alimenta el motor de ejecución ni garantiza datos CME en tiempo real. La cuadrícula por bot consulta velas por HTTP aproximadamente cada 60 segundos; el gráfico global mantiene la serie simulada de `/api/market/candles`.
+
+1. **Finnhub**: requiere clave; `MNQ`/`NQ` se mapean a `QQQ`, `ES` a `SPY` (ETFs, no contratos de futuros).
+2. **Yahoo Finance**: consulta sin clave mediante símbolos de futuros como `MNQ=F`, `NQ=F`, `ES=F`; disponibilidad y condiciones de uso dependen del proveedor.
+3. **Alpha Vantage**: Datos intradía de series temporales.
+4. **Sintético (Fallback)**: genera velas ficticias si fallan las fuentes externas. El dashboard no identifica con suficiente claridad este estado; no interpretes sus precios como cotizaciones.
+
+### Configuración en `.env`
+
+Crea un `.env` local en la raíz de `BOT_VPN` (está excluido de Git) si necesitas claves:
+
+```env
+MARKET_DATA_PROVIDER=finnhub
+FINNHUB_API_KEY=tu_clave_finnhub
+ALPHAVANTAGE_API_KEY=tu_clave_alphavantage
+CANDLE_INTERVAL=1m
+```
+
+Para cambiar de proveedor basta con ajustar `MARKET_DATA_PROVIDER` a `yahoo`, `finnhub` o `alphavantage` y reiniciar el servidor Node (`npm start`).
+
 ## Salud de los servicios
 
 Node y FastAPI exponen `GET /healthz`, una comprobación local que verifica el estado SQLite compartido por cada proceso. Responde `200` solo si la persistencia está accesible y el esquema de estado está presente; si SQLite falla, responde `503`. El endpoint Node indica `historical_csv` mientras haya datos CSV cargados en memoria, o `simulated` si no los hay; FastAPI reporta `simulated`. Ningún endpoint verifica conexión a broker, feed en vivo ni precios de mercado en tiempo real. Estos endpoints son para diagnóstico local y no sustituyen monitoreo, métricas ni alertas de producción.

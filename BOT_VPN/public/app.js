@@ -1724,21 +1724,60 @@ function escapeHtml(text) {
 
 // ======================================================================
 // 16. MÓDULO TRADINGVIEW LIGHTWEIGHT CHARTS (CANVAS 60FPS)
+// Soporte cruzado v4 (addCandlestickSeries) y v5 (addSeries + CandlestickSeries)
 // ======================================================================
+
+function createCandleSeriesCompat(chart, options) {
+  if (!chart) return null;
+  if (typeof chart.addCandlestickSeries === 'function') {
+    return chart.addCandlestickSeries(options);
+  }
+  if (typeof chart.addSeries === 'function' && window.LightweightCharts?.CandlestickSeries) {
+    return chart.addSeries(window.LightweightCharts.CandlestickSeries, options);
+  }
+  throw new Error('Unsupported LightweightCharts version or missing CandlestickSeries');
+}
+
+function setSeriesMarkersCompat(series, markers, holder, key) {
+  if (!series) return;
+  const safeMarkers = Array.isArray(markers) ? markers : [];
+  try {
+    if (typeof series.setMarkers === 'function') {
+      series.setMarkers(safeMarkers);
+    } else if (window.LightweightCharts && typeof window.LightweightCharts.createSeriesMarkers === 'function') {
+      if (holder && holder[key]) {
+        holder[key].setMarkers(safeMarkers);
+      } else {
+        const prim = window.LightweightCharts.createSeriesMarkers(series, safeMarkers);
+        if (holder) {
+          holder[key] = prim;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error configurando marcadores en serie:', e);
+  }
+}
 
 async function initLightweightChart() {
   const container = document.getElementById('tradingview-chart-box');
   if (!container || !window.LightweightCharts) return;
 
+  if (state.chartResizeObserver) {
+    try { state.chartResizeObserver.disconnect(); } catch (e) {}
+    state.chartResizeObserver = null;
+  }
+
   if (state.chartInstance) {
-    state.chartInstance.remove();
+    try { state.chartInstance.remove(); } catch (e) {}
     state.chartInstance = null;
     state.candleSeries = null;
+    state.chartMarkersPrimitive = null;
   }
 
   container.innerHTML = '';
 
-  const initialWidth = container.clientWidth > 0 ? container.clientWidth : (container.parentElement ? container.parentElement.clientWidth : 900);
+  const initialWidth = container.clientWidth > 0 ? container.clientWidth : (container.parentElement && container.parentElement.clientWidth > 0 ? container.parentElement.clientWidth : 900);
   const chart = LightweightCharts.createChart(container, {
     width: initialWidth,
     height: 520,
@@ -1766,7 +1805,7 @@ async function initLightweightChart() {
     }
   });
 
-  const candleSeries = chart.addCandlestickSeries({
+  const candleSeries = createCandleSeriesCompat(chart, {
     upColor: '#00E676',
     downColor: '#FF5252',
     borderUpColor: '#00E676',
@@ -1777,10 +1816,11 @@ async function initLightweightChart() {
 
   state.chartInstance = chart;
   state.candleSeries = candleSeries;
+  state.chartMarkersPrimitive = null;
 
   // Actualizar selector de bots en gráficos
   const chartBotSel = document.getElementById('chart-bot-selector');
-  if (chartBotSel && state.bots.length) {
+  if (chartBotSel && state.bots && state.bots.length) {
     const prev = chartBotSel.value;
     chartBotSel.innerHTML = `<option value="ALL">Todos los Bots (Ejecuciones Globales)</option>` +
       state.bots.map(b => `<option value="${b.id}">${escapeHtml(b.name)} (${b.id})</option>`).join('');
@@ -1804,18 +1844,34 @@ async function initLightweightChart() {
     if (volEl && bar.volume) volEl.textContent = bar.volume;
   });
 
-  window.addEventListener('resize', () => {
-    if (state.chartInstance && container) {
-      state.chartInstance.applyOptions({ width: container.clientWidth });
-    }
-  });
+  if (window.ResizeObserver) {
+    state.chartResizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        if (entry.contentRect && entry.contentRect.width > 0 && state.chartInstance) {
+          state.chartInstance.applyOptions({ width: Math.floor(entry.contentRect.width) });
+        }
+      }
+    });
+    state.chartResizeObserver.observe(container);
+  } else {
+    window.addEventListener('resize', () => {
+      if (state.chartInstance && container && container.clientWidth > 0) {
+        state.chartInstance.applyOptions({ width: container.clientWidth });
+      }
+    });
+  }
 
   await loadChartCandleData();
+  await renderMultiBotCharts();
 }
 
 async function loadChartCandleData() {
   try {
-    const resp = await apiFetch(`/api/market/candles?tf=${state.chartTimeframe}`);
+    let url = `/api/market/candles?tf=${state.chartTimeframe || '1m'}`;
+    if (state.chartBotFilter && state.chartBotFilter !== 'ALL') {
+      url = `/api/bot/${encodeURIComponent(state.chartBotFilter)}/candles?interval=${state.chartTimeframe || '1m'}`;
+    }
+    const resp = await apiFetch(url);
     if (!resp.ok) return;
     const data = await resp.json();
 
@@ -1827,7 +1883,7 @@ async function loadChartCandleData() {
 
       const last = data.candles[data.candles.length - 1];
       const curPriceEl = document.getElementById('chart-current-price');
-      if (curPriceEl && last) curPriceEl.textContent = `${last.close.toFixed(2)}`;
+      if (curPriceEl && last) curPriceEl.textContent = `$${last.close.toFixed(2)}`;
     }
   } catch (err) {
     console.warn('Error cargando velas:', err);
@@ -1837,10 +1893,10 @@ async function loadChartCandleData() {
 function updateChartMarkers() {
   if (!state.candleSeries) return;
   let markers = state.chartMarkers || [];
-  if (state.chartBotFilter !== 'ALL') {
+  if (state.chartBotFilter && state.chartBotFilter !== 'ALL') {
     markers = markers.filter(m => m.text?.includes(state.chartBotFilter));
   }
-  state.candleSeries.setMarkers(markers);
+  setSeriesMarkersCompat(state.candleSeries, markers, state, 'chartMarkersPrimitive');
   const countEl = document.getElementById('chart-markers-count');
   if (countEl) countEl.textContent = `${markers.length} Ejecuciones`;
 }
@@ -1853,18 +1909,137 @@ function setChartTimeframe(tf) {
   loadChartCandleData();
 }
 
-function onChartBotFilterChange() {
+async function onChartBotFilterChange() {
   const sel = document.getElementById('chart-bot-selector');
   if (sel) state.chartBotFilter = sel.value;
-  updateChartMarkers();
+  await loadChartCandleData();
 }
 
 function updateChartRealtimeCandle(candle) {
   if (state.candleSeries && candle) {
     state.candleSeries.update(candle);
     const curPriceEl = document.getElementById('chart-current-price');
-    if (curPriceEl) curPriceEl.textContent = `${candle.close.toFixed(2)}`;
+    if (curPriceEl) curPriceEl.textContent = `$${candle.close.toFixed(2)}`;
   }
+}
+
+async function renderMultiBotCharts() {
+  const grid = document.getElementById('multi-bot-charts-grid');
+  if (!grid || !window.LightweightCharts) return;
+
+  if (!state.bots || !state.bots.length) {
+    grid.innerHTML = '<div class="empty-state" style="padding: 20px; color: #8B90A0; grid-column: 1 / -1; text-align: center;">No hay bots configurados para mostrar en la cuadrícula.</div>';
+    return;
+  }
+
+  state.miniBotCharts = state.miniBotCharts || {};
+
+  let html = '';
+  state.bots.forEach(bot => {
+    html += `
+      <div class="bot-chart-card" id="bot-chart-card-${bot.id}">
+        <div class="bot-chart-card-header">
+          <div class="bot-chart-meta">
+            <span class="bot-chart-name">${escapeHtml(bot.name)}</span>
+            <span class="bot-chart-symbol-badge" id="bot-symbol-badge-${bot.id}">MNQ</span>
+          </div>
+          <span class="badge-status-dot active" title="Activo"></span>
+        </div>
+        <div class="bot-chart-container" id="mini-chart-${bot.id}"></div>
+        <div class="bot-chart-footer">
+          <span>Último: <strong id="mini-price-${bot.id}" class="text-neon">--</strong></span>
+          <span>Estrategia: ${escapeHtml(bot.strategy || 'ICT')}</span>
+        </div>
+      </div>
+    `;
+  });
+  grid.innerHTML = html;
+
+  for (const bot of state.bots) {
+    const el = document.getElementById(`mini-chart-${bot.id}`);
+    if (!el) continue;
+
+    if (state.miniBotCharts[bot.id]) {
+      try { state.miniBotCharts[bot.id].chart.remove(); } catch (e) {}
+      delete state.miniBotCharts[bot.id];
+    }
+
+    const miniChart = LightweightCharts.createChart(el, {
+      width: el.clientWidth > 0 ? el.clientWidth : 320,
+      height: 200,
+      layout: {
+        background: { color: '#07090C' },
+        textColor: '#8B90A0'
+      },
+      grid: {
+        vertLines: { color: '#13161F' },
+        horzLines: { color: '#13161F' }
+      },
+      rightPriceScale: {
+        borderColor: '#1F2433',
+        scaleMargins: { top: 0.1, bottom: 0.2 }
+      },
+      timeScale: {
+        borderColor: '#1F2433',
+        timeVisible: true,
+        secondsVisible: false
+      }
+    });
+
+    const series = createCandleSeriesCompat(miniChart, {
+      upColor: '#10B981',
+      downColor: '#EF4444',
+      borderUpColor: '#10B981',
+      borderDownColor: '#EF4444',
+      wickUpColor: '#10B981',
+      wickDownColor: '#EF4444'
+    });
+
+    state.miniBotCharts[bot.id] = { chart: miniChart, series };
+
+    try {
+      const resp = await apiFetch(`/api/bot/${bot.id}/candles?limit=60`);
+      if (resp.ok) {
+        const payload = await resp.json();
+        if (payload.candles && payload.candles.length) {
+          series.setData(payload.candles);
+          miniChart.timeScale().fitContent();
+          const last = payload.candles[payload.candles.length - 1];
+          const prEl = document.getElementById(`mini-price-${bot.id}`);
+          if (prEl && last) prEl.textContent = `$${last.close.toFixed(2)}`;
+        }
+        const symEl = document.getElementById(`bot-symbol-badge-${bot.id}`);
+        if (symEl && payload.symbol) symEl.textContent = payload.symbol;
+      }
+    } catch (e) {
+      console.warn(`Error cargando gráfico mini para ${bot.id}:`, e);
+    }
+  }
+}
+
+// Auto-refresh de gráficos cada 60s
+if (!window._chartRefreshTimer) {
+  window._chartRefreshTimer = setInterval(() => {
+    if (state.activeTab === 'charts') {
+      loadChartCandleData();
+      if (state.miniBotCharts) {
+        Object.entries(state.miniBotCharts).forEach(async ([botId, item]) => {
+          try {
+            const resp = await apiFetch(`/api/bot/${botId}/candles?limit=60`);
+            if (resp.ok) {
+              const payload = await resp.json();
+              if (payload.candles && payload.candles.length && item.series) {
+                item.series.setData(payload.candles);
+                const last = payload.candles[payload.candles.length - 1];
+                const prEl = document.getElementById(`mini-price-${botId}`);
+                if (prEl && last) prEl.textContent = `$${last.close.toFixed(2)}`;
+              }
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  }, 60000);
 }
 
 // ======================================================================
@@ -2273,6 +2448,7 @@ async function initModalBotChart(botId) {
     try { state.modalChartInstance.remove(); } catch (e) {}
     state.modalChartInstance = null;
     state.modalCandleSeries = null;
+    state.modalMarkersPrimitive = null;
   }
 
   container.innerHTML = '';
@@ -2300,7 +2476,7 @@ async function initModalBotChart(botId) {
     }
   });
 
-  const candleSeries = chart.addCandlestickSeries({
+  const candleSeries = createCandleSeriesCompat(chart, {
     upColor: '#10B981',
     downColor: '#EF4444',
     borderUpColor: '#10B981',
@@ -2311,6 +2487,7 @@ async function initModalBotChart(botId) {
 
   state.modalChartInstance = chart;
   state.modalCandleSeries = candleSeries;
+  state.modalMarkersPrimitive = null;
 
   try {
     const resp = await apiFetch(`/api/bots/${botId}/chart`);
@@ -2323,7 +2500,7 @@ async function initModalBotChart(botId) {
     }
 
     if (data.markers && data.markers.length) {
-      candleSeries.setMarkers(data.markers);
+      setSeriesMarkersCompat(candleSeries, data.markers, state, 'modalMarkersPrimitive');
     }
 
     // Telemetría de Posición en Vivo y Líneas de Precio

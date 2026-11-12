@@ -37,7 +37,7 @@ async function waitForServer(child, baseUrl) {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  throw new Error(`Node server did not start: ${lastError || child.output}`);
+  throw new Error(`Node server did not start: ${lastError}\nServer output:\n${child.output}`);
 }
 
 function receiveWebSocketMessage(port, token) {
@@ -78,6 +78,9 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   fs.copyFileSync(path.join(projectRoot, 'market_analysis.js'), path.join(tempRoot, 'market_analysis.js'));
   fs.cpSync(path.join(projectRoot, 'migrations'), path.join(tempRoot, 'migrations'), { recursive: true });
   fs.cpSync(path.join(projectRoot, 'public'), path.join(tempRoot, 'public'), { recursive: true });
+  if (fs.existsSync(path.join(projectRoot, 'src'))) {
+    fs.cpSync(path.join(projectRoot, 'src'), path.join(tempRoot, 'src'), { recursive: true });
+  }
   fs.writeFileSync(path.join(tempRoot, 'config.json'), JSON.stringify({
     auth: { username: 'ignored-config-user', password: 'ignored-config-password', role: 'ADMIN_TRADER' },
     server: { webhook_token: 'ignored-config-webhook-secret' },
@@ -307,6 +310,24 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   assert.equal(analysisStatus.data_type, 'HISTORICAL');
   const analysisHealth = await fetch(`${baseUrl}/healthz`).then(response => response.json());
   assert.equal(analysisHealth.components.market_data, 'historical_csv');
+
+  const candlesResponse = await fetch(`${baseUrl}/api/candles?symbol=MNQ&limit=10`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  assert.equal(candlesResponse.status, 200);
+  const candlesPayload = await candlesResponse.json();
+  assert.equal(candlesPayload.symbol, 'MNQ');
+  assert.ok(Array.isArray(candlesPayload.candles));
+  assert.ok(candlesPayload.candles.length > 0);
+
+  const botCandlesResponse = await fetch(`${baseUrl}/api/bot/bot_1/candles?limit=10`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  assert.equal(botCandlesResponse.status, 200);
+  const botCandlesPayload = await botCandlesResponse.json();
+  assert.equal(botCandlesPayload.botId, 'bot_1');
+  assert.ok(Array.isArray(botCandlesPayload.candles));
+  assert.ok(botCandlesPayload.candles.length > 0);
 
   const invalidCsvResponse = await fetch(`${baseUrl}/api/analysis/csv?symbol=NQ&timeframe=1m`, {
     method: 'POST',
