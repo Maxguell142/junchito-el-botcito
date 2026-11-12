@@ -1,9 +1,9 @@
 ---
 title: Velas Externas para Gráficos y Fallback Sintético
 category: connectors
-tags: [market-data, real-time, lightweight-charts, candles, finnhub, yahoo, alphavantage]
+tags: [market-data, external-data, synthetic-fallback, lightweight-charts, candles, finnhub, yahoo, alphavantage]
 last_updated: 2026-11-11
-sources: [raw/system-specifications.md]
+sources: [src/marketData.js, server.js, public/app.js, tests/marketData.test.js]
 ---
 
 # Velas Externas para Gráficos y Fallback Sintético

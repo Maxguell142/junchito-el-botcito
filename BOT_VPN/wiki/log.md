@@ -136,3 +136,16 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - **Soporte de Redimensionamiento Dinámico**: Incorporado `ResizeObserver` en el contenedor del gráfico principal para recalcular automáticamente el ancho al alternar pestañas o redimensionar paneles.
 - **Cuadrícula Multi-Bot y Conector de Datos**: Integrada sección de gráficos mini por bot con carga periódica de velas por bot (`/api/bot/:botId/candles`) y mapa de símbolos (`public/data/botSymbols.json`), alimentado por el módulo multi-fuente `src/marketData.js` (Finnhub, Yahoo, Alpha Vantage, Sintético).
 - **Testing y Documentación**: Creado `tests/marketData.test.js` y ampliadas aserciones en `tests/server.test.js`. Creada página `wiki/connectors/market-data-providers.md` e indexada en la wiki. 100% de tests unitarios pasando en verde.
+
+## [2026-11-11] audit | Estado integral del proyecto y límites del conector de velas
+- Revisado el commit de reglas/skill de contexto y los cambios locales actuales en backend Node, dashboard, pruebas, README y wiki.
+- Confirmado que el conector nuevo sirve velas para gráficos por separado del precio simulado usado por órdenes; la vista global sigue usando la serie simulada y la cuadrícula por bot consulta HTTP cada ~60 s.
+- Documentadas limitaciones detectadas: símbolos Finnhub/Alpha Vantage mapeados a ETFs, proveedor/fallback no visible con claridad, mapa de instrumentos estático, sin marcadores en la respuesta externa y prueba `synthetic` que puede intentar Yahoo/red.
+- Actualizadas la skill raíz y las notas del stack/proveedor para usar esta distinción en próximas tareas. No se ejecutó la suite durante esta auditoría.
+
+## [2026-11-11] fix | Actualización de precio a tiempo real (~28,245) y habilitación de cambio de temporalidad (1m, 5m, 15m, 1h, 1d)
+- **Diagnóstico de Precio Desactualizado (18k vs 28k)**: El endpoint `/api/market/candles` retornaba velas sintéticas simuladas fijadas a una base estática de 18,245.50 USD y el WebSocket sobrescribía el precio con dicho valor simulado. Finnhub arrojaba HTTP 403 Forbidden para series de velas en cuenta gratuita.
+- **Conmutación a Proveedor Nativo Real (Yahoo Finance)**: Configurado `MARKET_DATA_PROVIDER=yahoo` en `.env` para consultar directamente contratos oficiales de futuros CME (`MNQ=F`, `NQ=F`, `ES=F`) sin requerir API key ni cuotas restrictivas, obteniendo el precio real de mercado actual (~28,247 USD).
+- **Habilitación Total de Temporalidades**: Conectado `/api/market/candles` con `getCandles` soportando parámetros `tf` e `interval` (`1m`, `5m`, `15m`, `1h`, `1d`). Ajustados los rangos de consulta de Yahoo para garantizar densidad de velas en todas las resoluciones.
+- **Sincronización de WebSocket y Tickers**: El precio de referencia del servidor y los tickers de la interfaz se sincronizan con las cotizaciones reales de mercado, actualizándose tanto en el header superior como en la leyenda OHLC.
+- **Validación Automatizada**: 100% de la suite de pruebas unitarias e integración en verde (10/10 tests).

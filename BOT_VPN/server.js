@@ -332,7 +332,7 @@ function loadConfig() {
 }
 loadConfig();
 
-let marketPrice = 18245.50;
+let marketPrice = 28245.50;
 
 // ======================================================================
 // 1. MOTOR DE VELAS DE MERCADO (CME MNQ) & MARCADORES
@@ -343,7 +343,7 @@ const chartExecutionMarkers = [];
 
 function initMarketCandles() {
   const nowSec = Math.floor(Date.now() / 1000);
-  let basePrice = 18230.00;
+  let basePrice = 28240.00;
   for (let i = 120; i >= 1; i--) {
     const time = nowSec - (i * 60);
     const candleDelta = (Math.sin(i / 5) * 4) + ((Math.random() - 0.48) * 3);
@@ -375,6 +375,27 @@ function initMarketCandles() {
   }
 }
 initMarketCandles();
+
+// Sincronización asíncrona con el proveedor de mercado en tiempo real
+getCandles('MNQ', '1m', 120).then(res => {
+  if (res.candles && res.candles.length) {
+    marketCandles.length = 0;
+    marketCandles.push(...res.candles);
+    marketPrice = res.candles[res.candles.length - 1].close;
+  }
+}).catch(err => {
+  console.warn('[MARKET_DATA] Fallback a velas locales:', err.message);
+});
+
+// Sincronización periódica de precio real cada 30 segundos
+setInterval(async () => {
+  try {
+    const data = await getCandles('MNQ', '1m', 5);
+    if (data.candles && data.candles.length) {
+      marketPrice = data.candles[data.candles.length - 1].close;
+    }
+  } catch (e) {}
+}, 30000);
 
 function updateCandleOnTick(price) {
   const nowSec = Math.floor(Date.now() / 1000);
@@ -1834,7 +1855,7 @@ app.get('/api/vpn/proxies', (req, res) => {
 });
 
 // Telemetría de Velas y Operaciones Específicas por Bot (Modal de Inspección)
-app.get('/api/bots/:id/chart', (req, res) => {
+app.get('/api/bots/:id/chart', async (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
@@ -1858,13 +1879,33 @@ app.get('/api/bots/:id/chart', (req, res) => {
     floating_pnl: 0
   };
 
+  let symbolMap = { bot_1: 'MNQ', bot_2: 'NQ', bot_3: 'ES', default: 'MNQ' };
+  try {
+    const symbolsPath = path.join(__dirname, 'public', 'data', 'botSymbols.json');
+    if (fs.existsSync(symbolsPath)) {
+      symbolMap = JSON.parse(fs.readFileSync(symbolsPath, 'utf-8'));
+    }
+  } catch (err) {}
+
+  const symbol = symbolMap[bot.id] || symbolMap.default || 'MNQ';
+  let candles = marketCandles;
+  let botPrice = marketPrice;
+
+  try {
+    const candleData = await getCandles(symbol, '1m', 100);
+    if (candleData.candles && candleData.candles.length) {
+      candles = candleData.candles;
+      botPrice = candles[candles.length - 1].close;
+    }
+  } catch (e) {}
+
   res.json({
     bot_id: bot.id,
-    symbol: 'MNQ (Micro E-mini Nasdaq)',
-    candles: marketCandles,
+    symbol: `${symbol} (CME Futures)`,
+    candles,
     markers: botMarkers,
     position,
-    last_price: marketPrice
+    last_price: botPrice
   });
 });
 
@@ -1910,15 +1951,35 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
   });
 });
 
-app.get('/api/market/candles', (req, res) => {
-  const timeframe = req.query.tf || '1m';
-  res.json({
-    symbol: 'MNQ (Micro E-mini Nasdaq)',
-    timeframe,
-    candles: marketCandles,
-    markers: chartExecutionMarkers,
-    last_price: marketPrice
-  });
+app.get('/api/market/candles', async (req, res) => {
+  try {
+    const timeframe = req.query.tf || req.query.interval || '1m';
+    const limit = Number(req.query.limit) || 120;
+    const provider = req.query.provider;
+
+    const data = await getCandles('MNQ', timeframe, limit, provider);
+    if (data.candles && data.candles.length) {
+      marketPrice = data.candles[data.candles.length - 1].close;
+    }
+
+    res.json({
+      symbol: 'MNQ (Micro E-mini Nasdaq)',
+      timeframe,
+      candles: data.candles,
+      markers: chartExecutionMarkers,
+      last_price: marketPrice,
+      provider: data.provider
+    });
+  } catch (err) {
+    console.error('[ERROR] /api/market/candles:', err.message);
+    res.json({
+      symbol: 'MNQ (Micro E-mini Nasdaq)',
+      timeframe: req.query.tf || '1m',
+      candles: marketCandles,
+      markers: chartExecutionMarkers,
+      last_price: marketPrice
+    });
+  }
 });
 
 // Endpoints de Datos de Mercado en Tiempo Real (Yahoo / Finnhub / Alpha Vantage)

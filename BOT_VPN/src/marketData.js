@@ -66,11 +66,12 @@ async function fetchYahoo(symbol, interval = '1m', limit = 100) {
   const validIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '1h', '1d'];
   const safeInterval = validIntervals.includes(interval) ? interval : '1m';
 
-  // Seleccionar rango adecuado para el limit pedido
-  let range = '1d';
-  if (safeInterval === '1d') range = '3mo';
+  // Seleccionar rango adecuado para el interval pedido
+  let range = '2d';
+  if (safeInterval === '1d') range = '1y';
   else if (safeInterval === '1h' || safeInterval === '60m') range = '1mo';
-  else if (limit > 350) range = '5d';
+  else if (safeInterval === '15m' || safeInterval === '30m' || safeInterval === '5m') range = '5d';
+  else if (limit > 150) range = '5d';
 
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSymbol)}?interval=${safeInterval}&range=${range}`;
 
@@ -220,10 +221,10 @@ async function fetchAlphaVantage(symbol, interval = '1m', limit = 100) {
  */
 function generateSyntheticCandles(symbol, interval = '1m', limit = 100) {
   const clean = String(symbol || 'MNQ').toUpperCase();
-  let basePrice = 18245.50;
-  if (clean.includes('ES') || clean === 'SPY') basePrice = 5850.25;
-  else if (clean === 'QQQ') basePrice = 512.80;
-  else if (clean === 'AAPL') basePrice = 226.40;
+  let basePrice = 28245.50;
+  if (clean.includes('ES') || clean === 'SPY') basePrice = 7610.25;
+  else if (clean === 'QQQ') basePrice = 585.50;
+  else if (clean === 'AAPL') basePrice = 245.00;
 
   const seconds = intervalToSeconds(interval);
   const now = Math.floor(Date.now() / 1000);

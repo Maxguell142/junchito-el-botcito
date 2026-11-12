@@ -21,7 +21,9 @@ const state = {
   riskPolicy: null,
   selectedBotId: null,
   activeFilter: 'ALL',
-  marketPrice: 18245.50,
+  marketPrice: 28245.50,
+  chartTimeframe: '1m',
+  chartBotFilter: 'ALL',
   wsConnected: false,
   analysisResults: [],
   historicalTrades: []
@@ -1883,7 +1885,13 @@ async function loadChartCandleData() {
 
       const last = data.candles[data.candles.length - 1];
       const curPriceEl = document.getElementById('chart-current-price');
-      if (curPriceEl && last) curPriceEl.textContent = `$${last.close.toFixed(2)}`;
+      if (curPriceEl && last) {
+        curPriceEl.textContent = `$${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      const tickerEl = document.getElementById('market-price-val');
+      if (tickerEl && last) {
+        tickerEl.textContent = last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
     }
   } catch (err) {
     console.warn('Error cargando velas:', err);
@@ -1901,12 +1909,12 @@ function updateChartMarkers() {
   if (countEl) countEl.textContent = `${markers.length} Ejecuciones`;
 }
 
-function setChartTimeframe(tf) {
+async function setChartTimeframe(tf) {
   state.chartTimeframe = tf;
   document.querySelectorAll('.timeframe-buttons .btn-tf').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${tf}'`));
   });
-  loadChartCandleData();
+  await loadChartCandleData();
 }
 
 async function onChartBotFilterChange() {

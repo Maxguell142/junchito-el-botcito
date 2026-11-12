@@ -96,7 +96,7 @@ Obsidian usa `BOT_VPN/` como bóveda y su espacio de trabajo queda apuntando a `
 - El mapa `public/data/botSymbols.json` contiene asignaciones estáticas (`bot_1`/`bot_2`/`bot_3`) y usa MNQ como default; no obtiene necesariamente el instrumento configurado en la base para bots personalizados.
 - La prueba de `getCandles(..., 'synthetic')` no fuerza hoy una ruta sintética: un proveedor desconocido intenta Yahoo. Por eso esa prueba puede depender de red hasta que se corrija.
 - Sus rutas y métodos no son totalmente intercambiables. Consulta [[README|README operativo]] antes de integrar un cliente con ambos.
-- El modo de ejecución documentado y declarado por el código es `SIMULATED`. No se debe presentar como ejecución real con broker.
+- El modo de ejecución documentado y declarado por el código es `SIMULATED`. La consulta externa de velas para gráficos no cambia el precio simulado usado por órdenes y no se debe presentar como ejecución real con broker.
 - Tradovate, Rithmic, reglas de prop firms y varias estrategias también aparecen en documentos de conocimiento; su documentación por sí sola no acredita una conexión o ejecución real.
 - `GET /healthz` en cada servidor sirve como comprobación básica de disponibilidad, no como prueba de que cada función externa esté integrada.
 
