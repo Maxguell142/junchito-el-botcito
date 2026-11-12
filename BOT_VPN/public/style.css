@@ -97,10 +97,19 @@ body {
 
 .login-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.brand-logo-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.45));
+  margin-bottom: 2px;
 }
 
 .login-brand-text h1 {
@@ -216,6 +225,13 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.landing-header-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4));
 }
 
 .logo-icon {
@@ -2707,13 +2723,56 @@ input:focus, select:focus, textarea:focus {
   gap: 4px;
 }
 
-/* Cabecera de la Marca con Orbe Gradiente estilo Lucid */
+/* Cabecera de la Marca con Logo Superior y Orbe Gradiente estilo Lucid */
+.sidebar-brand-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 14px 12px 14px;
+  border-bottom: 1px solid var(--border-lucid);
+  gap: 10px;
+}
+
+.sidebar-logo-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+  user-select: none;
+}
+
+.sidebar-logo-trigger:hover {
+  transform: scale(1.08);
+}
+
+.sidebar-header-logo {
+  width: 52px;
+  height: auto;
+  max-height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
+}
+
+.lucid-sidebar.collapsed .sidebar-brand-wrapper {
+  padding: 14px 8px;
+}
+
+.lucid-sidebar.collapsed .sidebar-header-logo {
+  width: 40px;
+  height: 40px;
+}
+
+.lucid-sidebar.collapsed .sidebar-brand {
+  display: none !important;
+}
+
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 18px 14px 18px;
-  border-bottom: 1px solid var(--border-lucid);
+  cursor: pointer;
+  width: 100%;
 }
 
 .lucid-orb {

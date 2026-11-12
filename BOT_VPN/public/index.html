@@ -20,7 +20,7 @@
     <header class="public-landing-header">
       <div class="brand">
         <div class="brand-logo">
-          <span class="logo-icon">▲</span>
+          <img src="/static/logo.png" class="landing-header-logo" alt="QUANTUM FX Logo">
           <div class="brand-text">
             <span class="brand-title">QUANTUM FX</span>
             <span class="brand-subtitle">ORQUESTACIÓN MULTI-BOT // CME MNQ FUTURES</span>
@@ -297,14 +297,19 @@
            BARRA LATERAL VERTICAL ESTILO LUCID TRADING (PARED IZQUIERDA)
            ================================================================== -->
       <aside class="lucid-sidebar" id="app-sidebar" aria-label="Navegación Lateral Lucid">
-        <!-- Encabezado de Marca con Orbe Gradiente -->
-        <div class="sidebar-brand">
-          <div class="lucid-orb" title="QUANTUM FX Engine">
-            <div class="lucid-orb-inner"></div>
+        <!-- Encabezado de Marca con Logo Superior Interactivo y Orbe -->
+        <div class="sidebar-brand-wrapper">
+          <div class="sidebar-logo-trigger" onclick="toggleSidebarCollapse()" title="Haz clic para abrir o cerrar las opciones de navegación">
+            <img src="/static/logo.png" class="sidebar-header-logo" alt="QUANTUM FX Logo">
           </div>
-          <div class="sidebar-brand-text">
-            <span class="sidebar-brand-title">QUANTUM FX</span>
-            <span class="sidebar-brand-sub">MULTI-BOT TRADING</span>
+          <div class="sidebar-brand" onclick="toggleSidebarCollapse()" title="Haz clic para alternar barra lateral">
+            <div class="lucid-orb" title="QUANTUM FX Engine">
+              <div class="lucid-orb-inner"></div>
+            </div>
+            <div class="sidebar-brand-text">
+              <span class="sidebar-brand-title">QUANTUM FX</span>
+              <span class="sidebar-brand-sub">MULTI-BOT TRADING</span>
+            </div>
           </div>
         </div>
 
@@ -370,30 +375,8 @@
           </button>
         </nav>
 
-        <!-- Footer de Barra Lateral Estilo Lucid Trading (Grid de Mini Utilidades) -->
+        <!-- Footer de Barra Lateral -->
         <div class="sidebar-footer">
-          <div class="sidebar-footer-grid">
-            <button class="sidebar-util-btn" id="audio-toggle-btn" onclick="toggleAudioMute()" title="Alertas Sonoras Sintetizadas (Web Audio API)">
-              <span id="audio-icon">🔊</span>
-              <span class="util-label" id="audio-label">Audio</span>
-            </button>
-            <button class="sidebar-util-btn" onclick="goToLandingScreen()" title="Ver Guía de Arquitectura y Pilares">
-              <span>🏠</span>
-              <span class="util-label">Guía</span>
-            </button>
-            <button class="sidebar-util-btn" onclick="toggleSidebarDock()" id="btn-toggle-dock" title="Alternar Barra a Pared Izquierda o Derecha">
-              <span id="dock-icon">⇄</span>
-              <span class="util-label" id="dock-label">Pared</span>
-            </button>
-          </div>
-
-          <div class="sidebar-footer-row2">
-            <button class="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" id="btn-toggle-collapse" title="Contraer o Expandir Barra Lateral">
-              <span class="collapse-icon">◀▶</span>
-              <span class="collapse-label">COLLAPSE</span>
-            </button>
-          </div>
-
           <button class="sidebar-logout-btn" onclick="logoutUser()" title="Cerrar Sesión Segura">
             <span class="logout-icon">⏻</span>
             <span class="logout-label">Log Out</span>
@@ -410,10 +393,6 @@
         <header class="workspace-topbar" id="main-header">
           <!-- Izquierda: Live Ticker SIM-MNQ + Status WebSocket -->
           <div class="topbar-left-zone">
-            <div class="demo-mode-badge" title="Entorno Sandbox 100% Simulado // 0% Riesgo Real">
-              <span class="demo-mode-dot"></span>
-              <span class="demo-mode-text">MODO DEMO OPERATIVO</span>
-            </div>
             <div class="market-badge" title="Precio de demostración simulado MNQ (CME)">
               <span class="pulse-dot"></span>
               <span class="ticker-label">SIM-MNQ</span>
@@ -445,7 +424,7 @@
             </div>
           </div>
 
-          <!-- Derecha: Botones de Pánico y Banner Diamante estilo Lucid (V8_NAHUEL) -->
+          <!-- Derecha: Botones de Pánico y Perfil de Operador -->
           <div class="topbar-right-zone">
             <div class="emergency-controls-group">
               <button class="btn btn-emergency-flatten" onclick="promptFlattenAll()" title="Cierra inmediatamente todas las posiciones abiertas en todas las cuentas">
@@ -456,8 +435,8 @@
               </button>
             </div>
 
-            <!-- Banner de Operador Diamante Estilo Lucid Trading -->
-            <div class="lucid-diamond-banner" title="Operador Master Institucional">
+            <!-- Perfil de Operador Institucional -->
+            <div class="lucid-diamond-banner" title="Operador Institucional">
               <div class="diamond-avatar-wrap">
                 <div class="diamond-avatar" id="header-user-avatar">AD</div>
                 <span class="diamond-badge-crown">👑</span>
@@ -465,14 +444,6 @@
               <div class="diamond-info">
                 <div class="diamond-name-row">
                   <span class="diamond-handle" id="header-user-name">V8_NAHUEL</span>
-                  <span class="diamond-tier-pill">LV 65</span>
-                </div>
-                <div class="diamond-kpis">
-                  <div class="diamond-level-bar">
-                    <div class="diamond-level-fill"></div>
-                  </div>
-                  <span class="diamond-stat">💎 6,000</span>
-                  <span class="diamond-stat">⚡ 2,250</span>
                 </div>
               </div>
             </div>
