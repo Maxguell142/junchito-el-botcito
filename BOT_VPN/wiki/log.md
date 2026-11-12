@@ -149,3 +149,13 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - **Habilitación Total de Temporalidades**: Conectado `/api/market/candles` con `getCandles` soportando parámetros `tf` e `interval` (`1m`, `5m`, `15m`, `1h`, `1d`). Ajustados los rangos de consulta de Yahoo para garantizar densidad de velas en todas las resoluciones.
 - **Sincronización de WebSocket y Tickers**: El precio de referencia del servidor y los tickers de la interfaz se sincronizan con las cotizaciones reales de mercado, actualizándose tanto en el header superior como en la leyenda OHLC.
 - **Validación Automatizada**: 100% de la suite de pruebas unitarias e integración en verde (10/10 tests).
+
+## [2026-11-11] feat | CRUD completo de Bots/Titulares/Cuentas, edición de bots, barra dinámica de meta y Ledger en tiempo real
+- **Eliminación de Franja Estática**: Removida la franja superior de 4 garantías fijas (`.lucid-value-strip`).
+- **Logo Oficial Interactivo**: Reemplazada la pelota/orbe por el logotipo oficial de QUANTUM FX en la cabecera lateral; hacer clic sobre el logo abre/cierra la barra lateral de navegación.
+- **CRUD Completo y Seguro**: Implementados endpoints `DELETE /api/bots/:id`, `DELETE /api/identities/:id` y `DELETE /api/bots/:botId/accounts/:accountId` con confirmación modal en frontend y sincronización atómica en SQLite.
+- **Edición Integral de Bots (`PUT /api/bots/:id`)**: Modal y backend para editar nombre, estrategia, titular KYC, URL proxy/VPN, meta de ganancia objetivo (`consistency_target`, ej. $1500) y stop diario (`daily_loss_limit`, ej. $1000). Circuit breaker pausa automáticamente el bot al tocar cualquiera de los dos límites.
+- **Barra de Progreso Dinámica de Consistencia**: La barra de cada tarjeta de bot ahora calcula y refleja el porcentaje de progreso real hacia la meta de ganancia configurada por el usuario (ej. $1500), con indicador visual de objetivo completado (`target-reached`).
+- **Finanzas & Ledger Conectados en Tiempo Real**: El resumen y desglose por titular en `/api/ledger/summary` agrega en vivo el PnL neto de trading de los bots asignados, reflejando el reparto del 20% a titulares y el beneficio neto del operador en tiempo real.
+- **Preservación de TradingView Webhook**: Endpoint y panel de TradingView Webhook mantenidos intactos según especificación.
+- **Suite de Pruebas**: Creado `tests/crud_and_ledger.test.js` probando el flujo completo de CRUD y Ledger. 12/12 tests pasando en verde.

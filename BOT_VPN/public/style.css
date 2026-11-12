@@ -815,12 +815,35 @@ body {
 
 .progress-fill {
   height: 100%;
-  background-color: var(--color-neon);
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--color-neon) 0%, #38BDF8 100%);
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .progress-fill.warn {
   background-color: var(--color-warn);
+}
+
+.progress-fill.target-reached {
+  background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.6);
+}
+
+.target-status-note {
+  font-size: 0.72rem;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.btn-delete-bot {
+  color: #EF4444 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+.btn-delete-bot:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: #EF4444 !important;
 }
 
 /* Acciones de la Tarjeta */
@@ -2723,56 +2746,49 @@ input:focus, select:focus, textarea:focus {
   gap: 4px;
 }
 
-/* Cabecera de la Marca con Logo Superior y Orbe Gradiente estilo Lucid */
-.sidebar-brand-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 14px 12px 14px;
-  border-bottom: 1px solid var(--border-lucid);
-  gap: 10px;
-}
-
-.sidebar-logo-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
-  user-select: none;
-}
-
-.sidebar-logo-trigger:hover {
-  transform: scale(1.08);
-}
-
-.sidebar-header-logo {
-  width: 52px;
-  height: auto;
-  max-height: 52px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
-}
-
-.lucid-sidebar.collapsed .sidebar-brand-wrapper {
-  padding: 14px 8px;
-}
-
-.lucid-sidebar.collapsed .sidebar-header-logo {
-  width: 40px;
-  height: 40px;
-}
-
-.lucid-sidebar.collapsed .sidebar-brand {
-  display: none !important;
-}
-
+/* Cabecera de la Marca con Logo Oficial Interactivo (Reemplaza la antigua pelota) */
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 16px 14px 14px 14px;
+  border-bottom: 1px solid var(--border-lucid);
   cursor: pointer;
   width: 100%;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-brand:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.sidebar-brand-logo {
+  width: 38px;
+  height: 38px;
+  max-width: 38px;
+  max-height: 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.45));
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-brand:hover .sidebar-brand-logo {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.75));
+}
+
+.lucid-sidebar.collapsed .sidebar-brand {
+  display: flex !important;
+  justify-content: center;
+  padding: 16px 0;
+  width: 100%;
+}
+
+.lucid-sidebar.collapsed .sidebar-brand-logo {
+  width: 38px;
+  height: 38px;
 }
 
 .lucid-orb {

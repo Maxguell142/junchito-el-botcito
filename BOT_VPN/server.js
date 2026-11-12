@@ -866,9 +866,6 @@ function getLedgerSummary(identityFilter = null) {
   });
 
   const titularSplitRate = 0.20;
-  const totalTitularShareAccrued = Number((totalGrossPayouts * titularSplitRate).toFixed(2));
-  const pendingToTitulares = Number((totalTitularShareAccrued - totalPaidToTitulares).toFixed(2));
-  const operatorNetProfit = Number((totalGrossPayouts - totalInvested - totalPaidToTitulares).toFixed(2));
 
   const identityBreakdown = identities.map(ident => {
     const identTxs = ledgerTransactions.filter(t => t.identity_id === ident.id);
@@ -880,7 +877,12 @@ function getLedgerSummary(identityFilter = null) {
       else if (t.type === 'PROP_FIRM_PAYOUT') gross += t.amount;
       else if (t.type === 'TITULAR_SPLIT_PAYOUT') paid += Math.abs(t.amount);
     });
-    const share = Number((gross * titularSplitRate).toFixed(2));
+
+    // Calcular ganancias en vivo generadas por los bots asignados a este titular
+    const identBots = bots.filter(b => b.identity_id === ident.id || (b.identity && b.identity.id === ident.id));
+    const liveTradingPnl = identBots.reduce((sum, b) => sum + (Number(b.net_pnl) || 0) + (Number(b.today_pnl) || 0), 0);
+    const effectiveGross = Number((gross + Math.max(0, liveTradingPnl)).toFixed(2));
+    const share = Number((effectiveGross * titularSplitRate).toFixed(2));
     const pending = Number((share - paid).toFixed(2));
     return {
       identity_id: ident.id,
@@ -888,7 +890,8 @@ function getLedgerSummary(identityFilter = null) {
       flag: ident.flag,
       country: ident.country,
       total_invested: inv,
-      gross_payouts: gross,
+      gross_payouts: effectiveGross,
+      live_trading_pnl: Number(liveTradingPnl.toFixed(2)),
       split_rate_pct: 20,
       share_accrued: share,
       paid_to_date: paid,
@@ -896,14 +899,21 @@ function getLedgerSummary(identityFilter = null) {
     };
   });
 
+  const totalLiveTradingPnl = bots.reduce((sum, b) => sum + (Number(b.net_pnl) || 0) + (Number(b.today_pnl) || 0), 0);
+  const effectiveTotalGross = Number((totalGrossPayouts + Math.max(0, totalLiveTradingPnl)).toFixed(2));
+  const effectiveTotalTitularShare = Number((effectiveTotalGross * titularSplitRate).toFixed(2));
+  const effectivePendingToTitulares = Number((effectiveTotalTitularShare - totalPaidToTitulares).toFixed(2));
+  const effectiveOperatorNetProfit = Number((effectiveTotalGross - totalInvested - totalPaidToTitulares).toFixed(2));
+
   return {
     summary: {
       total_invested: Number(totalInvested.toFixed(2)),
-      total_gross_payouts: Number(totalGrossPayouts.toFixed(2)),
-      total_titular_share: totalTitularShareAccrued,
+      total_gross_payouts: effectiveTotalGross,
+      live_trading_pnl: Number(totalLiveTradingPnl.toFixed(2)),
+      total_titular_share: effectiveTotalTitularShare,
       total_paid_to_titulares: Number(totalPaidToTitulares.toFixed(2)),
-      pending_to_titulares: pendingToTitulares,
-      operator_net_profit: operatorNetProfit,
+      pending_to_titulares: effectivePendingToTitulares,
+      operator_net_profit: effectiveOperatorNetProfit,
       default_split_pct: 20
     },
     identity_breakdown: identityBreakdown,
@@ -1439,6 +1449,29 @@ app.post('/api/identities', (req, res) => {
   res.status(201).json({ status: 'CREATED', identity: newIdent });
 });
 
+app.delete('/api/identities/:id', (req, res) => {
+  const identIndex = identities.findIndex(i => i.id === req.params.id);
+  if (identIndex === -1) {
+    return res.status(404).json({ detail: 'Identidad no encontrada' });
+  }
+  const deletedIdent = identities.splice(identIndex, 1)[0];
+  // Desvincular de cualquier bot que la tuviera asignada
+  bots.forEach(b => {
+    if (b.identity_id === req.params.id || (b.identity && b.identity.id === req.params.id)) {
+      b.identity_id = null;
+      b.identity = null;
+    }
+  });
+  saveConfigToDisk({
+    action: 'identity_deleted',
+    entity_type: 'identity',
+    entity_id: req.params.id,
+    details: { full_name: deletedIdent.full_name }
+  });
+  broadcastSnapshot();
+  res.json({ status: 'DELETED', identity_id: req.params.id });
+});
+
 // Verificación de Proxy
 app.post('/api/bots/:id/proxy-test', (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
@@ -1650,6 +1683,27 @@ app.post('/api/bots/:id/accounts', (req, res) => {
   });
 });
 
+app.delete('/api/bots/:botId/accounts/:accountId', (req, res) => {
+  const bot = bots.find(b => b.id === req.params.botId);
+  if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
+  const accIndex = (bot.accounts || []).findIndex(a => a.id === req.params.accountId);
+  if (accIndex === -1) {
+    return res.status(404).json({ detail: 'Cuenta no encontrada en este bot' });
+  }
+  const deletedAcc = bot.accounts.splice(accIndex, 1)[0];
+  bot.total_active_contracts = bot.accounts.reduce((s, a) => s + (a.active_contracts || 0), 0);
+  const now = new Date().toLocaleTimeString();
+  bot.logs.unshift({ timestamp: now, level: 'CONFIG', message: `Cuenta desvinculada: ${deletedAcc.custom_name}` });
+  saveConfigToDisk({
+    action: 'account_deleted',
+    entity_type: 'account',
+    entity_id: req.params.accountId,
+    details: { bot_id: bot.id, custom_name: deletedAcc.custom_name }
+  });
+  broadcastSnapshot();
+  res.json({ status: 'DELETED', bot_id: bot.id, account_id: req.params.accountId });
+});
+
 // Crear Bot con Titular (Soporte de Estrategias Personalizadas y Archivo)
 app.post('/api/bots', (req, res) => {
   const body = req.body || {};
@@ -1747,6 +1801,13 @@ app.post('/api/bots', (req, res) => {
     max_drawdown: 0.0,
     total_active_contracts: 0,
     execution_count: 0,
+    circuit_breaker: {
+      daily_loss_limit: Number(body.daily_loss_limit) || 1000.0,
+      consistency_target: Number(body.consistency_target) || 1500.0,
+      auto_lock_consistency: true,
+      pause_on_red_news: true,
+      status: 'NORMAL'
+    },
     logs: [
       {
         timestamp: new Date().toLocaleTimeString(),
@@ -1764,6 +1825,147 @@ app.post('/api/bots', (req, res) => {
   });
   broadcastSnapshot();
   res.status(201).json({ message: 'Bot creado', bot: newBot });
+});
+
+// Editar Bot existente (Nombre, estrategia, titular, VPN/proxy, límites de ganancia y pérdida)
+app.put('/api/bots/:id', (req, res) => {
+  const bot = bots.find(b => b.id === req.params.id);
+  if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
+
+  const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, jitter_ms, start_time, end_time } = req.body || {};
+
+  if (name !== undefined) {
+    if (typeof name !== 'string' || !name.trim() || name.length > 160) {
+      return res.status(400).json({ detail: 'Nombre inválido.' });
+    }
+    bot.name = name.trim();
+  }
+
+  if (strategy !== undefined && typeof strategy === 'string' && strategy.trim()) {
+    const s = strategy.trim();
+    if (!Object.hasOwn(STRATEGIES, s) && s.length <= 160) {
+      STRATEGIES[s] = s;
+    }
+    bot.strategy = s;
+    bot.strategy_description = `Estrategia ${s} optimizada para MNQ`;
+  }
+
+  if (identity_id !== undefined) {
+    if (!identity_id) {
+      bot.identity_id = null;
+      bot.identity = null;
+    } else {
+      const ident = identities.find(i => i.id === identity_id);
+      bot.identity_id = ident ? ident.id : null;
+      bot.identity = ident || null;
+    }
+  }
+
+  if (proxy_url !== undefined) {
+    if (proxy_url && proxy_url.trim()) {
+      let parsedProxy;
+      try {
+        parsedProxy = new URL(proxy_url.trim());
+      } catch {
+        return res.status(400).json({ detail: 'URL de proxy inválida.' });
+      }
+      if (!['socks5:', 'socks5h:'].includes(parsedProxy.protocol)
+        || parsedProxy.username || parsedProxy.password || parsedProxy.search || parsedProxy.hash) {
+        return res.status(400).json({ detail: 'El proxy SOCKS5 no debe incluir credenciales.' });
+      }
+      bot.proxy_url = proxy_url.trim();
+      bot.outbound_ip = parsedProxy.hostname || bot.outbound_ip;
+      bot.proxy_ip = parsedProxy.hostname || bot.proxy_ip;
+      bot.proxy_healthy = true;
+    } else {
+      bot.proxy_url = '';
+    }
+  }
+
+  if (!bot.circuit_breaker) {
+    bot.circuit_breaker = {
+      daily_loss_limit: 1000.0,
+      consistency_target: 1500.0,
+      auto_lock_consistency: true,
+      pause_on_red_news: true,
+      status: 'NORMAL'
+    };
+  }
+
+  if (consistency_target !== undefined) {
+    const ct = Number(consistency_target);
+    if (!isNaN(ct) && ct > 0) {
+      bot.circuit_breaker.consistency_target = ct;
+      if (bot.circuit_breaker.status === 'LOCKED_PROFIT' && (bot.today_pnl || 0) < ct) {
+        bot.circuit_breaker.status = 'NORMAL';
+      }
+    }
+  }
+
+  if (daily_loss_limit !== undefined) {
+    const dll = Number(daily_loss_limit);
+    if (!isNaN(dll) && dll > 0) {
+      bot.circuit_breaker.daily_loss_limit = dll;
+      if (bot.circuit_breaker.status === 'TRIPPED_STOP' && (bot.today_pnl || 0) > -dll) {
+        bot.circuit_breaker.status = 'NORMAL';
+      }
+    }
+  }
+
+  if (jitter_ms !== undefined) {
+    const j = Number(jitter_ms);
+    if (Number.isInteger(j) && j >= 0 && j <= 5000) {
+      bot.jitter_ms = j;
+    }
+  }
+
+  if (start_time !== undefined && isValidTime(start_time)) {
+    if (!bot.schedule) bot.schedule = { timezone: 'America/New_York' };
+    bot.schedule.start_time = start_time;
+  }
+  if (end_time !== undefined && isValidTime(end_time)) {
+    if (!bot.schedule) bot.schedule = { timezone: 'America/New_York' };
+    bot.schedule.end_time = end_time;
+  }
+
+  const now = new Date().toLocaleTimeString();
+  bot.logs.unshift({
+    timestamp: now,
+    level: 'CONFIG',
+    message: `Bot editado: ${bot.name} | Estrategia: ${bot.strategy} | Target Consistencia: +$${bot.circuit_breaker.consistency_target} | DLL: $${bot.circuit_breaker.daily_loss_limit}`
+  });
+
+  saveConfigToDisk({
+    action: 'bot_updated',
+    entity_type: 'bot',
+    entity_id: bot.id,
+    details: {
+      name: bot.name,
+      strategy: bot.strategy,
+      identity_id: bot.identity_id,
+      circuit_breaker: bot.circuit_breaker
+    }
+  });
+
+  broadcastSnapshot();
+  res.json({ message: 'Bot actualizado con éxito', bot });
+});
+
+// Eliminar Bot
+app.delete('/api/bots/:id', (req, res) => {
+  const botIndex = bots.findIndex(b => b.id === req.params.id);
+  if (botIndex === -1) {
+    return res.status(404).json({ detail: 'Bot no encontrado' });
+  }
+  const deletedBot = bots.splice(botIndex, 1)[0];
+  saveConfigToDisk({
+    action: 'bot_deleted',
+    entity_type: 'bot',
+    entity_id: req.params.id,
+    details: { name: deletedBot.name }
+  });
+  broadcastSnapshot();
+  res.json({ status: 'DELETED', bot_id: req.params.id });
 });
 
 // Endpoint de Verificación de Archivos de Estrategia Multilenguaje

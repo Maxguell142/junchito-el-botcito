@@ -297,19 +297,12 @@
            BARRA LATERAL VERTICAL ESTILO LUCID TRADING (PARED IZQUIERDA)
            ================================================================== -->
       <aside class="lucid-sidebar" id="app-sidebar" aria-label="Navegación Lateral Lucid">
-        <!-- Encabezado de Marca con Logo Superior Interactivo y Orbe -->
-        <div class="sidebar-brand-wrapper">
-          <div class="sidebar-logo-trigger" onclick="toggleSidebarCollapse()" title="Haz clic para abrir o cerrar las opciones de navegación">
-            <img src="/static/logo.png" class="sidebar-header-logo" alt="QUANTUM FX Logo">
-          </div>
-          <div class="sidebar-brand" onclick="toggleSidebarCollapse()" title="Haz clic para alternar barra lateral">
-            <div class="lucid-orb" title="QUANTUM FX Engine">
-              <div class="lucid-orb-inner"></div>
-            </div>
-            <div class="sidebar-brand-text">
-              <span class="sidebar-brand-title">QUANTUM FX</span>
-              <span class="sidebar-brand-sub">MULTI-BOT TRADING</span>
-            </div>
+        <!-- Encabezado de Marca con Logo Oficial Interactivo -->
+        <div class="sidebar-brand" onclick="toggleSidebarCollapse()" title="Haz clic para abrir o cerrar opciones de navegación" style="cursor: pointer;">
+          <img src="/static/logo.png" class="sidebar-brand-logo" alt="QUANTUM FX Logo">
+          <div class="sidebar-brand-text">
+            <span class="sidebar-brand-title">QUANTUM FX</span>
+            <span class="sidebar-brand-sub">MULTI-BOT TRADING</span>
           </div>
         </div>
 
@@ -456,25 +449,6 @@
 
         <!-- 1. VISTA DASHBOARD (BOTS GRID) -->
     <section class="tab-view active" id="view-dashboard">
-      <!-- Franja de Valores y Garantías Anti-Baneo estilo Lucid Trading -->
-      <div class="lucid-value-strip">
-        <div class="lucid-value-item">
-          <span class="lucid-check-circle">✔</span>
-          <span class="lucid-value-text">Aislamiento SOCKS5 Residencial (ISP US)</span>
-        </div>
-        <div class="lucid-value-item">
-          <span class="lucid-check-circle">✔</span>
-          <span class="lucid-value-text">Anti-Mirroring Jitter (50-350ms)</span>
-        </div>
-        <div class="lucid-value-item">
-          <span class="lucid-check-circle">✔</span>
-          <span class="lucid-value-text">Consistency Lock Target (+$150 USD)</span>
-        </div>
-        <div class="lucid-value-item">
-          <span class="lucid-check-circle">✔</span>
-          <span class="lucid-value-text">Trailing DLL Circuit Breaker Activo</span>
-        </div>
-      </div>
       <div class="section-header">
         <div class="section-title-wrap">
           <h2>Unidades de Ejecución & Titulares Asignados</h2>
@@ -594,6 +568,7 @@
                 <th>MÁX. CTOS</th>
                 <th>STOP DIARIO</th>
                 <th>ESTADO</th>
+                <th>ACCIONES</th>
               </tr>
             </thead>
             <tbody id="global-accounts-tbody">
@@ -1428,6 +1403,69 @@
     </div>
   </div>
 
+  <!-- Modal Editar Bot Configurado -->
+  <div class="modal-overlay" id="edit-bot-modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h2>✏️ Editar Configuración del Bot</h2>
+        <button class="modal-close" onclick="closeEditBotModal()">&times;</button>
+      </div>
+      <form class="modal-body form-body" onsubmit="submitEditBot(event)">
+        <input type="hidden" id="edit-bot-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre del Bot *</label>
+            <input type="text" id="edit-bot-name" required placeholder="Nombre descriptivo">
+          </div>
+          <div class="form-group">
+            <label>Estrategia Algorítmica</label>
+            <select id="edit-bot-strategy">
+              <option value="ICTStrategy">ICT Scalper (Silver Bullet / Fair Value Gap)</option>
+              <option value="SMTStrategy">SMT Divergence (NQ / ES Smart Money)</option>
+              <option value="OrderFlowStrategy">Order Flow Delta (Footprint & Cumulative Delta)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Titular Asignado (KYC)</label>
+            <select id="edit-bot-identity">
+              <option value="">-- Sin Titular Asignado --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Proxy SOCKS5 Residencial / VPN</label>
+            <input type="text" id="edit-bot-proxy" placeholder="socks5://198.51.100.22:1080">
+            <small class="form-hint">Aislamiento IP US dedicado sin credenciales.</small>
+          </div>
+        </div>
+
+        <div class="form-row form-row-3col">
+          <div class="form-group">
+            <label>Meta de Ganancia ($) [Consistencia]</label>
+            <input type="number" id="edit-bot-target" value="1500" min="50" step="50" required>
+            <small class="form-hint">Al alcanzar este profit, el bot se pausa automáticamente.</small>
+          </div>
+          <div class="form-group">
+            <label>Límite Pérdida Diaria ($) [DLL]</label>
+            <input type="number" id="edit-bot-dll" value="1000" min="50" step="50" required>
+            <small class="form-hint">Pausa inmediata si la pérdida del día toca este tope.</small>
+          </div>
+          <div class="form-group">
+            <label>Anti-Mirroring Jitter (ms)</label>
+            <input type="number" id="edit-bot-jitter" value="120" min="40" max="500">
+            <small class="form-hint">Desfase estocástico anti-copia.</small>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditBotModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- 5. Modal de Confirmación Institucional -->
   <div class="modal-overlay" id="confirm-modal">

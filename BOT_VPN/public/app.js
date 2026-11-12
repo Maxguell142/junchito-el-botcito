@@ -303,6 +303,7 @@ function switchTab(tabName) {
   if (tabName === 'cuentas') renderGlobalAccounts();
   if (tabName === 'vpn') renderVpnCenter();
   if (tabName === 'dashboard') renderBotGrid();
+  if (tabName === 'ledger') loadLedgerData();
   if (tabName === 'analysis') loadAnalysisStatus();
   if (tabName === 'noticias') loadEconomicNews();
     if (tabName === 'charts') {
@@ -430,6 +431,7 @@ function handleStateSnapshot(snapshot) {
   if (state.activeTab === 'titulares') renderIdentities();
   if (state.activeTab === 'cuentas') renderGlobalAccounts();
   if (state.activeTab === 'vpn') renderVpnCenter();
+  if (state.activeTab === 'ledger') loadLedgerData();
 
   // Actualizar modal de detalle si está abierto
   if (state.selectedBotId) {
@@ -528,11 +530,16 @@ function renderBotGrid() {
     const statusLabel = bot.status === 'ACTIVE' ? '🟢 ACTIVO' : '🟡 PAUSADO';
     const ident = bot.identity || { full_name: 'Sin Titular', flag: '👤', city: 'N/A', country: 'XX', kyc_status: 'PENDING' };
     const pnlClass = bot.net_pnl >= 0 ? 'text-neon' : 'text-danger';
-    const consistencyPct = Math.min(100, Math.max(0, bot.consistency_pct || 0));
-    const consistencyWarn = consistencyPct > 30 ? 'warn' : '';
 
     const isFav = (state.favoriteBots || []).includes(bot.id);
-    const cb = bot.circuit_breaker || { consistency_target: 150, auto_lock_consistency: true, daily_loss_limit: 1000 };
+    const cb = bot.circuit_breaker || { consistency_target: 1500, auto_lock_consistency: true, daily_loss_limit: 1000, status: 'NORMAL' };
+    const targetProfit = Number(cb.consistency_target) || 1500;
+    const currentProfit = (bot.today_pnl !== undefined && bot.today_pnl !== null) ? Number(bot.today_pnl) : (Number(bot.net_pnl) || 0);
+    const positiveProfit = Math.max(0, currentProfit);
+    const targetPct = Math.min(100, Math.max(0, Math.round((positiveProfit / targetProfit) * 100)));
+    const isTargetReached = currentProfit >= targetProfit;
+    const isLocked = bot.status === 'PAUSED' && cb.status === 'LOCKED_PROFIT';
+    const isTripped = bot.status === 'PAUSED' && cb.status === 'TRIPPED_STOP';
 
     return `
       <div class="bot-card" data-bot-id="${bot.id}">
@@ -587,7 +594,7 @@ function renderBotGrid() {
             </div>
             <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary);">
               <span>Lock:</span>
-              <span class="lucid-switch-badge">+${cb.consistency_target || 150} ON</span>
+              <span class="lucid-switch-badge">+${targetProfit} ON</span>
             </div>
           </div>
         </div>
@@ -612,15 +619,17 @@ function renderBotGrid() {
           </div>
         </div>
 
-        <!-- Monitor de Regla de Consistencia (30%) -->
+        <!-- Monitor de Meta de Consistencia / Ganancia Objetivo -->
         <div class="consistency-bar-wrap">
           <div class="consistency-header">
-            <span>Regla de Consistencia Diaria (Máx 30%)</span>
-            <span><strong>${consistencyPct}%</strong></span>
+            <span>Meta de Consistencia / Target ($${targetProfit.toLocaleString()})</span>
+            <span class="${isTargetReached ? 'text-neon font-bold' : ''}"><strong>${currentProfit >= 0 ? '+' : ''}$${currentProfit.toFixed(2)} / $${targetProfit.toFixed(0)} (${targetPct}%)</strong></span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill ${consistencyWarn}" style="width: ${consistencyPct}%;"></div>
+            <div class="progress-fill ${isTargetReached ? 'target-reached' : ''}" style="width: ${targetPct}%;"></div>
           </div>
+          ${isLocked ? `<div class="target-status-note text-neon">🎯 Target de $${targetProfit} alcanzado — Bot pausado por Consistencia</div>` : ''}
+          ${isTripped ? `<div class="target-status-note text-danger">🛑 Límite de pérdida ($${cb.daily_loss_limit}) alcanzado — Bot pausado por DLL</div>` : ''}
         </div>
 
         <!-- Acciones de la Tarjeta estilo Lucid Trading -->
@@ -632,9 +641,15 @@ function renderBotGrid() {
             <button class="btn btn-danger btn-xs" onclick="closeBotPositions('${bot.id}')">
               🔴 FLAT
             </button>
+            <button class="btn btn-outline btn-xs" onclick="openEditBotModal('${bot.id}')" title="Editar configuración del bot">
+              ✏️ Editar
+            </button>
+            <button class="btn btn-outline btn-xs btn-delete-bot" onclick="deleteBot('${bot.id}')" title="Eliminar este bot">
+              🗑️
+            </button>
           </div>
           <button class="btn btn-primary btn-xs" onclick="openDetailModal('${bot.id}')">
-            Detalles & Logs ➔
+            Detalles ➔
           </button>
         </div>
       </div>`;
@@ -692,8 +707,14 @@ function renderIdentities() {
           </div>
         </div>
 
-        <div style="font-size: 0.72rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+        <div style="font-size: 0.72rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); padding-top: 8px; margin-top: 6px;">
           <em>${escapeHtml(ident.notes || 'Sin notas adicionales')}</em>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05);">
+          <button class="btn btn-outline btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.4);" onclick="deleteIdentity('${ident.id}')" title="Eliminar este titular">
+            🗑️ Eliminar Titular
+          </button>
         </div>
       </div>`;
   }).join('');
@@ -715,7 +736,7 @@ function renderGlobalAccounts() {
   });
 
   if (allAccounts.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; padding: 32px; color: var(--text-secondary);">No hay cuentas vinculadas. Haz clic en <strong>+ Vincular Cuenta</strong> para agregar una.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; padding: 32px; color: var(--text-secondary);">No hay cuentas vinculadas. Haz clic en <strong>+ Vincular Cuenta</strong> para agregar una.</td></tr>`;
     return;
   }
 
@@ -746,6 +767,11 @@ function renderGlobalAccounts() {
         <td class="text-mono">${maxContracts}</td>
         <td class="text-mono">$${dailyLossLimit}</td>
         <td><span class="text-neon" style="font-size: 0.72rem;">● ${escapeHtml(acc.status)}</span></td>
+        <td>
+          <button class="btn btn-outline btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.4);" onclick="unlinkAccount('${acc.bot_id}', '${acc.id}')" title="Desvincular o eliminar cuenta">
+            🗑️ Desvincular
+          </button>
+        </td>
       </tr>`;
   }).join('');
 }
@@ -800,9 +826,14 @@ function renderVpnCenter() {
           </div>
         </div>
 
-        <button class="btn btn-outline btn-sm btn-block" onclick="testProxyPing('${bot.id}')">
-          ⚡ Probar Latencia y Verificar IP
-        </button>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="btn btn-outline btn-sm" style="flex: 1;" onclick="testProxyPing('${bot.id}')">
+            ⚡ Probar Latencia
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="openEditBotModal('${bot.id}')" title="Configurar o cambiar VPN / Proxy">
+            ⚙️ Configurar VPN
+          </button>
+        </div>
       </div>`;
   }).join('');
 }
@@ -1122,6 +1153,150 @@ async function submitCreateBot(event) {
     showToast(`Bot "${name}" creado exitosamente con estrategia "${strategy}".`, 'success');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
+  }
+}
+
+function openEditBotModal(botId) {
+  const bot = state.bots.find(b => b.id === botId);
+  if (!bot) return;
+
+  document.getElementById('edit-bot-id').value = bot.id;
+  document.getElementById('edit-bot-name').value = bot.name || '';
+
+  const stratSel = document.getElementById('edit-bot-strategy');
+  if (stratSel) {
+    let exists = false;
+    for (let i = 0; i < stratSel.options.length; i++) {
+      if (stratSel.options[i].value === bot.strategy) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists && bot.strategy) {
+      const opt = document.createElement('option');
+      opt.value = bot.strategy;
+      opt.textContent = bot.strategy;
+      stratSel.appendChild(opt);
+    }
+    stratSel.value = bot.strategy || 'ICTStrategy';
+  }
+
+  const identSel = document.getElementById('edit-bot-identity');
+  if (identSel) {
+    identSel.innerHTML = '<option value="">-- Sin Titular Asignado --</option>' +
+      state.identities.map(i => `<option value="${i.id}" ${bot.identity_id === i.id || (bot.identity && bot.identity.id === i.id) ? 'selected' : ''}>${escapeHtml(i.full_name)} (${i.flag || '👤'} ${escapeHtml(i.country || 'US')})</option>`).join('');
+  }
+
+  const proxyInput = document.getElementById('edit-bot-proxy');
+  if (proxyInput) proxyInput.value = bot.proxy_url || '';
+
+  const cb = bot.circuit_breaker || {};
+  const targetInput = document.getElementById('edit-bot-target');
+  if (targetInput) targetInput.value = cb.consistency_target || 1500;
+
+  const dllInput = document.getElementById('edit-bot-dll');
+  if (dllInput) dllInput.value = cb.daily_loss_limit || 1000;
+
+  const jitterInput = document.getElementById('edit-bot-jitter');
+  if (jitterInput) jitterInput.value = bot.jitter_ms || 120;
+
+  document.getElementById('edit-bot-modal')?.classList.add('open');
+}
+
+function closeEditBotModal() {
+  document.getElementById('edit-bot-modal')?.classList.remove('open');
+}
+
+async function submitEditBot(event) {
+  event.preventDefault();
+  const botId = document.getElementById('edit-bot-id').value;
+  const name = document.getElementById('edit-bot-name').value.trim();
+  const strategy = document.getElementById('edit-bot-strategy').value;
+  const identity_id = document.getElementById('edit-bot-identity').value || null;
+  const proxy_url = document.getElementById('edit-bot-proxy').value.trim();
+  const consistency_target = Number(document.getElementById('edit-bot-target').value);
+  const daily_loss_limit = Number(document.getElementById('edit-bot-dll').value);
+  const jitter_ms = Number(document.getElementById('edit-bot-jitter').value);
+
+  try {
+    const resp = await apiFetch(`/api/bots/${encodeURIComponent(botId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        strategy,
+        identity_id,
+        proxy_url,
+        consistency_target,
+        daily_loss_limit,
+        jitter_ms
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al actualizar el bot');
+    }
+
+    closeEditBotModal();
+    showToast(`Bot "${name}" actualizado con éxito`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function deleteBot(botId) {
+  const bot = state.bots.find(b => b.id === botId);
+  const name = bot ? bot.name : botId;
+  const ok = await confirmModal('Eliminar Bot de Trading', `¿Estás seguro de que deseas eliminar permanentemente el bot "${name}"? Esta acción cancelará sus órdenes activas.`, true);
+  if (!ok) return;
+
+  try {
+    const resp = await apiFetch(`/api/bots/${encodeURIComponent(botId)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al eliminar el bot');
+    }
+    showToast(`Bot "${name}" eliminado correctamente`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function deleteIdentity(identId) {
+  const ident = state.identities.find(i => i.id === identId);
+  const name = ident ? ident.full_name : identId;
+  const ok = await confirmModal('Eliminar Titular KYC', `¿Estás seguro de que deseas eliminar al titular "${name}"? Se desvinculará de todos los bots que tenga asignados.`, true);
+  if (!ok) return;
+
+  try {
+    const resp = await apiFetch(`/api/identities/${encodeURIComponent(identId)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al eliminar titular');
+    }
+    showToast(`Titular "${name}" eliminado correctamente`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function unlinkAccount(botId, accountId) {
+  const bot = state.bots.find(b => b.id === botId);
+  const acc = bot ? (bot.accounts || []).find(a => a.id === accountId) : null;
+  const name = acc ? acc.custom_name : accountId;
+  const ok = await confirmModal('Desvincular Cuenta Prop Firm', `¿Deseas desvincular y eliminar la cuenta "${name}"?`, true);
+  if (!ok) return;
+
+  try {
+    const resp = await apiFetch(`/api/bots/${encodeURIComponent(botId)}/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al desvincular cuenta');
+    }
+    showToast(`Cuenta "${name}" desvinculada exitosamente`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
 
@@ -2098,7 +2273,10 @@ function renderLedgerView() {
         <td><strong>${escapeHtml(row.identity_name)}</strong></td>
         <td>${row.flag || '🇺🇸'} ${escapeHtml(row.country || 'US')}</td>
         <td class="text-mono text-danger">${formatCurrency(-row.total_invested)}</td>
-        <td class="text-mono text-neon">${formatCurrency(row.gross_payouts)}</td>
+        <td class="text-mono text-neon">
+          ${formatCurrency(row.gross_payouts)}
+          ${row.live_trading_pnl > 0 ? `<br><span class="badge-strat text-neon" style="font-size: 0.65rem; padding: 1px 4px;">+$${row.live_trading_pnl.toFixed(2)} Trading Live</span>` : ''}
+        </td>
         <td class="text-mono">${row.split_rate_pct}%</td>
         <td class="text-mono text-amber">${formatCurrency(row.share_accrued)}</td>
         <td class="text-mono">${formatCurrency(row.paid_to_date)}</td>
