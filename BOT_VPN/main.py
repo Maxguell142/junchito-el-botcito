@@ -381,28 +381,10 @@ async def list_identities():
 
 @app.post("/api/identities", summary="Registrar Nueva Identidad (Titular KYC)")
 async def create_identity(payload: AddIdentityPayload):
-    if payload.id in bot_manager.identities:
-        raise HTTPException(status_code=400, detail="Esta identidad ya existe.")
-
-    new_ident = IdentityProfile(
-        id=payload.id,
-        full_name=payload.full_name,
-        alias=payload.alias or payload.full_name,
-        country=payload.country,
-        city=payload.city or "",
-        flag=payload.flag or "🌐",
-        kyc_status=payload.kyc_status or "PENDING",
-        email=payload.email or "",
-        notes=payload.notes
+    raise HTTPException(
+        status_code=501,
+        detail="El registro de titulares con datos personales está disponible en la aplicación de escritorio, que cifra esos datos con Windows.",
     )
-    bot_manager.identities[payload.id] = new_ident
-    bot_manager.save_config(event={
-        "action": "identity_created",
-        "entity_type": "identity",
-        "entity_id": payload.id,
-    })
-    await ws_manager.broadcast(bot_manager.get_system_snapshot())
-    return {"status": "CREATED", "identity": new_ident.to_dict()}
 
 
 # ======================================================================

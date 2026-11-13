@@ -1,7 +1,55 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
-const { randomUUID } = require('node:crypto');
+const { randomBytes, randomUUID, createCipheriv, createDecipheriv } = require('node:crypto');
+
+const ENCRYPTED_IDENTITY_FIELDS = [
+  'full_name', 'alias', 'country', 'city', 'province', 'postal_code', 'address',
+  'email', 'phone_country_code', 'phone_country_iso', 'phone', 'dni', 'crypto_wallet_name',
+  'crypto_network', 'crypto_wallet_address', 'crypto_transfer_alias',
+  'card_brand', 'card_last4', 'card_exp_month', 'card_exp_year',
+  'payment_provider', 'payment_reference', 'notes'
+];
+
+function parseIdentityKey(value = process.env.BOT_VPN_PII_ENCRYPTION_KEY) {
+  if (!value) return null;
+  if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error('BOT_VPN_PII_ENCRYPTION_KEY debe contener 64 caracteres hexadecimales.');
+  return Buffer.from(value, 'hex');
+}
+
+function encryptIdentityFields(identity, key) {
+  const result = { ...identity };
+  const payload = Object.fromEntries(ENCRYPTED_IDENTITY_FIELDS
+    .filter(field => Object.hasOwn(result, field))
+    .map(field => [field, result[field]]));
+  if (!Object.keys(payload).length) return result;
+  if (!key) return result;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  for (const field of Object.keys(payload)) delete result[field];
+  result.__pii_encrypted_v1 = {
+    iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'),
+    data: encrypted.toString('base64')
+  };
+  return result;
+}
+
+function decryptIdentityFields(identity, key) {
+  const envelope = identity.__pii_encrypted_v1;
+  if (!envelope) return identity;
+  if (!key) throw new Error('No se pudo descifrar el perfil. Inicia QUANTUM FX con el usuario de Windows que lo creó.');
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+  const cleartext = Buffer.concat([
+    decipher.update(Buffer.from(envelope.data, 'base64')),
+    decipher.final()
+  ]).toString('utf8');
+  const result = { ...identity, ...JSON.parse(cleartext) };
+  delete result.__pii_encrypted_v1;
+  return result;
+}
 
 class PersistenceConflict extends Error {
   constructor() {
@@ -33,10 +81,29 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
   const identities = (Array.isArray(snapshot.identities) ? snapshot.identities : [])
     .filter(identity => identity && typeof identity.id === 'string')
     .map(identity => Object.fromEntries(
-      ['id', 'full_name', 'alias', 'country', 'city', 'flag', 'kyc_status', 'email', 'notes']
+      [
+        'id', 'full_name', 'alias', 'country', 'city', 'province', 'postal_code',
+        'address', 'flag', 'kyc_status', 'email', 'phone_country_code', 'phone',
+        'phone_country_iso', 'dni', 'crypto_wallet_name', 'crypto_network', 'crypto_wallet_address',
+        'crypto_transfer_alias', 'card_brand', 'card_last4', 'card_exp_month',
+        'card_exp_year', 'payment_provider', 'payment_reference', 'notes'
+      ]
         .filter(key => Object.hasOwn(identity, key))
         .map(key => [key, identity[key]])
     ));
+  const privateIdentityValues = (Array.isArray(snapshot.identities) ? snapshot.identities : [])
+    .flatMap(identity => ENCRYPTED_IDENTITY_FIELDS
+      .filter(field => field !== 'crypto_network')
+      .map(field => identity && identity[field])
+      .filter(value => typeof value === 'string' && value.length >= 4));
+  const redactIdentityText = value => {
+    if (Array.isArray(value)) return value.map(redactIdentityText);
+    if (!value || typeof value !== 'object') {
+      if (typeof value !== 'string') return value;
+      return privateIdentityValues.reduce((text, secret) => text.split(secret).join('[dato personal]'), value);
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, redactIdentityText(nested)]));
+  };
   const bots = (Array.isArray(snapshot.bots) ? snapshot.bots : [])
     .filter(bot => bot && typeof bot.id === 'string')
     .map(bot => {
@@ -45,13 +112,14 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
           'id', 'name', 'identity_id', 'strategy', 'outbound_ip', 'proxy_port',
           'isp_provider', 'node_location', 'geo_match_status', 'status',
           'jitter_min_ms', 'jitter_max_ms', 'jitter_ms', 'schedule', 'circuit_breaker',
-          'net_pnl', 'today_pnl', 'total_trades', 'winning_trades',
+          'net_pnl', 'today_pnl', 'today_pnl_date', 'total_trades', 'winning_trades',
           'losing_trades', 'max_drawdown', 'logs'
         ]
           .filter(key => Object.hasOwn(bot, key))
           .map(key => [key, bot[key]])
       );
       safeBot.proxy_url = sanitizeProxyUrl(bot.proxy_url);
+      safeBot.logs = redactIdentityText(safeBot.logs || []);
       safeBot.accounts = (Array.isArray(bot.accounts) ? bot.accounts : [])
         .filter(account => account && typeof account.id === 'string')
         .map(account => {
@@ -116,6 +184,8 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
 class SQLiteStore {
   constructor(databasePath = process.env.BOT_VPN_DB_PATH || path.join(__dirname, 'bot_vpn.sqlite3')) {
     this.databasePath = databasePath;
+    this.piiEncryptionKey = parseIdentityKey();
+    this.canEncryptIdentityPii = Boolean(this.piiEncryptionKey);
     if (databasePath !== ':memory:') {
       fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
     }
@@ -216,7 +286,7 @@ class SQLiteStore {
       'INSERT INTO identities (id, data_json, updated_at) VALUES (?, ?, ?)'
     );
     for (const identity of snapshot.identities) {
-      addIdentity.run(identity.id, JSON.stringify(identity), timestamp);
+      addIdentity.run(identity.id, JSON.stringify(encryptIdentityFields(identity, this.piiEncryptionKey)), timestamp);
     }
     const identityIds = new Set(snapshot.identities.map(identity => identity.id));
     const addBot = this.database.prepare(
@@ -249,7 +319,7 @@ class SQLiteStore {
     ).all().map(row => [row.key, JSON.parse(row.value_json)]));
     const identities = this.database.prepare(
       'SELECT data_json FROM identities ORDER BY rowid'
-    ).all().map(row => JSON.parse(row.data_json));
+    ).all().map(row => decryptIdentityFields(JSON.parse(row.data_json), this.piiEncryptionKey));
     const readAccounts = this.database.prepare(
       'SELECT data_json FROM accounts WHERE bot_id = ? ORDER BY rowid'
     );

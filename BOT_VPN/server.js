@@ -121,6 +121,37 @@ function isValidId(value) {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
 }
 
+const IDENTITY_FIELD_LIMITS = {
+  full_name: 160, alias: 160, country: 2, city: 120, province: 120,
+  postal_code: 24, address: 240, email: 254, phone_country_code: 6, phone_country_iso: 2,
+  phone: 48, dni: 48, crypto_wallet_name: 100, crypto_network: 80,
+  crypto_wallet_address: 240, crypto_transfer_alias: 160, card_brand: 40,
+  card_last4: 4, payment_provider: 80, payment_reference: 200, notes: 1000
+};
+
+function validateIdentityFields(data) {
+  for (const [field, maxLength] of Object.entries(IDENTITY_FIELD_LIMITS)) {
+    if (!Object.hasOwn(data, field)) continue;
+    const value = data[field];
+    if (typeof value !== 'string' || value.length > maxLength) return `${field} tiene un formato o longitud inválidos.`;
+    if (field === 'country' && value && !/^[A-Z]{2}$/.test(value)) return 'El país debe usar un código ISO de 2 letras (por ejemplo AR).';
+    if (field === 'phone_country_code' && value && !/^\+\d{1,4}$/.test(value)) return 'El código telefónico debe incluir + y de 1 a 4 dígitos.';
+    if (field === 'phone_country_iso' && value && !/^[A-Z]{2}$/.test(value)) return 'Selecciona un país válido para el teléfono.';
+    if (field === 'phone' && value && !/^[+\d\s().-]+$/.test(value)) return 'El número de teléfono contiene caracteres inválidos.';
+    if (field === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'El correo electrónico no es válido.';
+    if (field === 'card_last4' && value && !/^\d{4}$/.test(value)) return 'Guarda solo los últimos 4 dígitos de la tarjeta.';
+  }
+  for (const field of ['card_exp_month', 'card_exp_year']) {
+    if (!Object.hasOwn(data, field) || data[field] === '' || data[field] === null) continue;
+    const value = Number(data[field]);
+    const valid = Number.isInteger(value) && (field === 'card_exp_month'
+      ? value >= 1 && value <= 12
+      : value >= new Date().getFullYear() && value <= new Date().getFullYear() + 25);
+    if (!valid) return 'La fecha de vencimiento de la tarjeta no es válida.';
+  }
+  return null;
+}
+
 function isValidTime(value) {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
@@ -294,6 +325,7 @@ function toRuntimeBot(b) {
     })),
     net_pnl: b.net_pnl || 0.0,
     today_pnl: b.today_pnl || 0.0,
+    today_pnl_date: b.today_pnl_date || new Date().toISOString().slice(0, 10),
     consistency_pct: 0.0,
     total_trades: b.total_trades || 0,
     winning_trades: b.winning_trades || 0,
@@ -306,7 +338,7 @@ function toRuntimeBot(b) {
       {
         timestamp: new Date().toLocaleTimeString(),
         level: 'INFO',
-        message: `Bot inicializado // Titular: ${ident ? ident.full_name : 'Sin asignar'}`
+        message: `Bot inicializado // Titular: ${ident ? 'Asignado' : 'Sin asignar'}`
       }
     ]
   };
@@ -1184,6 +1216,7 @@ function saveConfigToDisk(event, operations = []) {
         schedule: b.schedule,
         net_pnl: b.net_pnl,
         today_pnl: b.today_pnl,
+        today_pnl_date: b.today_pnl_date,
         total_trades: b.total_trades,
         winning_trades: b.winning_trades,
         losing_trades: b.losing_trades,
@@ -1269,6 +1302,14 @@ function resetAccountDailyMetrics(account) {
   }
 }
 
+function resetBotDailyMetrics(bot) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (bot.today_pnl_date !== today) {
+    bot.today_pnl = 0;
+    bot.today_pnl_date = today;
+  }
+}
+
 // ======================================================================
 // WEBSOCKET SERVER (/ws)
 // ======================================================================
@@ -1301,6 +1342,7 @@ setInterval(() => {
 
   // Actualizar flotante de cuentas activas
   bots.forEach(bot => {
+    resetBotDailyMetrics(bot);
     let totalFloat = 0;
     bot.accounts.forEach(acc => {
       resetAccountDailyMetrics(acc);
@@ -1622,18 +1664,17 @@ app.get('/api/identities', (req, res) => {
 });
 
 app.post('/api/identities', (req, res) => {
-  const { id, full_name, alias, country, city, flag, kyc_status, email, notes } = req.body || {};
+  const body = req.body || {};
+  const { id, full_name, alias, country, city, province, postal_code, address, flag, kyc_status, email, phone_country_code, phone_country_iso, phone, dni,
+    crypto_wallet_name, crypto_network, crypto_wallet_address, crypto_transfer_alias, card_brand, card_last4,
+    card_exp_month, card_exp_year, payment_provider, payment_reference, notes } = body;
   if (!isValidId(id) || typeof full_name !== 'string' || !full_name.trim() || full_name.length > 160) {
     return res.status(400).json({ detail: 'ID o nombre inválido.' });
   }
-  if ((alias !== undefined && (typeof alias !== 'string' || alias.length > 160))
-    || (country !== undefined && (typeof country !== 'string' || !/^[A-Za-z]{2}$/.test(country)))
-    || (city !== undefined && (typeof city !== 'string' || city.length > 120))
-    || (email !== undefined && (typeof email !== 'string' || email.length > 254))
-    || (notes !== undefined && (typeof notes !== 'string' || notes.length > 1000))
-    || (kyc_status !== undefined && !['VERIFIED', 'PENDING', 'REJECTED'].includes(kyc_status))) {
-    return res.status(400).json({ detail: 'Datos de identidad inválidos.' });
-  }
+  const fieldError = validateIdentityFields(body);
+  if (fieldError) return res.status(400).json({ detail: fieldError });
+  if (kyc_status !== undefined && !['VERIFIED', 'PENDING', 'REJECTED'].includes(kyc_status)) return res.status(400).json({ detail: 'Estado KYC inválido.' });
+  if (!database.canEncryptIdentityPii) return res.status(503).json({ detail: 'Para guardar identidades, abre QUANTUM FX desde la aplicación de escritorio de Windows, que cifra estos datos con tu usuario de Windows.' });
   if (identities.some(identity => identity.id === id)) {
     return res.status(400).json({ detail: 'Esta identidad ya existe.' });
   }
@@ -1642,11 +1683,28 @@ app.post('/api/identities', (req, res) => {
     id,
     full_name,
     alias: alias || full_name,
-    country: country || 'US',
+    country: country || 'AR',
     city: city || '',
+    province: province || '',
+    postal_code: postal_code || '',
+    address: address || '',
     flag: flag || '🌐',
     kyc_status: kyc_status || 'PENDING',
     email: email || '',
+    phone_country_code: phone_country_code || '',
+    phone_country_iso: phone_country_iso || '',
+    phone: phone || '',
+    dni: dni || '',
+    crypto_wallet_name: crypto_wallet_name || '',
+    crypto_network: crypto_network || '',
+    crypto_wallet_address: crypto_wallet_address || '',
+    crypto_transfer_alias: crypto_transfer_alias || '',
+    card_brand: card_brand || '',
+    card_last4: card_last4 || '',
+    card_exp_month: card_exp_month === '' || card_exp_month === undefined ? '' : Number(card_exp_month),
+    card_exp_year: card_exp_year === '' || card_exp_year === undefined ? '' : Number(card_exp_year),
+    payment_provider: payment_provider || '',
+    payment_reference: payment_reference || '',
     notes: notes || ''
   };
 
@@ -1660,12 +1718,45 @@ app.post('/api/identities', (req, res) => {
   res.status(201).json({ status: 'CREATED', identity: newIdent });
 });
 
+app.put('/api/identities/:id', (req, res) => {
+  const identity = identities.find(item => item.id === req.params.id);
+  if (!identity) return res.status(404).json({ detail: 'Identidad no encontrada.' });
+  if (!database.canEncryptIdentityPii) return res.status(503).json({ detail: 'Para guardar identidades, abre QUANTUM FX desde la aplicación de escritorio de Windows, que cifra estos datos con tu usuario de Windows.' });
+  const body = req.body || {};
+  const fieldError = validateIdentityFields(body);
+  if (fieldError) return res.status(400).json({ detail: fieldError });
+  if (body.full_name !== undefined && !body.full_name.trim()) return res.status(400).json({ detail: 'El nombre completo no puede quedar vacío.' });
+  if (body.kyc_status !== undefined && !['VERIFIED', 'PENDING', 'REJECTED'].includes(body.kyc_status)) return res.status(400).json({ detail: 'Estado KYC inválido.' });
+  const editableFields = [
+    'full_name', 'alias', 'country', 'city', 'province', 'postal_code', 'address',
+    'email', 'phone_country_code', 'phone_country_iso', 'phone', 'dni', 'flag', 'kyc_status', 'notes',
+    'crypto_wallet_name', 'crypto_network', 'crypto_wallet_address', 'crypto_transfer_alias',
+    'card_brand', 'card_last4', 'card_exp_month', 'card_exp_year', 'payment_provider', 'payment_reference'
+  ];
+  for (const field of editableFields) {
+    if (!Object.hasOwn(body, field)) continue;
+    if (field === 'card_exp_month' || field === 'card_exp_year') {
+      identity[field] = body[field] === '' || body[field] === null ? '' : Number(body[field]);
+    } else {
+      identity[field] = body[field];
+    }
+  }
+  saveConfigToDisk({
+    action: 'identity_updated',
+    entity_type: 'identity',
+    entity_id: identity.id,
+    details: { fields: Object.keys(body).filter(field => editableFields.includes(field)) }
+  });
+  broadcastSnapshot();
+  res.json({ status: 'UPDATED', identity });
+});
+
 app.delete('/api/identities/:id', (req, res) => {
   const identIndex = identities.findIndex(i => i.id === req.params.id);
   if (identIndex === -1) {
     return res.status(404).json({ detail: 'Identidad no encontrada' });
   }
-  const deletedIdent = identities.splice(identIndex, 1)[0];
+  identities.splice(identIndex, 1);
   // Desvincular de cualquier bot que la tuviera asignada
   bots.forEach(b => {
     if (b.identity_id === req.params.id || (b.identity && b.identity.id === req.params.id)) {
@@ -1676,8 +1767,7 @@ app.delete('/api/identities/:id', (req, res) => {
   saveConfigToDisk({
     action: 'identity_deleted',
     entity_type: 'identity',
-    entity_id: req.params.id,
-    details: { full_name: deletedIdent.full_name }
+    entity_id: req.params.id
   });
   broadcastSnapshot();
   res.json({ status: 'DELETED', identity_id: req.params.id });
@@ -1751,7 +1841,7 @@ app.post('/api/bots/:id/toggle', (req, res) => {
   res.json({ message: `Bot ${bot.id} ahora está ${bot.status}`, status: bot.status });
 });
 
-app.post('/api/bots/:id/schedule', (req, res) => {
+app.route('/api/bots/:id/schedule').post((req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
@@ -2043,7 +2133,7 @@ app.put('/api/bots/:id', (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
-  const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, jitter_ms, start_time, end_time } = req.body || {};
+  const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, today_pnl, jitter_ms, start_time, end_time } = req.body || {};
 
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim() || name.length > 160) {
@@ -2101,6 +2191,15 @@ app.put('/api/bots/:id', (req, res) => {
       pause_on_red_news: true,
       status: 'NORMAL'
     };
+  }
+
+  if (today_pnl !== undefined) {
+    const parsedTodayPnl = Number(today_pnl);
+    if (!Number.isFinite(parsedTodayPnl) || Math.abs(parsedTodayPnl) > 10000000) {
+      return res.status(400).json({ detail: 'El P&L del día debe ser un importe válido entre -10.000.000 y 10.000.000.' });
+    }
+    bot.today_pnl = Number(parsedTodayPnl.toFixed(2));
+    bot.today_pnl_date = new Date().toISOString().slice(0, 10);
   }
 
   if (consistency_target !== undefined) {
@@ -2355,6 +2454,19 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
     message: `⚡ Orden SIMULADA ${side.toUpperCase()} ${contracts} MNQ @ ${marketPrice} ejecutada en ${bot.accounts.length} cuenta(s) con jitter disperso.`
   });
 
+  saveConfigToDisk({
+    action: 'simulated_trade_opened',
+    entity_type: 'bot',
+    entity_id: bot.id,
+    status: 'SIMULATED',
+    details: { side: side.toUpperCase(), contracts, market_price: marketPrice }
+  }, [{
+    bot_id: bot.id,
+    operation_type: 'SIMULATED_TRADE',
+    mode: 'SIMULATED',
+    status: 'SIMULATED',
+    details: { side: side.toUpperCase(), contracts, market_price: marketPrice }
+  }]);
   broadcastSnapshot();
   res.json({
     status: 'OK',
@@ -2561,3 +2673,15 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`👤 Identidades:   ${identities.length} Titulares KYC cargados`);
   console.log(`======================================================================`);
 });
+
+if (process.parentPort) {
+  process.parentPort.on('message', event => {
+    if (event.data?.type !== 'shutdown') return;
+    for (const client of wss.clients) client.close(1001, 'Desktop app closing');
+    wss.close();
+    server.close(() => {
+      database.close();
+      process.exit(0);
+    });
+  });
+}

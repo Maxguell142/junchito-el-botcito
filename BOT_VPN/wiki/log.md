@@ -148,6 +148,11 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - Cambiada la carga inicial de las tarjetas a solicitudes concurrentes para que una fuente lenta no deje esperando a todos los bots.
 - Añadidos estados visibles por tarjeta (`Cargando`, proveedor API, `SIMULADO` o `Sin datos`) y el precio recibido; los datos sintéticos quedan identificados como tales.
 
+## [2026-11-12] feat | Aplicación de escritorio para Windows
+- Añadido envoltorio Electron que arranca el servidor Express local, abre el panel en una ventana aislada y apaga SQLite/servidor al cerrar la aplicación.
+- Configurado empaquetado NSIS x64 por usuario; la base queda en el perfil de Windows, con importación opcional de la SQLite existente en el primer inicio instalado.
+- Añadidas instrucciones `npm run start:desktop` y `npm run dist:win`. Generado `dist-desktop/QuantumFX-Setup-1.0.0.exe` sin certificado de firma configurado.
+
 ## [2026-11-11] fix | Actualización de precio a tiempo real (~28,245) y habilitación de cambio de temporalidad (1m, 5m, 15m, 1h, 1d)
 - **Diagnóstico de Precio Desactualizado (18k vs 28k)**: El endpoint `/api/market/candles` retornaba velas sintéticas simuladas fijadas a una base estática de 18,245.50 USD y el WebSocket sobrescribía el precio con dicho valor simulado. Finnhub arrojaba HTTP 403 Forbidden para series de velas en cuenta gratuita.
 - **Conmutación a Proveedor Nativo Real (Yahoo Finance)**: Configurado `MARKET_DATA_PROVIDER=yahoo` en `.env` para consultar directamente contratos oficiales de futuros CME (`MNQ=F`, `NQ=F`, `ES=F`) sin requerir API key ni cuotas restrictivas, obteniendo el precio real de mercado actual (~28,247 USD).

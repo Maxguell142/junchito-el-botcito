@@ -74,9 +74,14 @@ class IdentityProfile:
     kyc_status: str = "VERIFIED"     # "VERIFIED", "PENDING", "REJECTED"
     email: str = ""
     notes: Optional[str] = None
+    encrypted_envelope: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        envelope = result.pop("encrypted_envelope", None)
+        if envelope:
+            result["__pii_encrypted_v1"] = envelope
+        return result
 
 
 class ProxyConnector:
@@ -617,7 +622,8 @@ class BotManager:
                 flag=ident_data.get("flag", "🌐"),
                 kyc_status=ident_data.get("kyc_status", "VERIFIED"),
                 email=ident_data.get("email", ""),
-                notes=ident_data.get("notes")
+                notes=ident_data.get("notes"),
+                encrypted_envelope=ident_data.get("__pii_encrypted_v1")
             )
 
         self.bots = {}

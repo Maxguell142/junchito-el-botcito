@@ -302,7 +302,9 @@ function switchTab(tabName) {
   if (tabName === 'titulares') renderIdentities();
   if (tabName === 'cuentas') renderGlobalAccounts();
   if (tabName === 'vpn') renderVpnCenter();
-  if (tabName === 'dashboard') renderBotGrid();
+  if (tabName === 'dashboard') {
+    renderBotGrid();
+  }
   if (tabName === 'ledger') loadLedgerData();
   if (tabName === 'analysis') loadAnalysisStatus();
   if (tabName === 'noticias') loadEconomicNews();
@@ -409,6 +411,7 @@ function handleStateSnapshot(snapshot) {
   if (clockElem && snapshot.ny_time) clockElem.textContent = snapshot.ny_time;
 
   const globalStats = snapshot.global_stats || {};
+  renderDashboardBento(globalStats);
   const pnlElem = document.getElementById('global-pnl');
   if (pnlElem) pnlElem.textContent = formatCurrency(globalStats.total_pnl || 0.0);
 
@@ -437,6 +440,67 @@ function handleStateSnapshot(snapshot) {
   if (state.selectedBotId) {
     updateDetailModalContent(state.selectedBotId);
   }
+}
+
+function renderDashboardBento(globalStats = {}) {
+  const root = document.getElementById('dashboard-bento');
+  if (!root) return;
+
+  const accounts = state.bots.flatMap(bot => (bot.accounts || []).map(account => ({
+    ...account,
+    botName: bot.name
+  })));
+  const totalBalance = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
+  const totalPnl = Number(globalStats.total_pnl) || 0;
+  const activeBots = Number(globalStats.active_bots) || 0;
+  const maxAbsPnl = Math.max(1, ...state.bots.map(bot => Math.abs(Number(bot.net_pnl) || 0)));
+  const pnlRows = state.bots.length
+    ? state.bots.map(bot => {
+      const pnl = Number(bot.net_pnl) || 0;
+      const width = Math.max(2, Math.round(Math.abs(pnl) / maxAbsPnl * 100));
+      return `<div class="bento-performance-row"><span class="bento-performance-name">${escapeHtml(bot.name)}</span><div class="bento-bar-track"><span class="bento-bar-fill ${pnl < 0 ? 'negative' : ''}" style="width:${width}%"></span></div><strong class="tabular-nums ${pnl < 0 ? 'text-danger' : 'text-neon'}">${formatCurrency(pnl)}</strong></div>`;
+    }).join('')
+    : '<div class="bento-empty">Aún no hay bots para mostrar.</div>';
+  const accountRows = accounts.length
+    ? accounts.slice(0, 5).map(account => `<div class="bento-account-row"><div><strong>${escapeHtml(account.custom_name || 'Cuenta')}</strong><span>${escapeHtml(account.botName)}</span></div><strong class="tabular-nums">${formatCurrency(Number(account.balance) || 0)}</strong></div>`).join('')
+    : '<div class="bento-empty">Vincula una cuenta para ver su balance.</div>';
+  const statusRows = state.bots.length
+    ? state.bots.map(bot => `<div class="bento-bot-row"><div class="bento-state-indicator ${bot.status === 'ACTIVE' ? 'is-active' : ''}"></div><div class="bento-bot-meta"><strong>${escapeHtml(bot.name)}</strong><span>${bot.proxy_url ? 'Proxy definido · estado de túnel no verificado' : 'Proxy no configurado'}</span></div><span class="bento-status ${bot.status === 'ACTIVE' ? 'is-active' : ''}">${bot.status === 'ACTIVE' ? 'ACTIVO' : 'PAUSADO'}</span></div>`).join('')
+    : '<div class="bento-empty">Sin bots registrados.</div>';
+
+  root.innerHTML = `
+    <article class="bento-card bento-kpi bento-pnl-card">
+      <span class="bento-label">P&L TOTAL</span>
+      <strong class="bento-value tabular-nums ${totalPnl < 0 ? 'text-danger' : 'text-neon'}">${formatCurrency(totalPnl)}</strong>
+      <span class="bento-caption">Resultado reportado · modo simulado</span>
+    </article>
+    <article class="bento-card bento-kpi">
+      <span class="bento-label">BOTS ACTIVOS</span>
+      <strong class="bento-value tabular-nums">${activeBots}<span class="bento-denominator"> / ${state.bots.length}</span></strong>
+      <span class="bento-caption">Estado reportado por la aplicación</span>
+    </article>
+    <article class="bento-card bento-kpi">
+      <span class="bento-label">CUENTAS DE FONDEO</span>
+      <strong class="bento-value tabular-nums">${accounts.length}</strong>
+      <span class="bento-caption">En ${state.identities.length} titulares registrados</span>
+    </article>
+    <article class="bento-card bento-kpi">
+      <span class="bento-label">BALANCE VINCULADO</span>
+      <strong class="bento-value tabular-nums">${formatCurrency(totalBalance)}</strong>
+      <span class="bento-caption">Suma de balances registrados</span>
+    </article>
+    <article class="bento-card bento-performance">
+      <div class="bento-card-heading"><div><span class="bento-label">RENDIMIENTO POR BOT</span><h3>P&L registrado</h3></div><span class="bento-period">ACUMULADO</span></div>
+      <div class="bento-performance-list">${pnlRows}</div>
+    </article>
+    <article class="bento-card bento-accounts">
+      <div class="bento-card-heading"><div><span class="bento-label">CUENTAS</span><h3>Balances</h3></div><button class="bento-link" onclick="switchTab('cuentas')">Ver todas ↗</button></div>
+      <div class="bento-account-list">${accountRows}</div>
+    </article>
+    <article class="bento-card bento-status-card">
+      <div class="bento-card-heading"><div><span class="bento-label">NODOS DE EJECUCIÓN</span><h3>Estado de bots</h3></div><span class="bento-period">${activeBots} ACTIVOS</span></div>
+      <div class="bento-status-list">${statusRows}</div>
+    </article>`;
 }
 
 // ======================================================================
@@ -698,6 +762,14 @@ function renderIdentities() {
             <span class="id-val">${escapeHtml(ident.email || 'N/A')}</span>
           </div>
           <div class="identity-row">
+            <span class="id-label">Celular:</span>
+            <span class="id-val">${escapeHtml([ident.phone_country_code, ident.phone].filter(Boolean).join(' ') || 'N/A')}</span>
+          </div>
+          <div class="identity-row">
+            <span class="id-label">Ubicación:</span>
+            <span class="id-val">${escapeHtml([ident.city, ident.province, ident.country].filter(Boolean).join(', ') || 'N/A')}</span>
+          </div>
+          <div class="identity-row">
             <span class="id-label">Bots a su Nombre:</span>
             <span class="id-val">${assignedBots.length} (${assignedBots.map(b => b.name).join(', ') || 'Ninguno'})</span>
           </div>
@@ -712,6 +784,8 @@ function renderIdentities() {
         </div>
 
         <div style="display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05);">
+          <button class="btn btn-outline btn-xs" type="button" onclick="openEditIdentityModal('${ident.id}')" title="Editar datos del titular">Editar</button>
+          <span style="flex:1"></span>
           <button class="btn btn-outline btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.4);" onclick="deleteIdentity('${ident.id}')" title="Eliminar este titular">
             🗑️ Eliminar Titular
           </button>
@@ -1199,6 +1273,8 @@ function openEditBotModal(botId) {
 
   const jitterInput = document.getElementById('edit-bot-jitter');
   if (jitterInput) jitterInput.value = bot.jitter_ms || 120;
+  const todayPnlInput = document.getElementById('edit-bot-today-pnl');
+  if (todayPnlInput) todayPnlInput.value = Number(bot.today_pnl) || 0;
 
   document.getElementById('edit-bot-modal')?.classList.add('open');
 }
@@ -1217,6 +1293,7 @@ async function submitEditBot(event) {
   const consistency_target = Number(document.getElementById('edit-bot-target').value);
   const daily_loss_limit = Number(document.getElementById('edit-bot-dll').value);
   const jitter_ms = Number(document.getElementById('edit-bot-jitter').value);
+  const today_pnl = Number(document.getElementById('edit-bot-today-pnl').value);
 
   try {
     const resp = await apiFetch(`/api/bots/${encodeURIComponent(botId)}`, {
@@ -1229,7 +1306,8 @@ async function submitEditBot(event) {
         proxy_url,
         consistency_target,
         daily_loss_limit,
-        jitter_ms
+        jitter_ms,
+        today_pnl
       })
     });
 
@@ -1603,6 +1681,13 @@ function statusTextForTrade(status) {
 }
 
 function openAddIdentityModal() {
+  const form = document.querySelector('#add-identity-modal form');
+  form?.reset();
+  document.getElementById('identity-form-mode').value = 'create';
+  document.getElementById('identity-modal-title').textContent = 'Registrar titular';
+  document.getElementById('identity-save-button').textContent = 'Guardar titular';
+  document.getElementById('new-ident-country').value = 'AR';
+  document.getElementById('new-ident-id').disabled = false;
   document.getElementById('add-identity-modal').classList.add('open');
 }
 
@@ -1610,42 +1695,95 @@ function closeAddIdentityModal() {
   document.getElementById('add-identity-modal').classList.remove('open');
 }
 
-async function submitAddIdentity(event) {
-  event.preventDefault();
-  const id = document.getElementById('new-ident-id').value.trim();
-  const name = document.getElementById('new-ident-name').value.trim();
-  const country = document.getElementById('new-ident-country').value.trim().toUpperCase();
-  const city = document.getElementById('new-ident-city').value.trim();
-  const flag = document.getElementById('new-ident-flag').value.trim() || '🌐';
-  const kyc = document.getElementById('new-ident-kyc').value;
-  const email = document.getElementById('new-ident-email').value.trim();
-  const notes = document.getElementById('new-ident-notes').value.trim();
+function openEditIdentityModal(identityId) {
+  const identity = state.identities.find(item => item.id === identityId);
+  if (!identity) return;
+  const form = document.querySelector('#add-identity-modal form');
+  form?.reset();
+  document.getElementById('identity-form-mode').value = 'edit';
+  document.getElementById('identity-modal-title').textContent = 'Editar titular';
+  document.getElementById('identity-save-button').textContent = 'Guardar cambios';
+  document.getElementById('new-ident-id').value = identity.id;
+  document.getElementById('new-ident-id').disabled = true;
+  document.getElementById('new-ident-name').value = identity.full_name || '';
+  document.getElementById('new-ident-country').value = identity.country || 'AR';
+  document.getElementById('new-ident-city').value = identity.city || '';
+  document.getElementById('identity-province').value = identity.province || '';
+  document.getElementById('identity-address').value = identity.address || '';
+  document.getElementById('identity-postal-code').value = identity.postal_code || '';
+  document.getElementById('new-ident-email').value = identity.email || '';
+  document.getElementById('identity-phone').value = [identity.phone_country_code, identity.phone].filter(Boolean).join(' ');
+  document.getElementById('identity-dni').value = identity.dni || '';
+  document.getElementById('identity-wallet-name').value = identity.crypto_wallet_name || '';
+  document.getElementById('identity-wallet-network').value = identity.crypto_network || '';
+  document.getElementById('identity-wallet-address').value = identity.crypto_wallet_address || '';
+  document.getElementById('identity-wallet-alias').value = identity.crypto_transfer_alias || '';
+  document.getElementById('identity-card-brand').value = identity.card_brand || '';
+  document.getElementById('identity-card-last4').value = identity.card_last4 || '';
+  document.getElementById('identity-card-exp-month').value = identity.card_exp_month || '';
+  document.getElementById('identity-card-exp-year').value = identity.card_exp_year || '';
+  document.getElementById('identity-payment-provider').value = identity.payment_provider || '';
+  document.getElementById('identity-payment-reference').value = identity.payment_reference || '';
+  document.getElementById('new-ident-kyc').value = identity.kyc_status || 'PENDING';
+  document.getElementById('new-ident-notes').value = identity.notes || '';
+  document.getElementById('add-identity-modal').classList.add('open');
+}
 
-  const payload = {
-    id: id,
-    full_name: name,
-    country: country,
-    city: city,
-    flag: flag,
-    kyc_status: kyc,
-    email: email,
-    notes: notes
+function collectIdentityFormData() {
+  const value = id => document.getElementById(id).value.trim();
+  return {
+    full_name: value('new-ident-name'),
+    country: value('new-ident-country').toUpperCase(),
+    city: value('new-ident-city'),
+    province: value('identity-province'),
+    address: value('identity-address'),
+    postal_code: value('identity-postal-code'),
+    email: value('new-ident-email'),
+    phone_country_code: '',
+    phone_country_iso: '',
+    phone: value('identity-phone'),
+    dni: value('identity-dni'),
+    crypto_wallet_name: value('identity-wallet-name'),
+    crypto_network: value('identity-wallet-network'),
+    crypto_wallet_address: value('identity-wallet-address'),
+    crypto_transfer_alias: value('identity-wallet-alias'),
+    card_brand: value('identity-card-brand'),
+    card_last4: value('identity-card-last4'),
+    card_exp_month: value('identity-card-exp-month'),
+    card_exp_year: value('identity-card-exp-year'),
+    payment_provider: value('identity-payment-provider'),
+    payment_reference: value('identity-payment-reference'),
+    kyc_status: document.getElementById('new-ident-kyc').value,
+    notes: value('new-ident-notes')
   };
+}
+
+async function saveIdentity(event) {
+  event.preventDefault();
+  const editing = document.getElementById('identity-form-mode').value === 'edit';
+  const name = document.getElementById('new-ident-name').value.trim();
+  const rawId = document.getElementById('new-ident-id').value.trim();
+  const normalizedId = rawId.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 64);
+  const id = editing
+    ? document.getElementById('new-ident-id').value
+    : normalizedId || `identity_${(crypto.randomUUID?.() || Date.now().toString(36)).replace(/-/g, '').slice(0, 20)}`;
+  const payload = collectIdentityFormData();
+  if (!editing) payload.id = id;
 
   try {
-    const resp = await apiFetch('/api/identities', {
-      method: 'POST',
+    const resp = await apiFetch(editing ? `/api/identities/${encodeURIComponent(id)}` : '/api/identities', {
+      method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.detail || 'Error registrando titular');
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || (editing ? 'Error actualizando titular' : 'Error registrando titular'));
     }
 
     closeAddIdentityModal();
-    showToast(`Titular "${name}" guardado como pendiente. Esto no verifica el KYC.`, 'info');
+    showToast(editing ? `Datos de "${name}" actualizados.` : `Titular "${name}" registrado como pendiente. Esto no verifica el KYC.`, 'success');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
@@ -1696,8 +1834,10 @@ function updateDetailModalContent(botId) {
   document.getElementById('modal-proxy-ping').textContent = bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'No verificada';
 
   if (bot.schedule) {
-    document.getElementById('modal-start-time').value = bot.schedule.start_time || '09:30';
-    document.getElementById('modal-end-time').value = bot.schedule.end_time || '11:30';
+    const startInput = document.getElementById('modal-start-time');
+    const endInput = document.getElementById('modal-end-time');
+    if (document.activeElement !== startInput) startInput.value = bot.schedule.start_time || '09:30';
+    if (document.activeElement !== endInput) endInput.value = bot.schedule.end_time || '11:30';
   }
 
   // KPIs
@@ -1780,11 +1920,16 @@ async function saveCurrentModalSchedule() {
 
   try {
     const resp = await apiFetch(`/api/bots/${state.selectedBotId}/schedule`, {
-      method: 'PUT',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start_time: start, end_time: end, timezone: 'America/New_York' })
     });
-    if (!resp.ok) throw new Error('Error al guardar horario');
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || data.message || 'Error al guardar horario');
+    const bot = state.bots.find(item => item.id === state.selectedBotId);
+    if (bot) bot.schedule = data.schedule;
+    renderBotGrid();
+    updateDetailModalContent(state.selectedBotId);
     showToast('Horario operativo actualizado con éxito.', 'success');
   } catch (err) {
     showToast(err.message, 'error');

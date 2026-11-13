@@ -18,6 +18,8 @@ Read this first; do not scan the whole repository by default.
 - The global chart still uses `GET /api/market/candles` (simulated in-memory series); bot-specific charts call authenticated `GET /api/bot/:botId/candles`, with symbols from a static JSON map and a default of MNQ. Browser refresh is polling, about every 60 seconds, not a market stream.
 - Finnhub and Alpha Vantage map futures symbols to QQQ/SPY, which are ETF prices, not MNQ/NQ/ES futures prices. The UI does not clearly surface provider/fallback state. Do not use these chart values as execution prices.
 - External provider requests now time out after eight seconds; per-bot cards load concurrently and show the reported source or simulated fallback. `synthetic` is an explicit provider mode.
+- A Windows desktop shell now lives in `BOT_VPN/desktop/main.js`; Electron starts the existing Node server in a utility process and opens the panel in a secured window. `npm run start:desktop` runs development mode; `npm run dist:win` builds the per-user x64 NSIS installer.
+- Packaged desktop app bundles Electron/Node and does not require system Node/Python for the Node dashboard. FastAPI remains optional and is not launched by the desktop shell. SQLite is stored under Electron's Windows user-data directory; first installed launch can import an existing SQLite database.
 - `BOT_VPN/.cursorrules` is Cursor guidance. `BOT_VPN/types/financial_types.ts` is not wired into JavaScript/Python or checked by a TypeScript build; treat it as a draft/reference until aligned with actual API and database contracts.
 - Keep credentials out of prompts, source, wiki, logs, and output. Never put secrets in MCP or dotenv tools exposed to an assistant.
 

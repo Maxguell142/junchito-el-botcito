@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QUANTUM FX // Plataforma Institucional Multi-Bot MNQ</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/terminal.css">
+  <link rel="stylesheet" href="/static/landing.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29,9 +31,9 @@
       </div>
 
       <nav class="public-landing-nav">
-        <a href="#landing-pillars" class="public-nav-link">4 Pilares Anti-Baneo</a>
-        <a href="#landing-workflow" class="public-nav-link">Flujo Operativo</a>
-        <a href="#landing-props" class="public-nav-link">Reglas Prop Firms</a>
+        <a href="#landing-pillars" class="public-nav-link">Plataforma</a>
+        <a href="#landing-workflow" class="public-nav-link">Cómo funciona</a>
+        <a href="#landing-props" class="public-nav-link">Controles</a>
       </nav>
 
       <div class="public-landing-actions" id="landing-auth-action-box">
@@ -43,111 +45,106 @@
 
     <!-- Contenedor scrolleable de la Landing -->
     <div class="landing-scroll-wrapper">
-      <div class="landing-hero">
-        <div class="landing-badge">
-          <span class="pulse-dot"></span>
-          <span>ARQUITECTURA INSTITUCIONAL // CME MNQ FUTURES</span>
+      <section class="landing-hero landing-hero-v2">
+        <div class="landing-hero-copy">
+          <div class="landing-badge"><span class="pulse-dot"></span><span>CONTROL MULTI-BOT · FUTUROS</span></div>
+          <h1 class="landing-title">Toda tu operación.<br><span>Una sola terminal.</span></h1>
+          <p class="landing-subtitle">Organiza bots y cuentas, supervisa métricas y analiza el mercado desde un espacio de trabajo diseñado para tener todo bajo control.</p>
+          <div class="landing-cta-group">
+            <button class="btn btn-primary btn-lg" onclick="handleLandingCta()"><span>Entrar a la plataforma</span><span aria-hidden="true">↗</span></button>
+            <button class="btn btn-outline btn-lg" onclick="document.getElementById('landing-pillars').scrollIntoView({ behavior: 'smooth' })"><span>Explorar funciones</span><span aria-hidden="true">↓</span></button>
+          </div>
+          <div class="landing-hero-note"><span class="landing-note-icon">◈</span> Dashboard multi-bot · Gestión de cuentas · Análisis histórico</div>
         </div>
-        <h1 class="landing-title">QUANTUM FX</h1>
-        <p class="landing-subtitle">
-          Sistema Centralizado de Orquestación y Monitoreo Multi-Bot con Aislamiento SOCKS5 Residencial por Titular Legal (KYC),
-          Anti-Mirroring Estocástico y Circuit Breakers de Seguridad para Cuentas de Fondeo (Prop Firms).
-        </p>
-        <div class="landing-cta-group">
-          <button class="btn btn-primary btn-lg" onclick="handleLandingCta()">
-            <span>🚀 Acceder a la Terminal de Trading</span> ➔
-          </button>
-          <button class="btn btn-outline btn-lg" onclick="document.getElementById('landing-pillars').scrollIntoView({ behavior: 'smooth' })">
-            <span>📖 Conocer los 4 Pilares</span>
-          </button>
+        <div class="landing-product-preview" aria-label="Vista conceptual de la terminal QUANTUM FX">
+          <div class="preview-topbar"><div class="preview-brand"><img src="/static/logo.png" alt=""><span>QUANTUM FX</span></div><span class="preview-mode"><i></i> ENTORNO DEMO</span></div>
+          <div class="preview-content">
+            <div class="preview-sidebar"><span class="selected">▦</span><span>⌁</span><span>◫</span><span>⌖</span></div>
+            <div class="preview-main">
+              <div class="preview-heading"><div><span class="preview-overline">WORKSPACE</span><strong>Resumen de operación</strong></div><span class="preview-date">MNQ · SIMULADO</span></div>
+              <div class="preview-metrics"><div><span>P&amp;L DE SESIÓN</span><b>— —</b></div><div><span>BOTS</span><b>Multi-bot</b></div><div><span>CUENTAS</span><b>Unificadas</b></div></div>
+              <div class="preview-chart"><div class="preview-chart-label"><span>Vista de mercado</span><span>GRÁFICO</span></div><svg viewBox="0 0 540 150" role="img" aria-label="Ilustración decorativa de un gráfico"><defs><linearGradient id="preview-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399" stop-opacity=".2"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/></linearGradient></defs><path class="preview-area" d="M0 121 C35 116 44 95 73 101 S111 116 143 86 181 96 211 72 248 83 282 62 320 76 347 50 390 67 421 40 458 56 487 26 519 40 540 16 V150 H0Z"/><path class="preview-line" d="M0 121 C35 116 44 95 73 101 S111 116 143 86 181 96 211 72 248 83 282 62 320 76 347 50 390 67 421 40 458 56 487 26 519 40 540 16"/></svg></div>
+              <div class="preview-bot-list"><div><i class="preview-dot"></i><span>Unidades de ejecución</span><b>Vista centralizada</b></div><div><i class="preview-dot muted"></i><span>Riesgo y horarios</span><b>Configurables</b></div></div>
+              <span class="preview-disclaimer">Ilustración de interfaz · sin datos de mercado reales</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Métricas Clave del Ecosistema -->
-      <div class="landing-kpis-strip">
+      <!-- Capacidades principales -->
+      <div class="landing-kpis-strip landing-capabilities">
         <div class="l-kpi-item">
-          <span class="l-kpi-val text-neon">MNQ (CME)</span>
-          <span class="l-kpi-lbl">Activo Operado</span>
+          <span class="capability-icon">▦</span><span class="l-kpi-val">Multi-bot</span>
+          <span class="l-kpi-lbl">Control en un mismo panel</span>
         </div>
         <div class="l-kpi-item">
-          <span class="l-kpi-val text-neon">SOCKS5 ISP</span>
-          <span class="l-kpi-lbl">Aislamiento por Socket</span>
+          <span class="capability-icon">◫</span><span class="l-kpi-val">Cuentas</span>
+          <span class="l-kpi-lbl">Balances y titulares organizados</span>
         </div>
         <div class="l-kpi-item">
-          <span class="l-kpi-val text-neon">50 - 350 ms</span>
-          <span class="l-kpi-lbl">Jitter Anti-Mirroring</span>
+          <span class="capability-icon">⌁</span><span class="l-kpi-val">Controles</span>
+          <span class="l-kpi-lbl">Riesgo y horarios configurables</span>
         </div>
         <div class="l-kpi-item">
-          <span class="l-kpi-val text-neon">+$150 USD</span>
-          <span class="l-kpi-lbl">Consistency Target Lock</span>
+          <span class="capability-icon">⌗</span><span class="l-kpi-val">Análisis</span>
+          <span class="l-kpi-lbl">Gráficos y pruebas históricas</span>
         </div>
       </div>
 
       <!-- 4 Pilares de la Arquitectura -->
       <div class="landing-pillars-section" id="landing-pillars">
         <div class="pillars-header">
-          <h2>Los 4 Pilares de Prevención de Baneos y Seguridad</h2>
-          <p>Diseñado para superar auditorías de Rithmic, Tradovate y Prop Firms (Apex, Topstep, Leelo Trading, Blue Guardian).</p>
+          <span class="landing-section-kicker">HERRAMIENTAS DE LA PLATAFORMA</span>
+          <h2>Una vista más clara de cada parte de tu operación</h2>
+          <p>Funciones para configurar, supervisar y analizar tus unidades desde una interfaz común.</p>
         </div>
 
         <div class="pillars-grid">
           <div class="pillar-card">
-            <div class="pillar-icon">🛡️</div>
-            <div class="pillar-num">PILAR 01</div>
-            <h3>Aislamiento SOCKS5 Dedicado</h3>
-            <p>
-              NO usamos VPNs comerciales que cambian la IP global de Windows. En su lugar, el socket HTTP/WebSocket de cada bot
-              se enlaza directamente a un proxy residencial estático (ISP Comcast, AT&T, Spectrum) geolocalizado en US.
-            </p>
+            <div class="pillar-icon">▦</div>
+            <div class="pillar-num">01 / ORQUESTACIÓN</div>
+            <h3>Todos tus bots, de un vistazo</h3>
+            <p>Consulta estado, estrategia, horarios, métricas y cuentas vinculadas en tarjetas individuales para cada bot.</p>
             <ul class="pillar-bullets">
-              <li>✓ IP local de Windows intacta sin colisiones.</li>
-              <li>✓ 0% detección de Data Center / VPN comercial.</li>
-              <li>✓ Latencia ultra-baja (~10-15ms a servidores CME).</li>
+              <li>Estado y configuración en una sola vista</li>
+              <li>Acceso rápido a controles por bot</li>
+              <li>Gráficos individuales disponibles</li>
             </ul>
           </div>
 
           <div class="pillar-card">
-            <div class="pillar-icon">👤</div>
-            <div class="pillar-num">PILAR 02</div>
-            <h3>Titulares Físicos & KYC Único</h3>
-            <p>
-              Regla estricta: Cada bot gestiona únicamente cuentas compradas a nombre de la MISMA persona física verificada.
-              Cuentas de distintos titulares jamás comparten nodo de salida ni proceso.
-            </p>
+            <div class="pillar-icon">◫</div>
+            <div class="pillar-num">02 / ORGANIZACIÓN</div>
+            <h3>Cuentas y titulares ordenados</h3>
+            <p>Relaciona tus cuentas con bots y titulares; revisa balances registrados, entorno y métricas desde el panel.</p>
             <ul class="pillar-bullets">
-              <li>✓ 1 Bot = 1 Persona Legal = 1 IP Residencial.</li>
-              <li>✓ Prevención absoluta de cuentas cruzadas.</li>
-              <li>✓ Trazabilidad de contratos y estados de fondeo.</li>
+              <li>Balances en una vista consolidada</li>
+              <li>Datos organizados por titular</li>
+              <li>Entornos identificados por cuenta</li>
             </ul>
           </div>
 
           <div class="pillar-card">
-            <div class="pillar-icon">⚡</div>
-            <div class="pillar-num">PILAR 03</div>
-            <h3>Anti-Mirroring con Jitter Asíncrono</h3>
-            <p>
-              Desfase estocástico aleatorio en milisegundos (50ms a 350ms) entre órdenes salientes enviadas a brokers.
-              Elimina la huella digital sincrónica que usan los brokers para detectar software de copy-trading no autorizado.
-            </p>
+            <div class="pillar-icon">⌁</div>
+            <div class="pillar-num">03 / CONTROL</div>
+            <h3>Parámetros de riesgo configurables</h3>
+            <p>Define horarios, límites diarios y objetivos de consistencia para mantener tus ajustes visibles y organizados.</p>
             <ul class="pillar-bullets">
-              <li>✓ Distribución gaussiana de retardos por orden.</li>
-              <li>✓ Desincronización deliberada de fills en broker.</li>
-              <li>✓ Respeto a las políticas de evaluación y PA.</li>
+              <li>Horarios por unidad</li>
+              <li>Límites y objetivos editables</li>
+              <li>Controles de pausa y cierre simulados</li>
             </ul>
           </div>
 
           <div class="pillar-card">
-            <div class="pillar-icon">🎯</div>
-            <div class="pillar-num">PILAR 04</div>
-            <h3>Circuit Breakers & Consistency Lock</h3>
-            <p>
-              Protección algorítmica de capital: candado automático de +$150 USD para cumplir el requisito de días de consistencia
-              mínimos para retiros en prop firms, y Trailing Daily Loss Limit con cierre de emergencia.
-            </p>
+            <div class="pillar-icon">⌗</div>
+            <div class="pillar-num">04 / ANÁLISIS</div>
+            <h3>Gráficos y análisis histórico</h3>
+            <p>Visualiza velas y revisa estrategias con datos históricos importados para entender mejor tus escenarios.</p>
             <ul class="pillar-bullets">
-              <li>✓ Candado +$150 asegura el día y bloquea nuevas entradas.</li>
-              <li>✓ Auto-flatten ante drawdown anómalo.</li>
-              <li>✓ Filtro macroeconómico ante noticias de alto impacto.</li>
+              <li>Gráficos por instrumento y bot</li>
+              <li>Importación de velas CSV</li>
+              <li>Resultados hipotéticos claramente identificados</li>
             </ul>
           </div>
         </div>
@@ -155,72 +152,75 @@
 
       <!-- Flujo de Ejecución End-to-End -->
       <div class="workflow-section" id="landing-workflow">
-        <h3>Flujo Operativo de Ejecución</h3>
+        <span class="landing-section-kicker">FLUJO DE TRABAJO</span>
+        <h3>De la configuración al análisis</h3>
         <div class="workflow-steps-row">
           <div class="wf-step">
             <div class="wf-step-idx">1</div>
-            <h4>Señal TradingView</h4>
-            <p>Webhook con token seguro emite señal algorítmica (ICT / SMT / Order Flow).</p>
+            <h4>Organiza</h4>
+            <p>Crea tus bots, asigna estrategias y relaciona cuentas y titulares.</p>
           </div>
           <div class="wf-arrow">➔</div>
           <div class="wf-step">
             <div class="wf-step-idx">2</div>
-            <h4>Filtros y Horarios</h4>
-            <p>Motor verifica New York Killzone, límites de riesgo y filtro ForexFactory.</p>
+            <h4>Supervisa</h4>
+            <p>Revisa estados, horarios, balances y controles configurados.</p>
           </div>
           <div class="wf-arrow">➔</div>
           <div class="wf-step">
             <div class="wf-step-idx">3</div>
-            <h4>Jitter y SOCKS5</h4>
-            <p>Inyección de retardo asíncrono y salida por el proxy ISP del titular.</p>
+            <h4>Analiza</h4>
+            <p>Explora gráficos y prueba estrategias con datos históricos importados.</p>
           </div>
           <div class="wf-arrow">➔</div>
           <div class="wf-step">
             <div class="wf-step-idx">4</div>
-            <h4>Broker y Circuit Breaker</h4>
-            <p>Ejecución en Tradovate/Rithmic y auto-bloqueo al alcanzar la meta de consistencia.</p>
+            <h4>Ajusta</h4>
+            <p>Actualiza parámetros y consulta las operaciones simuladas registradas.</p>
           </div>
         </div>
       </div>
 
-      <!-- Sección de Prop Firms Compatibles -->
+      <!-- Sección de cuentas y controles -->
       <div class="landing-props-section" id="landing-props">
         <div class="pillars-header">
-          <h2>Compatibilidad con Reglas de Prop Firms</h2>
-          <p>Configurado según las políticas vigentes de retiros, consistencia y drawdown.</p>
+          <span class="landing-section-kicker">GESTIÓN FLEXIBLE</span>
+          <h2>Una estructura adaptable a tu forma de trabajar</h2>
+          <p>Centraliza información y parámetros; verifica siempre las reglas vigentes de cada proveedor de fondeo.</p>
         </div>
         <div class="props-rules-grid">
           <div class="prop-rule-box">
-            <h4>Apex Trader Funding</h4>
-            <p>Requiere 5 días de trading de consistencia ($100-$150 min) para habilitar retiros. Candado automático QUANTUM FX lo asegura.</p>
+            <h4>01 · Configuración por bot</h4>
+            <p>Define horario, estrategia y límites individualmente y consúltalos en el panel.</p>
           </div>
           <div class="prop-rule-box">
-            <h4>Topstep</h4>
-            <p>Prohibición estricta de copy-trading masivo entre distintas identidades. SOCKS5 dedicado y jitter resuelven la detección.</p>
+            <h4>02 · Cuentas organizadas</h4>
+            <p>Asocia registros de cuenta y titular para encontrar rápidamente la información que necesitas.</p>
           </div>
           <div class="prop-rule-box">
-            <h4>Leelo Trading</h4>
-            <p>Límites estrictos de drawdown trailing al cierre de sesión. El circuit breaker DLL preserva las Performance Accounts.</p>
+            <h4>03 · Métricas a la vista</h4>
+            <p>Consulta balances registrados, P&amp;L y estado operativo desde una sola interfaz.</p>
           </div>
         </div>
       </div>
 
       <!-- CTA Inferior -->
       <div class="landing-bottom-cta">
-        <h2>¿Listo para operar tus cuentas con máxima protección?</h2>
-        <p>Inicia sesión con tus credenciales maestras de operador para acceder al panel de control y telemetría en tiempo real.</p>
+        <span class="landing-section-kicker">QUANTUM FX</span>
+        <h2>Una operación más fácil de seguir empieza aquí.</h2>
+        <p>Accede al panel y explora las herramientas de organización, monitoreo y análisis.</p>
         <button class="btn btn-primary btn-lg" onclick="handleLandingCta()">
-          <span>🚀 Iniciar Sesión y Entrar al Sistema</span> ➔
+          <span>Entrar a la plataforma</span> <span aria-hidden="true">↗</span>
         </button>
       </div>
 
       <!-- Footer Público -->
       <footer class="public-landing-footer">
         <div class="footer-brand">
-          <span class="logo-icon">▲</span> QUANTUM FX // INSTITUTIONAL FUTURES TRADING
+          <span class="logo-icon">▲</span> QUANTUM FX · TERMINAL MULTI-BOT
         </div>
         <p class="footer-copy">
-          Aislamiento de red SOCKS5 estático residencial · Gestión segregada por titular KYC · Cumplimiento estricto de reglas de consistencia de prop firms.
+          Entorno de monitoreo y simulación. No conecta con brokers ni ejecuta operaciones reales. Los resultados históricos e indicadores de mercado son informativos y no garantizan resultados futuros.
         </p>
       </footer>
     </div>
@@ -451,8 +451,9 @@
     <section class="tab-view active" id="view-dashboard">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Unidades de Ejecución & Titulares Asignados</h2>
-          <span class="section-sub">Aislamiento SOCKS5 Dedicado // Anti-Mirroring con Jitter // Anti-Flagging Geográfico</span>
+          <div class="terminal-eyebrow"><span class="pulse-dot"></span> QUANTUM FX / SISTEMA DE MONITOREO</div>
+          <h2>Panel de control</h2>
+          <span class="section-sub">Balances, rendimiento y estado reportado de tus bots.</span>
         </div>
         <!-- Cápsula de Filtros Redondeada estilo Lucid Trading -->
         <div class="lucid-filter-capsule">
@@ -460,6 +461,10 @@
           <button class="filter-capsule-item filter-tag" onclick="filterBots('ACTIVE')">Activos</button>
           <button class="filter-capsule-item filter-tag" onclick="filterBots('PAUSED')">Pausados</button>
         </div>
+      </div>
+
+      <div class="dashboard-bento" id="dashboard-bento" aria-live="polite">
+        <div class="bento-loading">Cargando métricas de cuentas y bots…</div>
       </div>
 
       <div class="bot-grid" id="bot-grid">
@@ -1339,6 +1344,12 @@
           </div>
         </div>
 
+        <div class="form-group">
+          <label for="edit-bot-today-pnl">Ganancia / P&amp;L del día (simulado) ($)</label>
+          <input type="number" id="edit-bot-today-pnl" value="0" min="-10000000" max="10000000" step="0.01" required>
+          <small class="form-hint">Ajusta el valor que muestra el panel. No proviene de un broker y puede influir en los límites simulados.</small>
+        </div>
+
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeAddBotModal()">Cancelar</button>
           <button type="submit" class="btn btn-primary">Crear y Desplegar Bot</button>
@@ -1349,55 +1360,91 @@
 
   <!-- 4. Modal Registrar Nueva Persona Titular (KYC) -->
   <div class="modal-overlay" id="add-identity-modal">
-    <div class="modal-content modal-sm">
+    <div class="modal-content modal-md identity-modal-content">
       <div class="modal-header">
-        <h2>Registrar Nuevo Titular (KYC)</h2>
-        <button class="modal-close" onclick="closeAddIdentityModal()">&times;</button>
+        <h2 id="identity-modal-title">Registrar titular</h2>
+        <button type="button" class="modal-close" onclick="closeAddIdentityModal()">&times;</button>
       </div>
-      <form class="modal-body form-body" onsubmit="submitAddIdentity(event)">
+      <form class="modal-body form-body identity-form" onsubmit="saveIdentity(event)">
+        <input type="hidden" id="identity-form-mode" value="create">
+        <p class="form-hint identity-security-note">La aplicación de escritorio cifra estos datos en SQLite con una clave protegida por tu usuario de Windows. No ingreses datos de tarjeta completos ni códigos CVV.</p>
         <div class="form-group">
-          <label>ID Interno *</label>
-          <input type="text" id="new-ident-id" placeholder="ej. id_roberto" required>
+          <label for="new-ident-id">ID interno (opcional)</label>
+          <input type="text" id="new-ident-id" placeholder="Se genera automáticamente" maxlength="64">
+          <small class="form-hint">Si lo dejas vacío, se genera un identificador seguro.</small>
         </div>
         <div class="form-group">
-          <label>Nombre y Apellidos Completos *</label>
-          <input type="text" id="new-ident-name" placeholder="ej. Roberto Gómez Bolaños" required>
+          <label for="new-ident-name">Nombre y apellidos *</label>
+          <input type="text" id="new-ident-name" placeholder="Nombre completo" maxlength="160" required>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>País (Código ISO) *</label>
-            <input type="text" id="new-ident-country" placeholder="US, ES, MX, AR..." required maxlength="3">
+            <label for="new-ident-country">País (ISO 2 letras)</label>
+            <input type="text" id="new-ident-country" placeholder="AR" value="AR" required maxlength="2" pattern="[A-Za-z]{2}">
           </div>
           <div class="form-group">
-            <label>Ciudad / Estado</label>
-            <input type="text" id="new-ident-city" placeholder="ej. Ciudad de México">
+            <label for="new-ident-kyc">Estado de KYC</label>
+            <select id="new-ident-kyc"><option value="PENDING">Pendiente</option><option value="VERIFIED">Verificado</option><option value="REJECTED">Rechazado</option></select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Emoji Bandera</label>
-            <input type="text" id="new-ident-flag" placeholder="🇲🇽" maxlength="4">
+            <label for="new-ident-city">Ciudad</label>
+            <input type="text" id="new-ident-city" placeholder="Ciudad" maxlength="120">
           </div>
           <div class="form-group">
-            <label>Estado de KYC</label>
-            <select id="new-ident-kyc">
-              <option value="PENDING">Pendiente (sin verificar)</option>
-              <option value="VERIFIED">Verificado</option>
-              <option value="REJECTED">Rechazado</option>
-            </select>
+            <label for="identity-province">Provincia / estado</label>
+            <input type="text" id="identity-province" placeholder="Provincia" maxlength="120">
           </div>
         </div>
         <div class="form-group">
-          <label>Correo Electrónico de las Cuentas</label>
-          <input type="email" id="new-ident-email" placeholder="titular@correo.com">
+          <label for="identity-address">Dirección</label>
+          <input type="text" id="identity-address" placeholder="Calle y altura" maxlength="240" autocomplete="street-address">
         </div>
         <div class="form-group">
-          <label>Notas Internas</label>
-          <textarea id="new-ident-notes" rows="2" placeholder="Notas no sensibles; no guardes documentos ni fecha de nacimiento."></textarea>
+          <label for="identity-postal-code">Código postal</label>
+          <input type="text" id="identity-postal-code" placeholder="Código postal" maxlength="24" autocomplete="postal-code">
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="new-ident-email">Correo electrónico</label>
+            <input type="email" id="new-ident-email" placeholder="nombre@correo.com" maxlength="254" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="identity-dni">DNI / documento</label>
+            <input type="text" id="identity-dni" placeholder="Número de documento" maxlength="48" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="identity-phone">Número de teléfono</label>
+          <input type="tel" id="identity-phone" placeholder="Ej.: +54 11 1234 5678" maxlength="48" autocomplete="tel">
+          <span class="form-hint">Ingresa el número completo en un solo campo; puedes incluir el prefijo internacional.</span>
+        </div>
+        <div class="identity-form-divider"><span>Wallet para recibir criptomonedas</span></div>
+        <div class="form-row">
+          <div class="form-group"><label for="identity-wallet-name">Nombre de wallet</label><input id="identity-wallet-name" type="text" maxlength="100" placeholder="Mi wallet"></div>
+          <div class="form-group"><label for="identity-wallet-network">Red</label><input id="identity-wallet-network" type="text" maxlength="80" placeholder="BTC, Ethereum, TRC20…"></div>
+        </div>
+        <div class="form-group"><label for="identity-wallet-address">Dirección pública de recepción</label><input id="identity-wallet-address" type="text" maxlength="240" placeholder="Dirección pública de la wallet" autocomplete="off"></div>
+        <div class="form-group"><label for="identity-wallet-alias">Alias para transferencias cripto</label><input id="identity-wallet-alias" type="text" maxlength="160" placeholder="Alias de recepción"></div>
+        <div class="identity-form-divider"><span>Referencia de medio de pago</span></div>
+        <p class="form-hint identity-security-note">Por seguridad, esta app no guarda el número completo ni el código de seguridad (CVV). Guarda la tarjeta en un proveedor de pagos y registra aquí solo su referencia y datos parciales.</p>
+        <div class="form-row">
+          <div class="form-group"><label for="identity-card-brand">Marca de tarjeta</label><input id="identity-card-brand" type="text" maxlength="40" placeholder="Visa, Mastercard…"></div>
+          <div class="form-group"><label for="identity-card-last4">Últimos 4 dígitos</label><input id="identity-card-last4" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="1234" autocomplete="off"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label for="identity-card-exp-month">Mes de vencimiento</label><input id="identity-card-exp-month" type="number" min="1" max="12" placeholder="MM"></div>
+          <div class="form-group"><label for="identity-card-exp-year">Año de vencimiento</label><input id="identity-card-exp-year" type="number" min="2026" max="2051" placeholder="AAAA"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label for="identity-payment-provider">Proveedor de pago</label><input id="identity-payment-provider" type="text" maxlength="80" placeholder="Proveedor que tokeniza la tarjeta"></div>
+          <div class="form-group"><label for="identity-payment-reference">Referencia / token del proveedor</label><input id="identity-payment-reference" type="text" maxlength="200" placeholder="Identificador no secreto"></div>
+        </div>
+        <div class="form-group"><label for="new-ident-notes">Notas internas</label><textarea id="new-ident-notes" rows="2" maxlength="1000" placeholder="Notas del perfil"></textarea></div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeAddIdentityModal()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Registrar Persona</button>
+          <button type="submit" class="btn btn-primary" id="identity-save-button">Guardar titular</button>
         </div>
       </form>
     </div>

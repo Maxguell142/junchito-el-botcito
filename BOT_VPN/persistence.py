@@ -49,7 +49,10 @@ class SQLiteStore:
                 continue
             identities.append({
                 key: identity[key]
-                for key in ("id", "full_name", "alias", "country", "city", "flag", "kyc_status", "email", "notes")
+                for key in (
+                    "id", "full_name", "alias", "country", "city", "flag", "kyc_status", "email", "notes",
+                    "__pii_encrypted_v1",
+                )
                 if key in identity
             })
 

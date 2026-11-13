@@ -1,5 +1,25 @@
 # BOT_VPN — ejecución local
 
+## Aplicación de escritorio para Windows
+
+El proyecto incluye un empaquetado de escritorio basado en Electron. La ventana inicia el servidor Node local, lo cierra al salir y guarda la base SQLite en el perfil de Windows. El instalador incluye Chromium y Node; no requiere instalar Node.js ni Python para abrir el panel. FastAPI sigue siendo opcional y no se inicia desde esta app.
+
+Desde `BOT_VPN`, para desarrollo o para crear el instalador x64:
+
+```powershell
+npm install
+npm run start:desktop
+npm run dist:win
+```
+
+El instalador queda en `dist-desktop/QuantumFX-Setup-1.0.0.exe`. La instalación es por usuario, crea accesos directos en Inicio y en el escritorio, y no solicita permisos de administrador salvo que una política de la institución lo exija. La app conserva los datos al desinstalar.
+
+En el primer inicio instalado se puede elegir un archivo `bot_vpn.sqlite3` para importarlo; si no, crea una base vacía. En modo de desarrollo copia de forma segura la base local existente la primera vez. La base y el archivo opcional `.env` quedan en la carpeta de datos de QUANTUM FX dentro de `%APPDATA%`. El `.env` puede definir `BOT_VPN_AUTH_USERNAME`, `BOT_VPN_AUTH_PASSWORD` y claves de proveedores; no se incluye dentro del instalador.
+
+Los datos personales de titulares se cifran en SQLite con AES-256-GCM; la clave se protege con el almacenamiento seguro de Windows para el mismo usuario. Para registrar o editar esos perfiles usa el escritorio (`npm run start:desktop` en desarrollo). El formulario guarda datos parciales de tarjeta y una referencia tokenizada; no admite el número completo ni el CVV.
+
+Sin variables de acceso configuradas, el servidor conserva sus credenciales locales de desarrollo (`admin` / `quantum2026`). Cambiá las credenciales en el `.env` del perfil antes de usar información sensible.
+
 > 📚 **Base de Conocimiento y Wiki (Obsidian):** Empieza por el [[wiki/stack-and-health|Mapa del sistema, stack y salud]], sigue con el [[wiki/index|Índice Maestro de la Wiki]] y la [[wiki/system-overview|Arquitectura General del Sistema]]. El marco operativo del agente está en [[AGENTS]].
 > 📋 **Roadmap y Backlog:** Lista priorizada de trabajo en [[PENDIENTES_Y_MEJORAS|Pendientes y Mejoras]]; plan ampliado en [[IMPLEMENTATION_PLAN|Plan de Implementación]].
 

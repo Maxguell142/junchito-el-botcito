@@ -2,7 +2,7 @@
 title: Mapa del sistema, stack y salud
 category: system
 tags: [stack, health, frontend, backend, ai, obsidian]
-last_updated: 2026-11-11
+last_updated: 2026-11-12
 ---
 
 # Mapa del sistema, stack y salud
@@ -14,6 +14,7 @@ last_updated: 2026-11-11
 | Área | Tecnología actual | Estado |
 | --- | --- | --- |
 | Backend web principal | Node.js 22.13+ y Express 5 | Sirve la interfaz y la API en `http://127.0.0.1:3008`. |
+| App de escritorio | Electron 45 y NSIS x64 | Inicia el servidor Node en una ventana de escritorio; la app instalada incluye runtime y guarda SQLite en el perfil de Windows. |
 | Backend alternativo | Python 3.10+, FastAPI, Pydantic y Uvicorn | Servicio separado y opcional en `http://127.0.0.1:8000`. |
 | Frontend | HTML, CSS y JavaScript sin framework | Archivos locales en `public/`; Node sirve el panel principal. |
 | Gráficos | TradingView Lightweight Charts 5.2.1 | Archivo local `public/lightweight-charts.standalone.production.js`. |
@@ -91,6 +92,8 @@ Obsidian usa `BOT_VPN/` como bóveda y su espacio de trabajo queda apuntando a `
 ## Estado funcional que no hay que confundir
 
 - Node y FastAPI son servicios independientes; la interfaz principal se sirve con Node.
+- El envoltorio Electron inicia solo el servidor Node del panel. FastAPI sigue opcional y no es requisito de la aplicación de escritorio.
+- El instalador NSIS es x64 y por usuario. La base se guarda en el directorio de datos de Electron en Windows; durante el primer inicio instalado se ofrece importar un `bot_vpn.sqlite3` existente.
 - La cuadrícula por bot consulta `/api/bot/:botId/candles` por HTTP y actualiza aproximadamente cada 60 segundos. El gráfico general usa `/api/market/candles`, que devuelve velas simuladas en memoria. No existe aquí un stream de precios de un broker.
 - Finnhub y Alpha Vantage mapean MNQ/NQ a QQQ y ES a SPY: son precios de ETFs, no precios equivalentes de los futuros CME. Si falla una fuente, el conector puede generar velas sintéticas; la UI no hace suficientemente visible el proveedor efectivo. No uses esas series para ejecutar ni evaluar trades reales.
 - El mapa `public/data/botSymbols.json` contiene asignaciones estáticas (`bot_1`/`bot_2`/`bot_3`) y usa MNQ como default; no obtiene necesariamente el instrumento configurado en la base para bots personalizados.
