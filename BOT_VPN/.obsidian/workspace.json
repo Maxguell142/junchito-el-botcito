@@ -29,7 +29,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "wiki/index.md",
+                "file": "documentacion/00_INICIO_OBSIDIAN.md",
                 "mode": "source",
                 "source": false
               },
@@ -238,6 +238,6 @@
     "raw/cme-mnq-specifications.md",
     "raw/system-specifications.md",
     "raw/prop-firms-comparison.md",
-    "wiki/strategies/ict-strategy.md"
+    "documentacion/estrategias/referencia-estrategia-ict.md"
   ]
 }

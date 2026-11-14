@@ -11,7 +11,7 @@ Read this first; do not scan the whole repository by default.
 
 ## Verified facts
 
-- App lives in `BOT_VPN/`; `BOT_VPN/AGENTS.md` defines wiki maintenance.
+- App and Obsidian vault live in `BOT_VPN/`; `BOT_VPN/AGENTS.md` gives project rules and `BOT_VPN/documentacion/AGENTS.md` defines documentation maintenance.
 - Node.js 22.13+ / Express 5 serves the vanilla JS dashboard and API on port 3008. Optional Python / FastAPI runs separately on port 8000. Both use SQLite but their APIs differ.
 - Trading/order execution remains simulated; the CSV analysis is historical. No live broker execution or real VPN-per-bot orchestration is established.
 - The current working tree adds a Node market-data module (`BOT_VPN/src/marketData.js`) for chart candles, with Yahoo/Finnhub/Alpha Vantage requests and synthetic fallback. This is separate from the simulated trading price and does not prove a live CME feed.
@@ -20,24 +20,26 @@ Read this first; do not scan the whole repository by default.
 - External provider requests now time out after eight seconds; per-bot cards load concurrently and show the reported source or simulated fallback. `synthetic` is an explicit provider mode.
 - A Windows desktop shell now lives in `BOT_VPN/desktop/main.js`; Electron starts the existing Node server in a utility process and opens the panel in a secured window. `npm run start:desktop` runs development mode; `npm run dist:win` builds the per-user x64 NSIS installer.
 - Packaged desktop app bundles Electron/Node and does not require system Node/Python for the Node dashboard. FastAPI remains optional and is not launched by the desktop shell. SQLite is stored under Electron's Windows user-data directory; first installed launch can import an existing SQLite database.
-- `BOT_VPN/.cursorrules` is Cursor guidance. `BOT_VPN/types/financial_types.ts` is not wired into JavaScript/Python or checked by a TypeScript build; treat it as a draft/reference until aligned with actual API and database contracts.
+- `BOT_VPN/.cursorrules` is Cursor guidance. A former unreferenced TypeScript draft was removed because no app code or build used it; Node/Python code and the SQLite schema remain the source of truth.
 - Keep credentials out of prompts, source, wiki, logs, and output. Never put secrets in MCP or dotenv tools exposed to an assistant.
 
 ## Find the relevant source
 
-- Verified stack and limits: `BOT_VPN/wiki/stack-and-health.md`; setup: `BOT_VPN/README.md`.
-- Node service / SQLite: `BOT_VPN/server.js`, `BOT_VPN/database.js`, `BOT_VPN/migrations/`.
-- Python service: `BOT_VPN/main.py`, `BOT_VPN/persistence.py`, `BOT_VPN/bot_engine.py`, `BOT_VPN/strategies.py`.
+- Verified stack and limits: `BOT_VPN/documentacion/02_ESTADO_TECNICO_Y_SALUD.md`; setup: `BOT_VPN/README.md`.
+- Obsidian start page: `BOT_VPN/documentacion/00_INICIO_OBSIDIAN.md`.
+- Node service / SQLite: `BOT_VPN/src/server/server.js`, `BOT_VPN/src/server/database.js`, `BOT_VPN/src/server/market_analysis.js`, `BOT_VPN/migrations/`.
+- Python service: `BOT_VPN/fastapi_service/main.py`, `BOT_VPN/fastapi_service/persistence.py`, `BOT_VPN/fastapi_service/bot_engine.py`, `BOT_VPN/fastapi_service/strategies.py`.
 - UI: `BOT_VPN/public/app.js`, `index.html`, `style.css`.
-- Existing tests: `BOT_VPN/tests/` (run only when requested or needed).
-- Market data connector notes: `BOT_VPN/wiki/connectors/market-data-providers.md`.
+- Existing tests: `BOT_VPN/tests/node/` and `BOT_VPN/tests/python/` (run only when requested or needed).
+- Code / Obsidian cross-reference map: `BOT_VPN/documentacion/01_MAPA_DEL_PROYECTO.md`; run `npm run check:docs` from `BOT_VPN/` to validate links.
+- Market data connector notes: `BOT_VPN/documentacion/integraciones/fuentes-de-datos-para-graficos.md`.
 
 ## Efficient workflow
 
 1. Search symbols with `rg`; open only the target and directly related code/docs/tests.
 2. Identify which service owns the requested behavior; never assume Node and FastAPI contracts match.
 3. Treat source and tests as evidence; label features implemented, simulated, optional, or planned.
-4. For wiki edits, preserve `raw/`, follow `BOT_VPN/AGENTS.md`, update the index for new pages, and append log entries when its workflow requires them.
+4. For documentation edits, preserve `raw/`, follow `BOT_VPN/documentacion/AGENTS.md`, update the Obsidian start page, and append changes to the history.
 5. Make the smallest complete change; keep explanations and diffs concise. Do not install a framework or MCP server without a concrete missing capability.
 
 ## Local tools and architecture choices

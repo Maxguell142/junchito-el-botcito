@@ -178,7 +178,7 @@ async function startDesktopApp() {
   const port = await findAvailablePort();
   const url = `http://127.0.0.1:${port}`;
   appOrigin = new URL(url).origin;
-  const serverPath = path.join(app.getAppPath(), 'server.js');
+  const serverPath = path.join(app.getAppPath(), 'src', 'server', 'server.js');
 
   if (!fs.existsSync(serverPath)) {
     throw new Error('No se encontró el servidor de QUANTUM FX dentro de la aplicación.');

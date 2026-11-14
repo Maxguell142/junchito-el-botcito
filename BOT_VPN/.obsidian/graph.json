@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "-path:node_modules -path:.venv -path:public",
+  "search": "-path:node_modules -path:.venv -path:public -path:src -path:fastapi_service -path:desktop -path:tests -path:scripts -path:migrations -path:dist -path:dist-desktop",
   "showTags": false,
   "showAttachments": false,
   "hideUnresolved": false,
@@ -8,28 +8,28 @@
   "collapse-color-groups": false,
   "colorGroups": [
     {
-      "query": "path:wiki/concepts",
+      "query": "path:documentacion/conceptos",
       "color": {
         "a": 1,
         "rgb": 45311
       }
     },
     {
-      "query": "path:wiki/strategies",
+      "query": "path:documentacion/estrategias",
       "color": {
         "a": 1,
         "rgb": 59000
       }
     },
     {
-      "query": "path:wiki/connectors",
+      "query": "path:documentacion/integraciones",
       "color": {
         "a": 1,
         "rgb": 16744448
       }
     },
     {
-      "query": "path:wiki/prop-firms",
+      "query": "path:documentacion/reglas_de_fondeo",
       "color": {
         "a": 1,
         "rgb": 14696703
@@ -43,7 +43,7 @@
       }
     },
     {
-      "query": "file:index OR file:system-overview OR file:README OR file:AGENTS",
+      "query": "file:00_INICIO_OBSIDIAN OR file:02_ESTADO_TECNICO_Y_SALUD OR file:01_MAPA_DEL_PROYECTO OR file:README OR file:AGENTS",
       "color": {
         "a": 1,
         "rgb": 16766720

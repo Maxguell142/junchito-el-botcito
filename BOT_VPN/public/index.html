@@ -38,7 +38,7 @@
 
       <div class="public-landing-actions" id="landing-auth-action-box">
         <button class="btn btn-primary" onclick="goToLoginScreen()">
-          <span>🔐 Iniciar Sesión</span> ➔
+          <span>Iniciar sesión</span> →
         </button>
       </div>
     </header>
@@ -253,7 +253,7 @@
             <label for="login-password">Contraseña Maestra</label>
             <div class="password-wrap">
               <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
-              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility('login-password')">👁️</button>
+              <button type="button" class="btn-toggle-pwd" aria-label="Mostrar u ocultar contraseña" onclick="togglePasswordVisibility('login-password')">Ver</button>
             </div>
           </div>
 
@@ -264,7 +264,7 @@
           </div>
 
           <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-login-submit">
-            <span>Ingresar a la Terminal</span> ➔
+            <span>Ingresar a la terminal</span> →
           </button>
         </form>
 
@@ -296,7 +296,7 @@
       <!-- ==================================================================
            BARRA LATERAL VERTICAL ESTILO LUCID TRADING (PARED IZQUIERDA)
            ================================================================== -->
-      <aside class="lucid-sidebar" id="app-sidebar" aria-label="Navegación Lateral Lucid">
+      <aside class="lucid-sidebar" id="app-sidebar" aria-label="Navegación principal">
         <!-- Encabezado de Marca con Logo Oficial Interactivo -->
         <div class="sidebar-brand" onclick="toggleSidebarCollapse()" title="Haz clic para abrir o cerrar opciones de navegación" style="cursor: pointer;">
           <img src="/static/logo.png" class="sidebar-brand-logo" alt="QUANTUM FX Logo">
@@ -306,71 +306,71 @@
           </div>
         </div>
 
-        <!-- Botón de Acción Principal (+ Nuevo Bot estilo Lucid '+ Add Account') -->
+        <!-- Acciones principales -->
         <div class="sidebar-actions-wrapper">
-          <button class="lucid-cta-btn" onclick="openAddBotModal()" title="Crear y Configurar Nuevo Bot de Trading">
+          <button class="lucid-cta-btn" onclick="openAddBotModal()" title="Crear bot">
             <span class="cta-icon">＋</span>
             <span class="cta-label">Nuevo Bot</span>
           </button>
-          <button class="lucid-sub-cta-btn" onclick="openAddAccountModal()" title="Vincular Cuenta de Fondeo Prop Firm">
-            <span class="sub-cta-icon">💼</span>
+          <button class="lucid-sub-cta-btn" onclick="openAddAccountModal()" title="Vincular cuenta">
+            <span class="sub-cta-icon" aria-hidden="true">▣</span>
             <span class="sub-cta-label">+ Vincular Cuenta</span>
           </button>
         </div>
 
-        <!-- Lista de Navegación Vertical en Pastillas (Pills) -->
+        <!-- Navegación principal -->
         <nav class="sidebar-nav-list" id="sidebar-nav">
-          <button class="sidebar-nav-item tab-link active" onclick="switchTab('dashboard')" title="Dashboard & Unidades de Ejecución">
-            <span class="nav-icon">📊</span>
-            <span class="nav-label">Dashboard & Bots</span>
+          <button class="sidebar-nav-item tab-link active" onclick="switchTab('dashboard')" title="Panel de control">
+            <span class="nav-icon" aria-hidden="true">▦</span>
+            <span class="nav-label">Panel</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('charts')" title="Gráficos MNQ & Ejecución de Trades en Vivo">
-            <span class="nav-icon">📈</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('charts')" title="Gráficos de mercado">
+            <span class="nav-icon" aria-hidden="true">⌁</span>
             <span class="nav-label">Gráficos MNQ</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('ledger')" title="Finanzas, Split Payouts & Contabilidad">
-            <span class="nav-icon">💰</span>
-            <span class="nav-label">Finanzas & Ledger</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('ledger')" title="Finanzas y pagos">
+            <span class="nav-icon" aria-hidden="true">＄</span>
+            <span class="nav-label">Finanzas</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('noticias')" title="Calendario Macro & Filtro de Noticias">
-            <span class="nav-icon">📰</span>
-            <span class="nav-label">Calendario Macro</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('noticias')" title="Calendario económico">
+            <span class="nav-icon" aria-hidden="true">▤</span>
+            <span class="nav-label">Calendario</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('analysis')" title="Simulación Histórica y Métricas NQ / ES">
-            <span class="nav-icon">🔬</span>
-            <span class="nav-label">Análisis de Mercado</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('analysis')" title="Análisis histórico">
+            <span class="nav-icon" aria-hidden="true">⌕</span>
+            <span class="nav-label">Análisis</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('titulares')" title="Personas Titulares Físicas & KYC Segregado">
-            <span class="nav-icon">👤</span>
-            <span class="nav-label">Titulares & KYC</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('titulares')" title="Titulares">
+            <span class="nav-icon" aria-hidden="true">◉</span>
+            <span class="nav-label">Titulares</span>
             <span class="sidebar-pill-badge" id="count-titulares">0</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('cuentas')" title="Cuentas de Fondeo Prop Firms Vinculadas">
-            <span class="nav-icon">💼</span>
-            <span class="nav-label">Cuentas Prop</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('cuentas')" title="Cuentas de fondeo">
+            <span class="nav-icon" aria-hidden="true">▣</span>
+            <span class="nav-label">Cuentas</span>
             <span class="sidebar-pill-badge" id="count-cuentas">0</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('vpn')" title="Aislamiento de Red SOCKS5 Residencial Dedicado">
-            <span class="nav-icon">🛡️</span>
-            <span class="nav-label">VPN & Proxies</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('vpn')" title="Conexiones y proxies">
+            <span class="nav-icon" aria-hidden="true">◈</span>
+            <span class="nav-label">Conexiones</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('webhook')" title="Integración con Alertas Webhook TradingView">
-            <span class="nav-icon">⚡</span>
-            <span class="nav-label">TradingView Webhook</span>
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('webhook')" title="Alertas de TradingView">
+            <span class="nav-icon" aria-hidden="true">↗</span>
+            <span class="nav-label">Alertas</span>
           </button>
         </nav>
 
         <!-- Footer de Barra Lateral -->
         <div class="sidebar-footer">
-          <button class="sidebar-logout-btn" onclick="logoutUser()" title="Cerrar Sesión Segura">
+          <button class="sidebar-logout-btn" onclick="logoutUser()" title="Cerrar sesión">
             <span class="logout-icon">⏻</span>
             <span class="logout-label">Log Out</span>
           </button>
@@ -382,9 +382,9 @@
            ================================================================== -->
       <div class="terminal-workspace">
 
-        <!-- Topbar Institucional Limpio y Despejado con Telemetría & Banner Diamante -->
+        <!-- Encabezado y resumen de sesión -->
         <header class="workspace-topbar" id="main-header">
-          <!-- Izquierda: Live Ticker SIM-MNQ + Status WebSocket -->
+          <!-- Estado del mercado y conexión -->
           <div class="topbar-left-zone">
             <div class="market-badge" title="Precio de demostración simulado MNQ (CME)">
               <span class="pulse-dot"></span>
@@ -397,7 +397,7 @@
             </div>
           </div>
 
-          <!-- Centro: Telemetría Global de la Sesión en Monospace -->
+          <!-- Resumen de sesión -->
           <div class="topbar-telemetry-strip">
             <div class="telemetry-chip">
               <span class="t-label">PnL SESIÓN</span>
@@ -417,22 +417,15 @@
             </div>
           </div>
 
-          <!-- Derecha: Botones de Pánico y Perfil de Operador -->
+          <!-- Perfil -->
           <div class="topbar-right-zone">
             <div class="emergency-controls-group">
-              <button class="btn btn-emergency-flatten" onclick="promptFlattenAll()" title="Cierra inmediatamente todas las posiciones abiertas en todas las cuentas">
-                <span class="btn-dot">🔴</span> FLAT ALL
-              </button>
-              <button class="btn btn-emergency-stop" onclick="promptStopAll()" title="Apaga y pausa inmediatamente todos los bots activos">
-                <span class="btn-dot">⏹️</span> STOP BOTS
-              </button>
+              <button class="btn btn-emergency-flatten" onclick="promptFlattenAll()" title="Cerrar todas las posiciones abiertas">Cerrar órdenes</button>
+              <button class="btn btn-emergency-stop" onclick="promptStopAll()" title="Pausar todos los bots activos">Pausar bots</button>
             </div>
-
-            <!-- Perfil de Operador Institucional -->
-            <div class="lucid-diamond-banner" title="Operador Institucional">
+            <div class="lucid-diamond-banner" title="Cuenta de usuario">
               <div class="diamond-avatar-wrap">
                 <div class="diamond-avatar" id="header-user-avatar">AD</div>
-                <span class="diamond-badge-crown">👑</span>
               </div>
               <div class="diamond-info">
                 <div class="diamond-name-row">
@@ -451,7 +444,7 @@
     <section class="tab-view active" id="view-dashboard">
       <div class="section-header">
         <div class="section-title-wrap">
-          <div class="terminal-eyebrow"><span class="pulse-dot"></span> QUANTUM FX / SISTEMA DE MONITOREO</div>
+          <div class="terminal-eyebrow"><span class="pulse-dot"></span> QUANTUM FX</div>
           <h2>Panel de control</h2>
           <span class="section-sub">Balances, rendimiento y estado reportado de tus bots.</span>
         </div>
@@ -611,19 +604,19 @@
 
       <div class="webhook-panel-grid">
         <div class="webhook-card">
-          <h3>🔗 URL del Webhook Receptor</h3>
+          <h3>URL del webhook</h3>
           <p class="card-desc">Copia y pega esta URL en la casilla "URL del Webhook" al crear una alerta en TradingView.</p>
           <div class="copy-input-group">
             <input type="text" id="webhook-url-input" readonly value="http://TU_IP_O_DOMINIO:8000/api/webhook">
             <button class="btn btn-outline" onclick="copyWebhookUrl()">Copiar URL</button>
           </div>
 
-          <h3 class="mt-4">🔑 Token Secreto de Autenticación</h3>
+          <h3 class="mt-4">Token de autenticación</h3>
           <p class="card-desc">Configura un token propio en <code>config.json</code>. No compartas ni publiques ese archivo.</p>
         </div>
 
         <div class="webhook-card">
-          <h3>📝 Formato de Mensaje JSON de la Alerta</h3>
+          <h3>Formato del mensaje JSON</h3>
           <p class="card-desc">Pega este JSON en el cuerpo del mensaje de la alerta de TradingView. Puedes usar variables dinámicas de Pine Script.</p>
           <pre class="code-box text-mono"><code>{
   "token": "&lt;CONFIGURE_WEBHOOK_TOKEN&gt;",
@@ -689,11 +682,11 @@
           </div>
           <div class="chart-metric">
             <span class="cm-label">CANDADO DE CONSISTENCIA:</span>
-            <span class="cm-val text-neon">🎯 +$150.00 USD Lock</span>
+            <span class="cm-val text-neon">+$150.00 USD</span>
           </div>
           <div class="chart-metric">
             <span class="cm-label">TRAILING STOP SEGURIDAD:</span>
-            <span class="cm-val text-danger">🛑 -$1,000.00 USD DLL</span>
+            <span class="cm-val text-danger">-$1,000.00 USD</span>
           </div>
           <div class="chart-metric">
             <span class="cm-label">TRADES MARCADOS:</span>
@@ -719,8 +712,8 @@
     <section class="tab-view" id="view-ledger">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Ledger Financiero & Reparto de Ganancias a Titulares KYC</h2>
-          <span class="section-sub">Control estricto de inversión en cuentas, retiros aprobados de prop firms y cálculo de splits (80/20) por persona.</span>
+          <h2>Finanzas</h2>
+          <span class="section-sub">Inversiones, retiros y saldos por titular.</span>
         </div>
         <div class="section-actions-group">
           <select id="ledger-identity-filter" onchange="onLedgerFilterChange()">
@@ -735,45 +728,45 @@
       <!-- KPIs Ejecutivos Financieros -->
       <div class="ledger-kpis-grid">
         <div class="ledger-kpi-card">
-          <span class="l-kpi-icon">💼</span>
+          <span class="l-kpi-icon" aria-hidden="true">↗</span>
           <div class="l-kpi-meta">
-            <span class="l-kpi-title">TOTAL INVERTIDO EN CUENTAS</span>
+            <span class="l-kpi-title">TOTAL INVERTIDO</span>
             <span class="l-kpi-amount text-danger" id="ledger-total-invested">-$0.00</span>
             <span class="l-kpi-hint">Evaluaciones + Activación PA</span>
           </div>
         </div>
 
         <div class="ledger-kpi-card">
-          <span class="l-kpi-icon">🏦</span>
+          <span class="l-kpi-icon" aria-hidden="true">↙</span>
           <div class="l-kpi-meta">
-            <span class="l-kpi-title">RETIROS BRUTOS PROP FIRMS</span>
+            <span class="l-kpi-title">RETIROS BRUTOS</span>
             <span class="l-kpi-amount text-neon" id="ledger-gross-payouts">+$0.00</span>
             <span class="l-kpi-hint">Apex, Topstep, Leelo Payouts</span>
           </div>
         </div>
 
         <div class="ledger-kpi-card">
-          <span class="l-kpi-icon">👤</span>
+          <span class="l-kpi-icon" aria-hidden="true">◉</span>
           <div class="l-kpi-meta">
-            <span class="l-kpi-title">SPLIT ACUMULADO TITULARES (20%)</span>
+            <span class="l-kpi-title">PARTE ACUMULADA DE TITULARES</span>
             <span class="l-kpi-amount text-amber" id="ledger-titular-accrued">$0.00</span>
             <span class="l-kpi-hint">Devengado a pagar a los titulares</span>
           </div>
         </div>
 
         <div class="ledger-kpi-card">
-          <span class="l-kpi-icon">⏳</span>
+          <span class="l-kpi-icon" aria-hidden="true">◷</span>
           <div class="l-kpi-meta">
-            <span class="l-kpi-title">SALDO PENDIENTE A TITULARES</span>
+            <span class="l-kpi-title">PENDIENTE DE PAGO</span>
             <span class="l-kpi-amount text-amber font-bold" id="ledger-pending-titulares">$0.00</span>
             <span class="l-kpi-hint">Por transferir a billeteras/bancos</span>
           </div>
         </div>
 
         <div class="ledger-kpi-card highlight">
-          <span class="l-kpi-icon">💰</span>
+          <span class="l-kpi-icon" aria-hidden="true">＝</span>
           <div class="l-kpi-meta">
-            <span class="l-kpi-title">GANANCIA NETA OPERADOR (80%)</span>
+            <span class="l-kpi-title">GANANCIA NETA</span>
             <span class="l-kpi-amount text-neon font-bold" id="ledger-operator-net">+$0.00</span>
             <span class="l-kpi-hint">Ganancia limpia tras deducir costos</span>
           </div>
@@ -784,7 +777,7 @@
       <div class="table-card mb-4">
         <div class="table-card-header">
           <h3>Balance y Repartos por Persona Titular (KYC)</h3>
-          <span class="table-sub">Comisión institucional por préstamo de identidad: 20% de cada retiro neto</span>
+          <span class="table-sub">Distribución acumulada por titular</span>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -812,7 +805,7 @@
       <div class="table-card">
         <div class="table-card-header">
           <h3>Journal de Transacciones Financieras</h3>
-          <span class="table-sub">Registro auditado de compras de evaluaciones, fees PA y pagos a titulares</span>
+          <span class="table-sub">Compras, retiros y pagos registrados</span>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -840,41 +833,40 @@
     <section class="tab-view" id="view-noticias">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Calendario Macroeconómico & Filtro de Noticias ForexFactory</h2>
-          <span class="section-sub">Feed oficial estilo ForexFactory con filtros de divisas y protección contra volatilidad en aperturas críticas.</span>
+          <h2>Calendario económico</h2>
+          <span class="section-sub">Eventos de la semana por divisa e impacto.</span>
         </div>
       </div>
 
-      <!-- Barra de Filtros ForexFactory (Divisas & Impacto) -->
+      <!-- Filtros del calendario -->
       <div class="ff-filter-bar">
         <div class="ff-filter-group">
-          <span class="ff-filter-label">DIVISA:</span>
-          <div class="ff-pill-buttons" id="ff-currency-pills">
-            <button type="button" class="ff-pill active" data-currency="ALL" onclick="setNewsCurrencyFilter('ALL')">🌐 Todas</button>
-            <button type="button" class="ff-pill" data-currency="USD" onclick="setNewsCurrencyFilter('USD')">🇺🇸 Solo USD</button>
-            <button type="button" class="ff-pill" data-currency="JPY" onclick="setNewsCurrencyFilter('JPY')">🇯🇵 Solo JPY</button>
-            <button type="button" class="ff-pill" data-currency="EUR" onclick="setNewsCurrencyFilter('EUR')">🇪🇺 EUR</button>
-            <button type="button" class="ff-pill" data-currency="GBP" onclick="setNewsCurrencyFilter('GBP')">🇬🇧 GBP</button>
+          <span class="ff-filter-label">Divisa</span>
+          <div class="ff-pill-buttons" id="ff-currency-pills" role="tablist" aria-label="Filtrar por divisa">
+            <button type="button" class="ff-pill active" role="tab" aria-controls="news-events-tbody" tabindex="0" aria-selected="true" data-currency="ALL" onclick="setNewsCurrencyFilter('ALL')" onkeydown="handleFilterTabKeydown(event)">Todas</button>
+            <button type="button" class="ff-pill" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-currency="USD" onclick="setNewsCurrencyFilter('USD')" onkeydown="handleFilterTabKeydown(event)">USD</button>
+            <button type="button" class="ff-pill" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-currency="JPY" onclick="setNewsCurrencyFilter('JPY')" onkeydown="handleFilterTabKeydown(event)">JPY</button>
+            <button type="button" class="ff-pill" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-currency="EUR" onclick="setNewsCurrencyFilter('EUR')" onkeydown="handleFilterTabKeydown(event)">EUR</button>
+            <button type="button" class="ff-pill" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-currency="GBP" onclick="setNewsCurrencyFilter('GBP')" onkeydown="handleFilterTabKeydown(event)">GBP</button>
           </div>
         </div>
         <div class="ff-filter-group">
-          <span class="ff-filter-label">IMPACTO:</span>
-          <div class="ff-pill-buttons" id="ff-impact-pills">
-            <button type="button" class="ff-pill active" data-impact="ALL" onclick="setNewsImpactFilter('ALL')">Todos los Impactos</button>
-            <button type="button" class="ff-pill pill-red" data-impact="HIGH" onclick="setNewsImpactFilter('HIGH')">🔴 Solo Alto Impacto (Rojas)</button>
-            <button type="button" class="ff-pill" data-impact="MEDIUM_HIGH" onclick="setNewsImpactFilter('MEDIUM_HIGH')">🟠 Medio y Alto</button>
+          <span class="ff-filter-label">Impacto</span>
+          <div class="ff-pill-buttons" id="ff-impact-pills" role="tablist" aria-label="Filtrar por impacto">
+            <button type="button" class="ff-pill active" role="tab" aria-controls="news-events-tbody" tabindex="0" aria-selected="true" data-impact="ALL" onclick="setNewsImpactFilter('ALL')" onkeydown="handleFilterTabKeydown(event)">Todos</button>
+            <button type="button" class="ff-pill pill-red" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-impact="HIGH" onclick="setNewsImpactFilter('HIGH')" onkeydown="handleFilterTabKeydown(event)">Alto</button>
+            <button type="button" class="ff-pill" role="tab" aria-controls="news-events-tbody" tabindex="-1" aria-selected="false" data-impact="MEDIUM_HIGH" onclick="setNewsImpactFilter('MEDIUM_HIGH')" onkeydown="handleFilterTabKeydown(event)">Medio y alto</button>
           </div>
         </div>
         <div class="ff-filter-search">
-          <input type="text" id="news-search-input" class="search-input" placeholder="🔍 Buscar evento (ej. CPI, NFP, Powell, BOJ)..." oninput="handleNewsSearch(event)">
+          <input type="search" id="news-search-input" class="search-input" placeholder="Buscar evento o divisa…" aria-label="Buscar evento o divisa" oninput="handleNewsSearch(event)">
         </div>
       </div>
 
       <div class="news-layout-grid">
-        <!-- Tabla de Eventos Macroeconómicos ForexFactory -->
         <div class="table-card news-table-card">
           <div class="table-card-header">
-            <h3>Eventos Institucionales ForexFactory (Semana en Curso)</h3>
+            <h3>Eventos de la semana</h3>
             <span class="table-sub" id="news-filter-subtitle">Mostrando todos los eventos sincronizados</span>
           </div>
           <div class="table-responsive">
@@ -899,37 +891,37 @@
           </div>
         </div>
 
-        <!-- Panel de Configuración de Filtro de Noticias por Bot -->
-        <div class="news-settings-card">
-          <h3>🛡️ Reglas Institucionales de Noticias</h3>
-          <p class="card-desc">Define cómo deben responder los bots ante noticias rojas (Alto Impacto).</p>
-
-          <div class="news-rule-item">
-            <div class="news-rule-text">
-              <strong>Pausar Bots 5 min antes de Noticias Rojas</strong>
-              <span>Evita que se abran órdenes durante el deslizamiento inicial del spread.</span>
-            </div>
-            <span class="badge-status-dot active"></span>
-          </div>
-
-          <div class="news-rule-item">
-            <div class="news-rule-text">
-              <strong>Mantener Pausa 10 min después del impacto</strong>
-              <span>Permite que el libro de órdenes recupere liquidez institucional.</span>
-            </div>
-            <span class="badge-status-dot active"></span>
-          </div>
-
-          <div class="news-prop-notice">
-            <h4>⚠️ Reglas de Prop Firms sobre Noticias</h4>
-            <p>
-              <strong>Apex Trader Funding:</strong> Permite operar noticias sin restricción.<br>
-              <strong>Topstep:</strong> Prohíbe tener órdenes abiertas 1 minuto antes y 1 minuto después de noticias rojas seleccionadas.<br>
-              <strong>Leelo Trading:</strong> Permite operar noticias en evaluaciones pero exige cuidado en cuentas de fondeo.
-            </p>
-          </div>
-        </div>
       </div>
+
+      <section class="news-settings-card" aria-labelledby="news-rules-title">
+        <h3 id="news-rules-title">Reglas de referencia</h3>
+        <p class="card-desc">Revisa las condiciones vigentes de cada empresa antes de operar.</p>
+
+        <div class="news-rule-item">
+          <div class="news-rule-text">
+            <strong>Pausar bots 5 minutos antes</strong>
+            <span>Evita nuevas entradas durante la publicación.</span>
+          </div>
+          <span class="badge-status-dot active"></span>
+        </div>
+
+        <div class="news-rule-item">
+          <div class="news-rule-text">
+            <strong>Mantener la pausa 10 minutos después</strong>
+            <span>Espera a que pase el impacto inicial del evento.</span>
+          </div>
+          <span class="badge-status-dot active"></span>
+        </div>
+
+        <div class="news-prop-notice">
+          <h4>Restricciones de empresas de fondeo</h4>
+          <p>
+            <strong>Apex Trader Funding:</strong> Permite operar noticias sin restricción.<br>
+            <strong>Topstep:</strong> Prohíbe tener órdenes abiertas 1 minuto antes y 1 minuto después de noticias rojas seleccionadas.<br>
+            <strong>Leelo Trading:</strong> Permite operar noticias en evaluaciones pero exige cuidado en cuentas de fondeo.
+          </p>
+        </div>
+      </section>
     </section>
 
   
@@ -948,10 +940,10 @@
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title-group">
-          <div class="bot-status-tag" id="modal-bot-status-badge">🟢 ACTIVO</div>
+          <div class="bot-status-tag" id="modal-bot-status-badge">ACTIVO</div>
           <h2 id="modal-bot-name">MNQ ICT Scalper</h2>
           <span class="badge-strat" id="modal-bot-strategy">ICTStrategy</span>
-          <span class="badge-titular-pill" id="modal-bot-titular-badge">👤 Titular</span>
+          <span class="badge-titular-pill" id="modal-bot-titular-badge">Titular</span>
         </div>
         <div class="modal-header-actions">
           <button class="btn btn-secondary btn-sm" id="modal-toggle-btn" onclick="toggleCurrentModalBot()">Pausar Bot</button>
@@ -973,7 +965,7 @@
           </div>
           <div class="config-cell">
             <span class="cell-label">PING DE PROXY</span>
-            <span class="cell-val text-mono text-neon" id="modal-proxy-ping">⚡ 12.4 ms</span>
+            <span class="cell-val text-mono text-neon" id="modal-proxy-ping">12.4 ms</span>
           </div>
           <div class="config-cell schedule-picker-cell">
             <span class="cell-label">VENTANA OPERATIVA (EST / NY)</span>
@@ -1013,13 +1005,13 @@
                 <!-- Telemetría de Operaciones y Gráfico Dedicado del Bot (CME MNQ) -->
         <div class="detail-section modal-bot-chart-section">
           <div class="section-sub-header">
-            <h3>📊 Gráfico de Operaciones y Telemetría en Vivo (CME MNQ)</h3>
+            <h3>Gráfico de operaciones MNQ</h3>
             <div class="modal-position-badge-wrap">
-              <span class="bot-position-status-badge flat" id="modal-bot-position-status">⚪ SIN OPERACIONES ACTIVAS (FLAT)</span>
+              <span class="bot-position-status-badge flat" id="modal-bot-position-status">SIN OPERACIONES ACTIVAS</span>
               <div class="bot-trade-simulator-actions">
-                <button type="button" class="btn btn-outline btn-xs" onclick="simulateBotTradeFromModal('BUY')" title="Simular Entrada en Largo (BUY)">🟢 + BUY</button>
-                <button type="button" class="btn btn-outline btn-xs" onclick="simulateBotTradeFromModal('SELL')" title="Simular Entrada en Corto (SELL)">🔴 + SELL</button>
-                <button type="button" class="btn btn-danger btn-xs" onclick="closeCurrentModalPositions()" title="Cerrar Posiciones (FLAT)">🔴 FLAT</button>
+                <button type="button" class="btn btn-outline btn-xs" onclick="simulateBotTradeFromModal('BUY')" title="Simular entrada en largo">+ BUY</button>
+                <button type="button" class="btn btn-outline btn-xs" onclick="simulateBotTradeFromModal('SELL')" title="Simular entrada en corto">+ SELL</button>
+                <button type="button" class="btn btn-danger btn-xs" onclick="closeCurrentModalPositions()" title="Cerrar posiciones">Cerrar órdenes</button>
               </div>
             </div>
           </div>
@@ -1031,7 +1023,7 @@
         <!-- Controles Avanzados de Circuit Breaker & Consistencia -->
         <div class="detail-section circuit-breaker-box">
           <div class="section-sub-header">
-            <h3>⚡ Parámetros de Circuit Breaker & Candado de Consistencia</h3>
+            <h3>Protección de cuenta</h3>
             <span class="badge-strat" id="modal-cb-status-badge">ESTADO: NORMAL</span>
           </div>
           <div class="form-row">
@@ -1056,7 +1048,7 @@
               <input type="checkbox" id="modal-cb-pause-news" checked> Pausar automáticamente durante noticias rojas (ForexFactory)
             </label>
             <button class="btn btn-primary btn-sm ml-auto" onclick="saveCurrentModalCircuitBreaker()">
-              💾 Guardar Circuit Breaker
+              Guardar cambios
             </button>
           </div>
         </div>
@@ -1091,7 +1083,7 @@
         <div class="detail-section">
           <div class="section-sub-header">
             <h3>Consola de Auditoría y Eventos</h3>
-            <span class="log-indicator">🔴 STREAMING EN VIVO</span>
+            <span class="log-indicator">ACTIVIDAD</span>
           </div>
           <div class="terminal-console" id="modal-console-logs"></div>
         </div>
@@ -1244,7 +1236,7 @@
           <div class="bot-file-dropzone" id="bot-file-dropzone" onclick="document.getElementById('new-bot-code-file').click()" ondragover="handleBotFileDragOver(event)" ondragleave="handleBotFileDragLeave(event)" ondrop="handleBotFileDrop(event)">
             <input type="file" id="new-bot-code-file" accept=".pine,.py,.js,.ts,.cs,.mq4,.mq5,.json,.txt" style="display:none;" onchange="handleBotFileSelect(event)">
             <div class="dropzone-content-wrap">
-              <span class="dropzone-icon">📁</span>
+              <span class="dropzone-icon" aria-hidden="true">＋</span>
               <div class="dropzone-text-block">
                 <div class="dropzone-title">Haz clic o arrastra aquí el código de tu bot</div>
                 <div class="dropzone-desc">El sistema leerá el archivo, detectará el lenguaje, verificará señales de compra/venta y validará la gestión de riesgo antes de operar.</div>
@@ -1316,7 +1308,7 @@
         <div class="form-row-full">
           <div class="demo-proxy-auto-card">
             <div class="proxy-auto-content">
-              <span class="proxy-auto-icon">🛡️</span>
+              <span class="proxy-auto-icon" aria-hidden="true">◈</span>
               <div class="proxy-auto-texts">
                 <strong>Aislamiento SOCKS5 Residencial: Auto-Asignado (US East / Chicago CME)</strong>
                 <small>Conexión residencial aislada asignada automáticamente por el sistema para operar en modo Demo sin necesidad de configurar proxies manualmente.</small>
@@ -1454,7 +1446,7 @@
   <div class="modal-overlay" id="edit-bot-modal">
     <div class="modal-content modal-md">
       <div class="modal-header">
-        <h2>✏️ Editar Configuración del Bot</h2>
+        <h2>Editar bot</h2>
         <button class="modal-close" onclick="closeEditBotModal()">&times;</button>
       </div>
       <form class="modal-body form-body" onsubmit="submitEditBot(event)">
@@ -1518,7 +1510,7 @@
   <div class="modal-overlay" id="add-ledger-modal">
     <div class="modal-content modal-md">
       <div class="modal-header">
-        <h2>💰 Registrar Retiro / Movimiento en Ledger</h2>
+        <h2>Registrar movimiento</h2>
         <button class="modal-close" type="button" onclick="closeAddLedgerModal()">&times;</button>
       </div>
       <form class="modal-body form-body" onsubmit="submitAddLedger(event)">
@@ -1532,10 +1524,10 @@
           <div class="form-group">
             <label for="ledger-modal-type">Tipo de Operación *</label>
             <select id="ledger-modal-type" required>
-              <option value="PROP_FIRM_PAYOUT">🟢 Retiro Prop Firm (Ingreso Bruto de la Firma)</option>
-              <option value="TITULAR_SPLIT_PAYOUT">🟡 Pago Transferido a Titular (Split 20%)</option>
-              <option value="INVESTMENT_EVAL">🔴 Compra de Evaluación (Costo / Inversión)</option>
-              <option value="INVESTMENT_PA_FEE">🔴 Fee Activación PA / Funded (Costo)</option>
+              <option value="PROP_FIRM_PAYOUT">Retiro de empresa de fondeo (ingreso)</option>
+              <option value="TITULAR_SPLIT_PAYOUT">Pago al titular</option>
+              <option value="INVESTMENT_EVAL">Compra de evaluación (costo)</option>
+              <option value="INVESTMENT_PA_FEE">Activación de cuenta (costo)</option>
             </select>
           </div>
         </div>
@@ -1581,7 +1573,7 @@
   <!-- 5. Modal de Confirmación Institucional -->
   <div class="modal-overlay" id="confirm-modal">
     <div class="modal-content modal-confirm">
-      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <div class="confirm-icon" id="confirm-icon">!</div>
       <h2 id="confirm-title">¿Confirmar Acción?</h2>
       <p id="confirm-message">Esta es una acción crítica que afectará la operativa en tiempo real.</p>
       <div class="modal-footer confirm-actions">

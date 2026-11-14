@@ -5,13 +5,14 @@
   "description": "Panel local de escritorio para QUANTUM FX",
   "main": "desktop/main.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node src/server/server.js",
     "start:desktop": "electron .",
     "dist:win": "electron-builder --win nsis --x64",
-    "start:fastapi": "python -m uvicorn main:app --host 127.0.0.1 --port 8000",
+    "start:fastapi": "python -m uvicorn fastapi_service.main:app --host 127.0.0.1 --port 8000",
+    "check:docs": "node scripts/check-obsidian-links.js",
     "test": "npm run test:node && npm run test:python",
-    "test:node": "node --test",
-    "test:python": "python -m pytest tests"
+    "test:node": "node --test tests/node/*.test.js",
+    "test:python": "python -m pytest tests/python"
   },
   "keywords": [],
   "author": "",
@@ -37,27 +38,24 @@
     },
     "files": [
       "desktop/**",
-      "server.js",
-      "database.js",
-      "market_analysis.js",
       "src/**",
       "public/**",
       "migrations/**",
       "package.json",
       "!public/data/**/*.csv",
       "!tests/**",
-      "!wiki/**",
+      "!documentacion/**",
       "!raw/**",
       "!backups/**",
       "!config.json",
       "!.env",
       "!bot_vpn.sqlite3*",
       "!*.py",
+      "!fastapi_service/**",
       "!requirements*.txt",
       "!AGENTS.md",
       "!.agents/**",
-      "!.cursorrules",
-      "!types/**"
+      "!.cursorrules"
     ],
     "win": {
       "target": [

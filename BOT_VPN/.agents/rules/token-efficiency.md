@@ -1,4 +1,13 @@
-# Directiva de Eficiencia y Ahorro de Tokens
+---
+title: "Directiva de contexto y ahorro de tokens"
+doc_type: "regla_para_agentes"
+status: "vigente"
+summary: "Instrucciones breves para reducir contexto y enlazar a la skill del proyecto."
+tags: [quantum-fx, agentes, tokens, reglas]
+last_updated: "2026-11-13"
+---
+
+# Directiva de contexto y ahorro de tokens
 
 Esta regla asegura que el asistente opere con el mínimo consumo de tokens posible en cada interacción:
 
@@ -8,4 +17,4 @@ Esta regla asegura que el asistente opere con el mínimo consumo de tokens posib
 4. **Contexto Limpio:** Cuando la conversación sea larga, sugerir el comando `/compact` para comprimir el historial acumulado.
 
 ---
-- Relacionado: [[.agents/skills/token-saver/SKILL|Skill Token Saver]] · [[AGENTS|Esquema del Agente]] · [[wiki/index|Índice Maestro de la Wiki]]
+- Relacionado: [[.agents/skills/token-saver/SKILL|Skill Token Saver]] · [[documentacion/AGENTS|Esquema del Agente]] · [[documentacion/00_INICIO_OBSIDIAN|Índice Maestro de la Wiki]]

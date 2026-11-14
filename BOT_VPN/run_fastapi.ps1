@@ -27,7 +27,7 @@ try {
 
   Write-Host "[OK] Iniciando FastAPI en http://127.0.0.1:8000" -ForegroundColor Green
   Write-Host "[OK] Presione Ctrl+C para detener el servidor" -ForegroundColor Gray
-  & $pythonPath -m uvicorn main:app --host 127.0.0.1 --port 8000
+  & $pythonPath -m uvicorn fastapi_service.main:app --host 127.0.0.1 --port 8000
   if ($LASTEXITCODE -ne 0) {
     throw "El servidor FastAPI terminó con error."
   }

@@ -117,7 +117,7 @@ function updateAudioButtonUI() {
   const label = document.getElementById('audio-label');
   if (!btn) return;
   btn.classList.toggle('muted', state.audioMuted);
-  if (icon) icon.textContent = state.audioMuted ? '🔇' : '🔊';
+  if (icon) icon.textContent = state.audioMuted ? 'OFF' : 'ON';
   if (label) label.textContent = state.audioMuted ? 'Audio OFF' : 'Audio ON';
 }
 
@@ -179,7 +179,7 @@ function updateLandingAuthUI() {
     const username = state.currentUser?.username || 'admin';
     box.innerHTML = `
       <button class="btn btn-primary" onclick="goToTerminalScreen()">
-        <span>🚀 Ir a la Terminal (${escapeHtml(username)})</span> ➔
+        <span>Ir a la terminal (${escapeHtml(username)})</span> →
       </button>
       <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Cerrar Sesión">
         ⏻ Salir
@@ -188,7 +188,7 @@ function updateLandingAuthUI() {
   } else {
     box.innerHTML = `
       <button class="btn btn-primary" onclick="goToLoginScreen()">
-        <span>🔐 Iniciar Sesión</span> ➔
+        <span>Iniciar sesión</span> →
       </button>
     `;
   }
@@ -509,7 +509,7 @@ function renderDashboardBento(globalStats = {}) {
 
 async function promptFlattenAll() {
   const confirmed = await confirmModal(
-    '🔴 LIQUIDACIÓN GLOBAL DE EMERGENCIA',
+    'Cerrar todas las posiciones',
     '¿Estás seguro de CERRAR TODAS las posiciones abiertas en todas las cuentas de todos los bots inmediatamente?',
     true
   );
@@ -526,7 +526,7 @@ async function promptFlattenAll() {
 
 async function promptStopAll() {
   const confirmed = await confirmModal(
-    '⏹️ KILL-SWITCH GLOBAL',
+    'Pausar todos los bots',
     '¿Estás seguro de APAGAR Y PAUSAR todos los bots activos? Esto detendrá la ejecución de nuevas órdenes.',
     true
   );
@@ -591,8 +591,8 @@ function renderBotGrid() {
 
   grid.innerHTML = filtered.map(bot => {
     const statusClass = bot.status === 'ACTIVE' ? 'active' : 'paused';
-    const statusLabel = bot.status === 'ACTIVE' ? '🟢 ACTIVO' : '🟡 PAUSADO';
-    const ident = bot.identity || { full_name: 'Sin Titular', flag: '👤', city: 'N/A', country: 'XX', kyc_status: 'PENDING' };
+    const statusLabel = bot.status === 'ACTIVE' ? 'ACTIVO' : 'PAUSADO';
+    const ident = bot.identity || { full_name: 'Sin titular', city: 'N/A', country: 'XX', kyc_status: 'PENDING' };
     const pnlClass = bot.net_pnl >= 0 ? 'text-neon' : 'text-danger';
 
     const isFav = (state.favoriteBots || []).includes(bot.id);
@@ -631,7 +631,7 @@ function renderBotGrid() {
         <!-- Ficha del Titular Asignado -->
         <div class="bot-titular-strip">
           <div class="titular-left">
-            <span class="titular-avatar-icon">${ident.flag || '🇺🇸'}</span>
+              <span class="titular-avatar-icon">${escapeHtml(ident.country || '—')}</span>
             <div class="titular-meta">
               <span class="titular-name">${escapeHtml(ident.full_name)}</span>
               <span class="titular-loc">${escapeHtml(ident.city || ident.country || 'US')} // KYC ${escapeHtml(ident.kyc_status || 'VERIFIED')}</span>
@@ -646,7 +646,7 @@ function renderBotGrid() {
             <div>
               <span class="net-ip-tag font-bold">${escapeHtml(bot.outbound_ip || bot.proxy_ip || 'No verificada')}</span>
               <span style="margin: 0 4px; opacity: 0.4;">|</span>
-              <span class="net-ping-tag font-bold">${bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'Latencia no verificada'}</span>
+              <span class="net-ping-tag font-bold">${bot.proxy_healthy ? `${bot.proxy_ping_ms} ms` : 'Latencia no verificada'}</span>
             </div>
             <span style="font-size: 0.68rem; color: var(--text-secondary);">${escapeHtml(bot.isp_provider ? bot.isp_provider.split(' ')[0] : 'ISP US')}</span>
           </div>
@@ -692,24 +692,24 @@ function renderBotGrid() {
           <div class="progress-track">
             <div class="progress-fill ${isTargetReached ? 'target-reached' : ''}" style="width: ${targetPct}%;"></div>
           </div>
-          ${isLocked ? `<div class="target-status-note text-neon">🎯 Target de $${targetProfit} alcanzado — Bot pausado por Consistencia</div>` : ''}
-          ${isTripped ? `<div class="target-status-note text-danger">🛑 Límite de pérdida ($${cb.daily_loss_limit}) alcanzado — Bot pausado por DLL</div>` : ''}
+          ${isLocked ? `<div class="target-status-note text-neon">Objetivo de $${targetProfit} alcanzado. Bot pausado por consistencia.</div>` : ''}
+          ${isTripped ? `<div class="target-status-note text-danger">Límite de pérdida ($${cb.daily_loss_limit}) alcanzado. Bot pausado.</div>` : ''}
         </div>
 
         <!-- Acciones de la Tarjeta estilo Lucid Trading -->
         <div class="bot-card-actions">
           <div class="btn-group-left">
             <button class="btn btn-secondary btn-xs" onclick="toggleBot('${bot.id}')">
-              ${bot.status === 'ACTIVE' ? '⏸️ Pausar' : '▶️ Reanudar'}
+              ${bot.status === 'ACTIVE' ? 'Pausar' : 'Reanudar'}
             </button>
             <button class="btn btn-danger btn-xs" onclick="closeBotPositions('${bot.id}')">
-              🔴 FLAT
+              Cerrar órdenes
             </button>
             <button class="btn btn-outline btn-xs" onclick="openEditBotModal('${bot.id}')" title="Editar configuración del bot">
-              ✏️ Editar
+              Editar
             </button>
             <button class="btn btn-outline btn-xs btn-delete-bot" onclick="deleteBot('${bot.id}')" title="Eliminar este bot">
-              🗑️
+              Eliminar
             </button>
           </div>
           <button class="btn btn-primary btn-xs" onclick="openDetailModal('${bot.id}')">
@@ -745,7 +745,7 @@ function renderIdentities() {
     return `
       <div class="identity-card">
         <div class="identity-header">
-          <span class="identity-flag-avatar">${ident.flag || '👤'}</span>
+          <span class="identity-flag-avatar">${escapeHtml(ident.country || '—')}</span>
           <div class="identity-titles">
             <h3>${escapeHtml(ident.full_name)}</h3>
             <span>${escapeHtml(ident.city || ident.country || '')} // ${escapeHtml(ident.id)}</span>
@@ -787,7 +787,7 @@ function renderIdentities() {
           <button class="btn btn-outline btn-xs" type="button" onclick="openEditIdentityModal('${ident.id}')" title="Editar datos del titular">Editar</button>
           <span style="flex:1"></span>
           <button class="btn btn-outline btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.4);" onclick="deleteIdentity('${ident.id}')" title="Eliminar este titular">
-            🗑️ Eliminar Titular
+            Eliminar titular
           </button>
         </div>
       </div>`;
@@ -843,7 +843,7 @@ function renderGlobalAccounts() {
         <td><span class="text-neon" style="font-size: 0.72rem;">● ${escapeHtml(acc.status)}</span></td>
         <td>
           <button class="btn btn-outline btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.4);" onclick="unlinkAccount('${acc.bot_id}', '${acc.id}')" title="Desvincular o eliminar cuenta">
-            🗑️ Desvincular
+            Desvincular
           </button>
         </td>
       </tr>`;
@@ -869,7 +869,7 @@ function renderVpnCenter() {
             <span>Titular Asignado: <strong>${escapeHtml(ident.full_name)}</strong></span>
           </div>
           <span class="kyc-pill ${bot.proxy_healthy ? 'verified' : 'pending'}">
-            ${bot.proxy_healthy ? '🟢 EN LÍNEA' : '🔴 OFFLINE'}
+            ${bot.proxy_healthy ? 'EN LÍNEA' : 'SIN CONEXIÓN'}
           </span>
         </div>
 
@@ -892,7 +892,7 @@ function renderVpnCenter() {
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Latencia Socket (CME Chicago):</span>
-            <span class="text-mono font-bold">${bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'No verificada'}</span>
+            <span class="text-mono font-bold">${bot.proxy_healthy ? `${bot.proxy_ping_ms} ms` : 'No verificada'}</span>
           </div>
           <div class="ping-stat-row">
             <span class="text-secondary">Anti-Flagging Geográfico:</span>
@@ -902,10 +902,10 @@ function renderVpnCenter() {
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
           <button class="btn btn-outline btn-sm" style="flex: 1;" onclick="testProxyPing('${bot.id}')">
-            ⚡ Probar Latencia
+            Probar latencia
           </button>
           <button class="btn btn-secondary btn-sm" onclick="openEditBotModal('${bot.id}')" title="Configurar o cambiar VPN / Proxy">
-            ⚙️ Configurar VPN
+            Configurar proxy
           </button>
         </div>
       </div>`;
@@ -921,7 +921,7 @@ async function testProxyPing(botId) {
       showToast('Fallo en el proxy: ' + (res.message || 'Error'), 'error');
       return;
     }
-    showToast('⚡ Proxy SOCKS5 verificado: ' + res.detected_ip + ' (' + res.isp + ') — Latencia CME: ' + res.ping_ms + ' ms (Geo-Match OK)', 'success');
+    showToast('Proxy verificado: ' + res.detected_ip + ' (' + res.isp + ') — Latencia: ' + res.ping_ms + ' ms.', 'success');
     playAudioCue('chime');
     renderVpnCenter();
   } catch (err) {
@@ -1258,7 +1258,7 @@ function openEditBotModal(botId) {
   const identSel = document.getElementById('edit-bot-identity');
   if (identSel) {
     identSel.innerHTML = '<option value="">-- Sin Titular Asignado --</option>' +
-      state.identities.map(i => `<option value="${i.id}" ${bot.identity_id === i.id || (bot.identity && bot.identity.id === i.id) ? 'selected' : ''}>${escapeHtml(i.full_name)} (${i.flag || '👤'} ${escapeHtml(i.country || 'US')})</option>`).join('');
+      state.identities.map(i => `<option value="${i.id}" ${bot.identity_id === i.id || (bot.identity && bot.identity.id === i.id) ? 'selected' : ''}>${escapeHtml(i.full_name)} (${escapeHtml(i.country || 'US')})</option>`).join('');
   }
 
   const proxyInput = document.getElementById('edit-bot-proxy');
@@ -1816,14 +1816,14 @@ function updateDetailModalContent(botId) {
   const bot = state.bots.find(b => b.id === botId);
   if (!bot) return;
 
-  const ident = bot.identity || { full_name: 'Sin Titular', flag: '👤' };
+  const ident = bot.identity || { full_name: 'Sin titular' };
 
   document.getElementById('modal-bot-name').textContent = bot.name;
   document.getElementById('modal-bot-strategy').textContent = bot.strategy;
-  document.getElementById('modal-bot-titular-badge').textContent = `${ident.flag || '👤'} ${ident.full_name}`;
+  document.getElementById('modal-bot-titular-badge').textContent = ident.full_name;
 
   const statusBadge = document.getElementById('modal-bot-status-badge');
-  statusBadge.textContent = bot.status === 'ACTIVE' ? '🟢 ACTIVO' : '🟡 PAUSADO';
+  statusBadge.textContent = bot.status === 'ACTIVE' ? 'ACTIVO' : 'PAUSADO';
   statusBadge.className = `bot-status-tag ${bot.status.toLowerCase()}`;
 
   const toggleBtn = document.getElementById('modal-toggle-btn');
@@ -1831,7 +1831,7 @@ function updateDetailModalContent(botId) {
 
   document.getElementById('modal-proxy-url').textContent = bot.proxy_url || 'No configurado';
   document.getElementById('modal-proxy-ip').textContent = bot.proxy_ip || 'No verificada';
-  document.getElementById('modal-proxy-ping').textContent = bot.proxy_healthy ? `⚡ ${bot.proxy_ping_ms} ms` : 'No verificada';
+  document.getElementById('modal-proxy-ping').textContent = bot.proxy_healthy ? `${bot.proxy_ping_ms} ms` : 'No verificada';
 
   if (bot.schedule) {
     const startInput = document.getElementById('modal-start-time');
@@ -1975,7 +1975,7 @@ function confirmModal(title, message, isDanger = false) {
     document.getElementById('confirm-message').textContent = message;
     const okBtn = document.getElementById('confirm-ok-btn');
     okBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
-    document.getElementById('confirm-icon').textContent = isDanger ? '🔴' : 'ℹ️';
+    document.getElementById('confirm-icon').textContent = isDanger ? '!' : 'i';
     document.getElementById('confirm-modal').classList.add('open');
   });
 }
@@ -2000,14 +2000,14 @@ function showToast(message, type = 'info', duration = 3500) {
   toast.className = `toast toast-${type}`;
 
   const iconMap = {
-    success: '✅',
-    error: '❌',
-    warn: '⚠️',
-    info: 'ℹ️'
+    success: '✓',
+    error: '×',
+    warn: '!',
+    info: 'i'
   };
 
   toast.innerHTML = `
-    <span class="toast-icon">${iconMap[type] || 'ℹ️'}</span>
+    <span class="toast-icon">${iconMap[type] || 'i'}</span>
     <span class="toast-msg">${escapeHtml(message)}</span>
   `;
 
@@ -2439,7 +2439,7 @@ function renderLedgerView() {
   if (filterSel && state.identities.length) {
     const currentVal = filterSel.value;
     filterSel.innerHTML = `<option value="ALL">Vista Consolidada (Todos los Titulares)</option>` +
-      state.identities.map(i => `<option value="${i.id}" ${currentVal === i.id ? 'selected' : ''}>${escapeHtml(i.full_name)} (${i.flag || '🇺🇸'})</option>`).join('');
+      state.identities.map(i => `<option value="${i.id}" ${currentVal === i.id ? 'selected' : ''}>${escapeHtml(i.full_name)} (${escapeHtml(i.country || 'US')})</option>`).join('');
   }
 
   const idTbody = document.getElementById('ledger-identities-tbody');
@@ -2447,7 +2447,7 @@ function renderLedgerView() {
     idTbody.innerHTML = (identity_breakdown || []).map(row => `
       <tr>
         <td><strong>${escapeHtml(row.identity_name)}</strong></td>
-        <td>${row.flag || '🇺🇸'} ${escapeHtml(row.country || 'US')}</td>
+        <td>${escapeHtml(row.country || 'US')}</td>
         <td class="text-mono text-danger">${formatCurrency(-row.total_invested)}</td>
         <td class="text-mono text-neon">
           ${formatCurrency(row.gross_payouts)}
@@ -2563,7 +2563,10 @@ state.newsSearchQuery = '';
 function setNewsCurrencyFilter(currency) {
   state.newsCurrencyFilter = currency;
   document.querySelectorAll('#ff-currency-pills .ff-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-currency') === currency);
+    const selected = btn.getAttribute('data-currency') === currency;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-selected', String(selected));
+    btn.tabIndex = selected ? 0 : -1;
   });
   renderNewsView();
 }
@@ -2571,9 +2574,26 @@ function setNewsCurrencyFilter(currency) {
 function setNewsImpactFilter(impact) {
   state.newsImpactFilter = impact;
   document.querySelectorAll('#ff-impact-pills .ff-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-impact') === impact);
+    const selected = btn.getAttribute('data-impact') === impact;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-selected', String(selected));
+    btn.tabIndex = selected ? 0 : -1;
   });
   renderNewsView();
+}
+
+function handleFilterTabKeydown(event) {
+  const tabs = [...event.currentTarget.parentElement.querySelectorAll('[role="tab"]')];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  tabs[nextIndex].focus();
+  tabs[nextIndex].click();
 }
 
 function handleNewsSearch(event) {
@@ -2600,7 +2620,7 @@ function renderNewsView() {
   const subtitle = document.getElementById('news-filter-subtitle');
   if (subtitle) {
     const currText = state.newsCurrencyFilter === 'ALL' ? 'Todas las divisas' : state.newsCurrencyFilter;
-    const impactText = state.newsImpactFilter === 'ALL' ? 'Todos los impactos' : (state.newsImpactFilter === 'HIGH' ? '🔴 Solo Alto Impacto' : '🟠 Medio & Alto');
+    const impactText = state.newsImpactFilter === 'ALL' ? 'Todos los impactos' : (state.newsImpactFilter === 'HIGH' ? 'Impacto alto' : 'Impacto medio y alto');
     subtitle.textContent = `Filtros activos: ${currText} | ${impactText}`;
   }
 
@@ -2634,7 +2654,6 @@ function renderNewsView() {
 
   tbody.innerHTML = filtered.map(ev => {
     const impactClass = ev.impact === 'HIGH' ? 'high' : (ev.impact === 'MEDIUM' ? 'medium' : 'low');
-    const folderIcon = ev.impact === 'HIGH' ? '🔴' : (ev.impact === 'MEDIUM' ? '🟠' : '🟡');
     const impactLabel = ev.impact === 'HIGH' ? 'ALTO' : (ev.impact === 'MEDIUM' ? 'MEDIO' : 'BAJO');
 
     // Color del dato actual (ForexFactory style: Verde mejor a previsión, Rojo peor)
@@ -2651,7 +2670,7 @@ function renderNewsView() {
         <td class="text-mono">${escapeHtml(ev.date)}</td>
         <td class="text-mono font-bold">${escapeHtml(ev.time_est)}</td>
         <td><span class="ff-curr-badge ${currBadgeClass}">${escapeHtml(ev.currency)}</span></td>
-        <td><span class="impact-badge ${impactClass}">${folderIcon} ${impactLabel}</span></td>
+        <td><span class="impact-badge ${impactClass}">${impactLabel}</span></td>
         <td><strong>${escapeHtml(ev.event)}</strong></td>
         <td class="text-mono">${actualHtml}</td>
         <td class="text-mono">${escapeHtml(ev.forecast || '-')}</td>
@@ -2688,10 +2707,10 @@ function populateCircuitBreakerInModal(bot) {
 
   if (statusBadge) {
     if (cb.status === 'LOCKED_PROFIT') {
-      statusBadge.textContent = '🎯 META DE CONSISTENCIA ASEGURADA (+$150)';
+      statusBadge.textContent = 'Objetivo de consistencia alcanzado (+$150)';
       statusBadge.className = 'badge-strat text-neon';
     } else if (cb.status === 'TRIPPED_STOP') {
-      statusBadge.textContent = '🛑 CIRCUIT BREAKER ACTIVADO (DLL STOP)';
+      statusBadge.textContent = 'Límite diario alcanzado';
       statusBadge.className = 'badge-strat text-danger';
     } else {
       statusBadge.textContent = 'ESTADO: NORMAL (VIGILANDO)';
@@ -2872,7 +2891,7 @@ async function initModalBotChart(botId) {
       if (pos && pos.in_position) {
         const isLong = pos.side === 'LONG';
         statusBadge.className = `bot-position-status-badge ${isLong ? 'in-position-long' : 'in-position-short'}`;
-        statusBadge.textContent = `${isLong ? '🟢 LONG' : '🔴 SHORT'} ${pos.size} MNQ @ ${pos.entry_price.toFixed(2)} | Flotante: ${formatCurrency(pos.floating_pnl)}`;
+        statusBadge.textContent = `${isLong ? 'LONG' : 'SHORT'} ${pos.size} MNQ @ ${pos.entry_price.toFixed(2)} | Flotante: ${formatCurrency(pos.floating_pnl)}`;
 
         // Líneas de Precio de la Operación en Curso
         candleSeries.createPriceLine({
@@ -2901,7 +2920,7 @@ async function initModalBotChart(botId) {
         });
       } else {
         statusBadge.className = 'bot-position-status-badge flat';
-        statusBadge.textContent = '⚪ SIN OPERACIONES ACTIVAS (FLAT)';
+        statusBadge.textContent = 'SIN OPERACIONES ACTIVAS';
       }
     }
   } catch (err) {
