@@ -468,8 +468,8 @@
     <section class="tab-view" id="view-analysis">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Simulación histórica de operaciones NQ / ES</h2>
-          <span class="section-sub">Importa velas CSV para ver señales históricas y operaciones hipotéticas con entrada, TP, stop y estrategia.</span>
+          <h2>Análisis histórico NQ / ES</h2>
+          <span class="section-sub">Sirve para revisar cómo habrían respondido las estrategias de tus bots ante precios históricos; no envía órdenes.</span>
         </div>
       </div>
       <div class="analysis-warning">
@@ -502,8 +502,17 @@
             <label for="analysis-csv-file">Archivo CSV (máx. 5 MB)</label>
             <input id="analysis-csv-file" type="file" accept=".csv,text/csv" required>
           </div>
+          <div class="form-group">
+            <label for="analysis-timezone">Zona horaria de las fechas sin zona</label>
+            <select id="analysis-timezone" required>
+              <option value="UTC">UTC</option>
+              <option value="America/Chicago">Chicago — horario CME</option>
+              <option value="America/New_York">Nueva York</option>
+              <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+            </select>
+          </div>
         </div>
-        <p class="form-hint">Columnas requeridas: timestamp, open, high, low, close, volume. La fecha debe incluir zona horaria, por ejemplo 2026-10-28T13:30:00Z.</p>
+        <p class="form-hint">Columnas requeridas: timestamp, open, high, low, close, volume. Si la fecha no tiene zona, se interpretará con la zona elegida arriba. Ejemplo: 2026-10-28 09:30:00. Si ya incluye Z o -04:00, esa zona explícita tiene prioridad.</p>
         <p class="form-hint">Señales disponibles: ICT simplificado (FVG/MSS/kilzone NY), técnica (EMA/RSI); SMT requiere ambos instrumentos. Order Flow necesita datos bid/ask y no se calcula con OHLCV. Los intervalos diarios/VWAP usan UTC.</p>
         <div class="analysis-import-actions">
           <span id="analysis-import-status" class="form-hint">Sin datos históricos cargados en esta sesión.</span>
@@ -597,35 +606,36 @@
     <section class="tab-view" id="view-webhook">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Configuración de Alertas & Webhooks de TradingView</h2>
-          <span class="section-sub">Conecta tus indicadores y estrategias de Pine Script directamente al motor QUANTUM FX.</span>
+          <h2>Alertas y endpoint local</h2>
+          <span class="section-sub">El endpoint solo registra operaciones simuladas en el servidor local.</span>
         </div>
       </div>
 
       <div class="webhook-panel-grid">
         <div class="webhook-card">
-          <h3>URL del webhook</h3>
-          <p class="card-desc">Copia y pega esta URL en la casilla "URL del Webhook" al crear una alerta en TradingView.</p>
+          <h3>Dirección local</h3>
+          <p class="card-desc">Node escucha únicamente en 127.0.0.1. Las alertas de TradingView en la nube no pueden acceder directamente a esta dirección; no se incluye un relay público seguro.</p>
           <div class="copy-input-group">
-            <input type="text" id="webhook-url-input" readonly value="http://TU_IP_O_DOMINIO:8000/api/webhook">
+            <input type="text" id="webhook-url-input" readonly value="http://TU_IP_O_DOMINIO:3008/api/webhook">
             <button class="btn btn-outline" onclick="copyWebhookUrl()">Copiar URL</button>
           </div>
 
           <h3 class="mt-4">Token de autenticación</h3>
-          <p class="card-desc">Configura un token propio en <code>config.json</code>. No compartas ni publiques ese archivo.</p>
+          <p class="card-desc">Configura <code>QUANTUM_WEBHOOK_SECRET</code> en el archivo local <code>.env</code> con al menos 32 caracteres aleatorios. Incluye el mismo valor en el campo <code>token</code> del mensaje. Sin token válido, el webhook rechaza la alerta.</p>
         </div>
 
         <div class="webhook-card">
-          <h3>Formato del mensaje JSON</h3>
-          <p class="card-desc">Pega este JSON en el cuerpo del mensaje de la alerta de TradingView. Puedes usar variables dinámicas de Pine Script.</p>
+          <h3>Formato de prueba local</h3>
+          <p class="card-desc">Este cuerpo sirve para probar el endpoint desde la misma máquina. No lo uses como conexión en vivo a un broker.</p>
           <pre class="code-box text-mono"><code>{
   "token": "&lt;CONFIGURE_WEBHOOK_TOKEN&gt;",
   "ticker": "MNQ",
   "action": "{{strategy.order.action}}",
   "price": {{close}},
   "contracts": 1,
-  "sl": 0.0,
-  "tp": 0.0,
+  "stop_loss_points": 15.0,
+  "take_profit_points": 30.0,
+  "min_rr": 2.0,
   "strategy": "ICTStrategy",
   "comment": "TradingView Alert"
 }</code></pre>
@@ -1151,8 +1161,27 @@
           </div>
         </div>
 
-        <div class="form-section-title">Conexión al Broker</div>
-        <p class="form-hint">La conexión al broker aún no está implementada. No ingreses aquí usuarios, contraseñas ni API keys.</p>
+        <div class="form-section-title">Datos de referencia de la cuenta</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>ID de Cuenta Prop Firm (Account ID) *</label>
+            <input type="text" id="acc-id" placeholder="ej. LFF025-51C65NOS-PRO001" required>
+            <small class="form-hint">Identificador único asignado por la empresa de fondeo.</small>
+          </div>
+          <div class="form-group">
+            <label>Usuario / Login de referencia (opcional)</label>
+            <input type="text" id="acc-username" placeholder="ej. LT-ROFC0256">
+            <small class="form-hint">Se guarda enmascarado. No inicia sesión en ningún broker.</small>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Control simulado de posiciones</label>
+            <div style="padding: 10px 12px; background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; font-size: 0.78rem; color: #34D399;">
+              Se bloquean posiciones simuladas opuestas entre bots asignados al mismo titular. Esto no verifica las políticas de una firma.
+            </div>
+          </div>
+        </div>
 
         <!-- Parámetros de Riesgo -->
         <div class="form-section-title">Parámetros de Riesgo y Consistencia</div>
@@ -1169,7 +1198,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeAddAccountModal()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar Cuenta de Prueba</button>
+          <button type="submit" class="btn btn-primary">Vincular Cuenta de Fondeo</button>
         </div>
       </form>
     </div>
@@ -1319,13 +1348,8 @@
           <input type="hidden" id="new-bot-proxy" value="">
         </div>
 
-        <!-- Fila 6: Jitter y Horario de Sesión NY en 3 Columnas -->
-        <div class="form-row form-row-3col">
-          <div class="form-group">
-            <label>Anti-Mirroring Jitter (ms)</label>
-            <input type="number" id="new-bot-jitter" value="120" min="40" max="500">
-            <small class="form-hint">Retardo aleatorio estocástico.</small>
-          </div>
+        <!-- Horario de sesión de Nueva York -->
+        <div class="form-row form-row-2col">
           <div class="form-group">
             <label>Hora Inicio (EST)</label>
             <input type="time" id="new-bot-start" value="09:30" required>
@@ -1340,6 +1364,54 @@
           <label for="edit-bot-today-pnl">Ganancia / P&amp;L del día (simulado) ($)</label>
           <input type="number" id="edit-bot-today-pnl" value="0" min="-10000000" max="10000000" step="0.01" required>
           <small class="form-hint">Ajusta el valor que muestra el panel. No proviene de un broker y puede influir en los límites simulados.</small>
+        </div>
+
+        <!-- Compuertas Gate Engine y Ratio R:R (Decidido por Usuario) -->
+        <div class="form-section-title">Compuertas Gate Engine & Ratio R:R (Decidido por Usuario)</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Ratio Riesgo:Beneficio (R:R) *</label>
+            <select id="new-bot-rr-ratio">
+              <option value="2.0" selected>1:2 (Recomendado ICT / Day Trading)</option>
+              <option value="3.0">1:3 (Recomendado Swing / Trend)</option>
+              <option value="1.5">1:1.5 (Scalping Rápido)</option>
+              <option value="2.5">1:2.5 (Extendido)</option>
+              <option value="4.0">1:4 (Tendencia Fuerte)</option>
+            </select>
+            <small class="form-hint">Verificado matemáticamente en cada orden.</small>
+          </div>
+          <div class="form-group">
+            <label>Stop Loss Base (Puntos MNQ)</label>
+            <input type="number" id="new-bot-sl-points" value="15" min="2" max="200" step="0.25">
+            <small class="form-hint">MNQ = $2.00 por punto ($0.50 por tick).</small>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="new-bot-auto-sizing" checked>
+              <strong>Cálculo automático de contratos (Sizing dinámico)</strong>
+            </label>
+            <small class="form-hint" style="margin-left: 22px;">Calcula automáticamente los contratos MNQ en base al riesgo en USD y el SL.</small>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="new-bot-block-ny-open">
+              <strong>Bloquear órdenes en apertura NY (09:30 - 09:45 EST)</strong>
+            </label>
+            <small class="form-hint" style="margin-left: 22px;">Opcional: Desmarca si tu estrategia opera expresamente la volatilidad de apertura.</small>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="new-bot-block-red-news">
+              <strong>Pausar en noticias macro rojas (CPI / FOMC / NFP)</strong>
+            </label>
+            <small class="form-hint" style="margin-left: 22px;">Opcional: Desmarca si tu empresa de fondeo permite operar eventos macro.</small>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -1480,7 +1552,7 @@
           </div>
         </div>
 
-        <div class="form-row form-row-3col">
+        <div class="form-row form-row-2col">
           <div class="form-group">
             <label>Meta de Ganancia ($) [Consistencia]</label>
             <input type="number" id="edit-bot-target" value="1500" min="50" step="50" required>
@@ -1491,10 +1563,48 @@
             <input type="number" id="edit-bot-dll" value="1000" min="50" step="50" required>
             <small class="form-hint">Pausa inmediata si la pérdida del día toca este tope.</small>
           </div>
+        </div>
+
+        <!-- Compuertas Gate Engine y Ratio R:R (Decidido por Usuario) -->
+        <div class="form-section-title">Compuertas Gate Engine & Ratio R:R (Decidido por Usuario)</div>
+        <div class="form-row">
           <div class="form-group">
-            <label>Anti-Mirroring Jitter (ms)</label>
-            <input type="number" id="edit-bot-jitter" value="120" min="40" max="500">
-            <small class="form-hint">Desfase estocástico anti-copia.</small>
+            <label>Ratio Riesgo:Beneficio (R:R) *</label>
+            <select id="edit-bot-rr-ratio">
+              <option value="2.0">1:2 (Recomendado ICT / Day Trading)</option>
+              <option value="3.0">1:3 (Recomendado Swing / Trend)</option>
+              <option value="1.5">1:1.5 (Scalping Rápido)</option>
+              <option value="2.5">1:2.5 (Extendido)</option>
+              <option value="4.0">1:4 (Tendencia Fuerte)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Stop Loss Base (Puntos MNQ)</label>
+            <input type="number" id="edit-bot-sl-points" value="15" min="2" max="200" step="0.25">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="edit-bot-auto-sizing" checked>
+              <strong>Cálculo automático de contratos (Sizing dinámico MNQ)</strong>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="edit-bot-block-ny-open">
+              <strong>Bloquear órdenes en apertura NY (09:30 - 09:45 EST)</strong>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 0.84rem;">
+              <input type="checkbox" id="edit-bot-block-red-news">
+              <strong>Pausar en noticias macro rojas (CPI / FOMC / NFP)</strong>
+            </label>
           </div>
         </div>
 

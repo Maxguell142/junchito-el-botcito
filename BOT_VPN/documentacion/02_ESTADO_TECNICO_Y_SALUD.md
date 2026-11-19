@@ -2,7 +2,7 @@
 title: "Estado técnico verificado y salud"
 category: sistema
 tags: [stack, health, frontend, backend, ai, obsidian, quantum-fx, estado, verificacion, salud]
-last_updated: "2026-11-13"
+last_updated: "2026-11-18"
 doc_type: "estado_tecnico"
 status: "verificado"
 summary: "Inventario de tecnologías y capacidades comprobadas, con límites conocidos."
@@ -28,6 +28,18 @@ summary: "Inventario de tecnologías y capacidades comprobadas, con límites con
 | IA de la aplicación | No hay proveedor ni modelo integrado | No se encontraron SDK de OpenAI, Anthropic, Gemini, Ollama u otro LLM en los manifiestos actuales. |
 | IA para desarrollo y documentación | `AGENTS.md` y configuraciones en `.agents/` | Instrucciones y habilidades para asistentes; no son un motor de IA ejecutado por el servidor. |
 | Wiki personal | Obsidian sobre esta carpeta del proyecto | El índice maestro está en `documentacion/00_INICIO_OBSIDIAN.md`; esta nota es la referencia técnica principal. |
+
+### Webhook y cuentas
+
+- `/api/webhook` solo acepta operaciones simuladas y exige `QUANTUM_WEBHOOK_SECRET` de al menos 32 caracteres; el token puede enviarse en el cuerpo o en `x-quantum-webhook-token`.
+- Express escucha en `127.0.0.1:3008`. Por eso TradingView Cloud no puede invocar el endpoint directamente y no hay relay público configurado.
+- El webhook valida instrumento, dirección, bot objetivo, contratos, stop, objetivo y riesgo antes de simular una orden.
+- El análisis histórico importa velas OHLCV en CSV y simula señales según estrategia e intervalo configurados en cada bot. Para timestamps sin zona, el formulario solicita zona horaria; timestamps con `Z` u offset conservan esa zona. Los datos importados viven en memoria y se borran al reiniciar Node.
+- La simulación histórica no envía órdenes y no representa resultados futuros; Order Flow requiere datos de operaciones y bid/ask que un CSV OHLCV no contiene.
+- No hay conector de broker activo. La API rechaza contraseñas de broker y las cuentas registradas quedan como `NOT_CONFIGURED`.
+- La sesión del panel vence tras 12 horas sin solicitudes autenticadas; cada solicitud válida renueva ese plazo. Los procesos de Node mantienen sesiones en memoria, así que al reiniciar el servidor hay que iniciar sesión nuevamente.
+- La interfaz de jitter anti-mirroring se retiró; el sistema no incorpora demoras, rotación de IP ni identidades para ocultar replicación.
+- El [[documentacion/planificacion/PLAN_INTEGRACION_ECOSISTEMA_FUTUROS|plan de ecosistema NQ/MNQ]] es una propuesta; sus repositorios candidatos no implican integración verificada.
 
 ## Inventario por capa
 

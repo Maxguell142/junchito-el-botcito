@@ -42,7 +42,7 @@ const {
 const app = express();
 const server = http.createServer(app);
 const PORT = Number(process.env.PORT || 3008);
-const SESSION_TTL_MS = 30 * 60 * 1000;
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = Number(process.env.BOT_VPN_LOGIN_WINDOW_MS || 1000);
 const LOGIN_MAX_ATTEMPTS = 5;
 const sessions = new Map();
@@ -183,7 +183,7 @@ function secureEqual(value, expected) {
     && crypto.timingSafeEqual(valueBuffer, expectedBuffer);
 }
 
-function hasValidSessionToken(token) {
+function hasValidSessionToken(token, refreshActivity = true) {
   if (typeof token !== 'string' || token.length > 256) return false;
   const session = sessions.get(token);
   if (!session) return false;
@@ -191,6 +191,7 @@ function hasValidSessionToken(token) {
     sessions.delete(token);
     return false;
   }
+  if (refreshActivity) session.expiresAt = Date.now() + SESSION_TTL_MS;
   return true;
 }
 
@@ -225,7 +226,7 @@ function loginRateLimit(req, res, next) {
 }
 
 app.use('/api', (req, res, next) => {
-  if (req.path === '/auth/login' || req.path === '/auth/me') {
+  if (req.path === '/auth/login' || req.path === '/auth/me' || req.path === '/webhook') {
     return next();
   }
 
@@ -290,8 +291,6 @@ function toRuntimeBot(b) {
     proxy_healthy: true,
     geo_consistent: true,
     geo_description: 'Geolocalización consistente con titular KYC (US)',
-    jitter_min_ms: b.jitter_min_ms || b.jitter_ms || 50,
-    jitter_max_ms: b.jitter_max_ms || 350,
     status: b.status || 'ACTIVE',
     circuit_breaker: b.circuit_breaker || {
       daily_loss_limit: 1000.0,
@@ -299,6 +298,16 @@ function toRuntimeBot(b) {
       auto_lock_consistency: true,
       pause_on_red_news: true,
       status: 'NORMAL'
+    },
+    gate_engine: b.gate_engine || {
+      block_ny_open: Boolean(b.block_ny_open),
+      block_red_news: Boolean(b.block_red_news)
+    },
+    risk_parameters: b.risk_parameters || {
+      min_rr_ratio: Number(b.min_rr_ratio) || 2.0,
+      auto_position_sizing: b.auto_position_sizing !== undefined ? Boolean(b.auto_position_sizing) : true,
+      risk_per_trade_usd: Number(b.risk_per_trade_usd) || 150.0,
+      stop_loss_points: Number(b.stop_loss_points) || 15.0
     },
     schedule: b.schedule || { start_time: '09:30', end_time: '12:00', timezone: 'America/New_York' },
     accounts: (b.accounts || []).map(a => ({
@@ -309,7 +318,7 @@ function toRuntimeBot(b) {
       broker: a.broker || 'Tradovate',
       prop_firm: a.prop_firm || 'Apex Trader Funding',
       username: a.username || '',
-      password_masked: a.password_masked || '••••••••',
+      password_masked: '',
       balance: a.balance ?? 50000.0,
       max_contracts: a.max_contracts ?? 2,
       daily_loss_limit: a.daily_loss_limit ?? 1000.0,
@@ -321,7 +330,7 @@ function toRuntimeBot(b) {
       active_contracts: a.active_contracts || 0,
       current_position: a.current_position || 'FLAT',
       entry_price: a.entry_price || 0.0,
-      status: a.status === 'CONNECTED' ? 'NOT_CONFIGURED' : (a.status || 'NOT_CONFIGURED'),
+      status: 'NOT_CONFIGURED',
       last_order_time: a.last_order_time || null
     })),
     net_pnl: b.net_pnl || 0.0,
@@ -343,6 +352,77 @@ function toRuntimeBot(b) {
       }
     ]
   };
+}
+
+function checkAntiHedging(bot, requestedSide) {
+  const identId = bot.identity ? bot.identity.id : (bot.identity_id || null);
+  if (!identId) return { allowed: true };
+
+  const isBuy = requestedSide.toUpperCase() === 'BUY';
+  const opposingPosition = isBuy ? 'SHORT' : 'LONG';
+
+  // Buscar todos los bots vinculados a la MISMA identidad
+  const sameIdentityBots = bots.filter(b => (b.identity && b.identity.id === identId) || (b.identity_id === identId));
+
+  for (const b of sameIdentityBots) {
+    for (const acc of (b.accounts || [])) {
+      if (acc.current_position === opposingPosition && (acc.active_contracts || 0) > 0) {
+        return {
+          allowed: false,
+          identityId: identId,
+          identityName: bot.identity ? bot.identity.full_name : 'Titular',
+          opposingBotId: b.id,
+          opposingBotName: b.name,
+          opposingAccountName: acc.custom_name,
+          opposingPosition: opposingPosition
+        };
+      }
+    }
+  }
+  return { allowed: true };
+}
+
+function checkGateEngine(bot) {
+  if (!bot.gate_engine) return { open: true };
+
+  // 1. Bloqueo de apertura NY 09:30 - 09:45 EST (Configurable por el usuario)
+  if (bot.gate_engine.block_ny_open) {
+    const nyDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const totalMinutes = nyDate.getHours() * 60 + nyDate.getMinutes();
+    if (totalMinutes >= 570 && totalMinutes < 585) {
+      return {
+        open: false,
+        reason: 'Apertura volátil de Wall Street (09:30 - 09:45 EST)',
+        code: 'GATE_NY_OPEN'
+      };
+    }
+  }
+
+  // 2. Pausa por noticias macroeconómicas rojas CPI/FOMC/NFP (Configurable por el usuario)
+  if (bot.gate_engine.block_red_news) {
+    if (bot.macro_event_active) {
+      return {
+        open: false,
+        reason: 'Pausa por evento macroeconómico de alto impacto (CPI/FOMC/NFP)',
+        code: 'GATE_RED_NEWS'
+      };
+    }
+  }
+
+  return { open: true };
+}
+
+function calculatePositionSizing(bot, baseContracts, stopLossPoints = null) {
+  if (!bot.risk_parameters || !bot.risk_parameters.auto_position_sizing) {
+    const requested = Number(baseContracts);
+    return Number.isInteger(requested) && requested > 0 ? requested : 0;
+  }
+  const slPoints = Number(stopLossPoints ?? bot.risk_parameters.stop_loss_points);
+  const riskUsd = Number(bot.risk_parameters.risk_per_trade_usd);
+  if (!Number.isFinite(slPoints) || slPoints <= 0 || !Number.isFinite(riskUsd) || riskUsd <= 0) return 0;
+  // MNQ: $2.00 por punto ($0.50 por tick)
+  const riskPerContract = slPoints * 2.0;
+  return Math.floor(riskUsd / riskPerContract);
 }
 
 function loadConfig() {
@@ -1211,9 +1291,6 @@ function saveConfigToDisk(event, operations = []) {
         proxy_url: sanitizeProxyUrl(b.proxy_url),
         status: b.status,
         circuit_breaker: b.circuit_breaker,
-        jitter_ms: b.jitter_ms,
-        jitter_min_ms: b.jitter_min_ms,
-        jitter_max_ms: b.jitter_max_ms,
         schedule: b.schedule,
         net_pnl: b.net_pnl,
         today_pnl: b.today_pnl,
@@ -1321,7 +1398,7 @@ function broadcastSnapshot() {
   const payload = JSON.stringify(getSystemSnapshot());
   wss.clients.forEach(client => {
     if (client.isAuthenticated && client.readyState === 1) {
-      if (!hasValidSessionToken(client.sessionToken)) {
+      if (!hasValidSessionToken(client.sessionToken, false)) {
         client.close(4401, 'Session expired');
       } else {
         client.send(payload);
@@ -1465,6 +1542,7 @@ app.get('/api/analysis/status', (req, res) => {
       symbol,
       {
         source_timeframe: dataset.sourceTimeframe,
+        source_timezone: dataset.timestampTimeZone,
         candles: dataset.bars.length,
         imported_at: dataset.importedAt
       }
@@ -1479,9 +1557,10 @@ app.post(
   (req, res) => {
     const symbol = req.query.symbol;
     const sourceTimeframe = req.query.timeframe;
+    const timestampTimeZone = req.query.timezone || 'UTC';
     let dataset;
     try {
-      dataset = parseCsv(req.body, symbol, sourceTimeframe);
+      dataset = parseCsv(req.body, symbol, sourceTimeframe, timestampTimeZone);
     } catch (error) {
       return res.status(400).json({ detail: error.message });
     }
@@ -1492,6 +1571,7 @@ app.post(
     return res.json({
       symbol,
       source_timeframe: sourceTimeframe,
+      source_timezone: dataset.timestampTimeZone,
       candles: dataset.bars.length,
       imported_at: dataset.importedAt,
       data_type: 'HISTORICAL',
@@ -1919,15 +1999,22 @@ app.post('/api/bots/:id/accounts', (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
-  const { id, custom_name, titular_name, broker, prop_firm, environment, username, password, balance, max_contracts, daily_loss_limit } = req.body || {};
-  if (!isValidId(id) || typeof custom_name !== 'string' || !custom_name.trim() || custom_name.length > 160) {
+  const { id, account_id, custom_name, titular_name, broker, prop_firm, environment, username, password, balance, max_contracts, daily_loss_limit } = req.body || {};
+  const effectiveId = id || account_id;
+  if (!isValidId(effectiveId) || typeof custom_name !== 'string' || !custom_name.trim() || custom_name.length > 160) {
     return res.status(400).json({ detail: 'ID y nombre de cuenta inválidos.' });
   }
-  if (bot.accounts.some(account => account.id === id)) {
+  if (bot.accounts.some(account => account.id === effectiveId)) {
     return res.status(400).json({ detail: 'Esta cuenta ya existe en el bot.' });
   }
-  if (username || password) {
-    return res.status(400).json({ detail: 'No se aceptan credenciales de broker hasta implementar un gestor seguro.' });
+  if (username !== undefined && (typeof username !== 'string' || username.length > 120)) {
+    return res.status(400).json({ detail: 'Usuario de broker inválido.' });
+  }
+  if (password !== undefined && (typeof password !== 'string' || password.length > 120)) {
+    return res.status(400).json({ detail: 'Contraseña de broker inválida.' });
+  }
+  if (typeof password === 'string' && password.length > 0) {
+    return res.status(400).json({ detail: 'No se reciben contraseñas de broker: la aplicación no tiene un conector activo. Registra solo los datos de referencia de la cuenta.' });
   }
   if ((titular_name !== undefined && (typeof titular_name !== 'string' || titular_name.length > 160))
     || (broker !== undefined && (typeof broker !== 'string' || !broker.trim() || broker.length > 64))
@@ -1948,15 +2035,15 @@ app.post('/api/bots/:id/accounts', (req, res) => {
   }
 
   const titular = titular_name || (bot.identity ? bot.identity.full_name : 'Titular');
-
+  const cleanUsername = (typeof username === 'string' && username.trim()) ? username.trim() : '';
   const newAcc = {
-    id,
+    id: effectiveId,
     custom_name,
     titular_name: titular,
     environment: environment || 'EVALUATION',
     broker: broker || 'Tradovate',
     prop_firm: prop_firm || 'Apex Trader Funding',
-    username: '',
+    username: cleanUsername,
     password_masked: '',
     balance: parsedBalance,
     max_contracts: parsedContracts,
@@ -1966,12 +2053,13 @@ app.post('/api/bots/:id/accounts', (req, res) => {
     active_contracts: 0,
     current_position: 'FLAT',
     entry_price: 0.0,
-    status: (req.body && req.body.status) ? req.body.status : 'NOT_CONFIGURED',
+    // Las credenciales no se almacenan ni se usan para abrir una sesión de broker.
+    status: 'NOT_CONFIGURED',
     last_order_time: null
   };
   bot.accounts.push(newAcc);
   const now = new Date().toLocaleTimeString();
-  bot.logs.unshift({ timestamp: now, level: 'CONFIG', message: `Cuenta vinculada: ${custom_name} (${prop_firm} // ${titular})` });
+  bot.logs.unshift({ timestamp: now, level: 'CONFIG', message: `Cuenta vinculada: ${custom_name} (${prop_firm} // ${titular}) [Usuario: ${cleanUsername || 'N/A'}]` });
   saveConfigToDisk({
     action: 'account_added',
     entity_type: 'account',
@@ -1980,8 +2068,8 @@ app.post('/api/bots/:id/accounts', (req, res) => {
   });
   broadcastSnapshot();
   res.json({
-    message: 'Cuenta agregada con éxito',
-    account: { ...newAcc, username: '' }
+    message: 'Cuenta registrada; no hay conexión de broker activa.',
+    account: { ...newAcc, password: '' }
   });
 });
 
@@ -2009,7 +2097,7 @@ app.delete('/api/bots/:botId/accounts/:accountId', (req, res) => {
 // Crear Bot con Titular (Soporte de Estrategias Personalizadas y Archivo)
 app.post('/api/bots', (req, res) => {
   const body = req.body || {};
-  let { id, name, identity_id, strategy, proxy_url, jitter_ms, start_time, end_time, strategy_file } = body;
+  let { id, name, identity_id, strategy, proxy_url, start_time, end_time, strategy_file } = body;
   
   if (typeof name !== 'string' || !name.trim() || name.length > 160) {
     return res.status(400).json({ detail: 'ID y nombre inválidos.' });
@@ -2044,12 +2132,10 @@ app.post('/api/bots', (req, res) => {
   if (!['NQ', 'ES'].includes(analysisSymbol) || !validAnalysisTimeframes(analysisTimeframes)) {
     return res.status(400).json({ detail: 'Instrumento o intervalos de análisis no válidos.' });
   }
-  const parsedJitter = jitter_ms === undefined ? 120 : Number(jitter_ms);
   const requestedStart = start_time === undefined ? '09:30' : start_time;
   const requestedEnd = end_time === undefined ? '12:00' : end_time;
-  if (!Number.isInteger(parsedJitter) || parsedJitter < 0 || parsedJitter > 5000
-    || !isValidTime(requestedStart) || !isValidTime(requestedEnd)) {
-    return res.status(400).json({ detail: 'Horario o jitter inválidos.' });
+  if (!isValidTime(requestedStart) || !isValidTime(requestedEnd)) {
+    return res.status(400).json({ detail: 'Horario inválido.' });
   }
   if (proxy_url) {
     let parsedProxy;
@@ -2085,7 +2171,6 @@ app.post('/api/bots', (req, res) => {
     proxy_healthy: false,
     geo_consistent: false,
     geo_description: 'No verificado',
-    jitter_ms: parsedJitter,
     status: 'ACTIVE',
     schedule: {
       start_time: requestedStart,
@@ -2109,6 +2194,16 @@ app.post('/api/bots', (req, res) => {
       auto_lock_consistency: true,
       pause_on_red_news: true,
       status: 'NORMAL'
+    },
+    gate_engine: {
+      block_ny_open: Boolean(body.block_ny_open || (body.gate_engine && body.gate_engine.block_ny_open)),
+      block_red_news: Boolean(body.block_red_news || (body.gate_engine && body.gate_engine.block_red_news))
+    },
+    risk_parameters: {
+      min_rr_ratio: Number(body.min_rr_ratio || (body.risk_parameters && body.risk_parameters.min_rr_ratio)) || 2.0,
+      auto_position_sizing: body.auto_position_sizing !== undefined ? Boolean(body.auto_position_sizing) : true,
+      risk_per_trade_usd: Number(body.risk_per_trade_usd || (body.risk_parameters && body.risk_parameters.risk_per_trade_usd)) || 150.0,
+      stop_loss_points: Number(body.stop_loss_points || (body.risk_parameters && body.risk_parameters.stop_loss_points)) || 15.0
     },
     logs: [
       {
@@ -2134,7 +2229,7 @@ app.put('/api/bots/:id', (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
-  const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, today_pnl, jitter_ms, start_time, end_time } = req.body || {};
+  const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, today_pnl, start_time, end_time } = req.body || {};
 
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim() || name.length > 160) {
@@ -2223,12 +2318,6 @@ app.put('/api/bots/:id', (req, res) => {
     }
   }
 
-  if (jitter_ms !== undefined) {
-    const j = Number(jitter_ms);
-    if (Number.isInteger(j) && j >= 0 && j <= 5000) {
-      bot.jitter_ms = j;
-    }
-  }
 
   if (start_time !== undefined && isValidTime(start_time)) {
     if (!bot.schedule) bot.schedule = { timezone: 'America/New_York' };
@@ -2237,6 +2326,31 @@ app.put('/api/bots/:id', (req, res) => {
   if (end_time !== undefined && isValidTime(end_time)) {
     if (!bot.schedule) bot.schedule = { timezone: 'America/New_York' };
     bot.schedule.end_time = end_time;
+  }
+
+  const bodyData = req.body || {};
+  if (bodyData.gate_engine !== undefined || bodyData.block_ny_open !== undefined || bodyData.block_red_news !== undefined) {
+    if (!bot.gate_engine) bot.gate_engine = { block_ny_open: false, block_red_news: false };
+    if (bodyData.block_ny_open !== undefined) bot.gate_engine.block_ny_open = Boolean(bodyData.block_ny_open);
+    if (bodyData.block_red_news !== undefined) bot.gate_engine.block_red_news = Boolean(bodyData.block_red_news);
+    if (bodyData.gate_engine) {
+      if (bodyData.gate_engine.block_ny_open !== undefined) bot.gate_engine.block_ny_open = Boolean(bodyData.gate_engine.block_ny_open);
+      if (bodyData.gate_engine.block_red_news !== undefined) bot.gate_engine.block_red_news = Boolean(bodyData.gate_engine.block_red_news);
+    }
+  }
+
+  if (bodyData.risk_parameters !== undefined || bodyData.min_rr_ratio !== undefined || bodyData.auto_position_sizing !== undefined || bodyData.stop_loss_points !== undefined || bodyData.risk_per_trade_usd !== undefined) {
+    if (!bot.risk_parameters) bot.risk_parameters = { min_rr_ratio: 2.0, auto_position_sizing: true, risk_per_trade_usd: 150.0, stop_loss_points: 15.0 };
+    if (bodyData.min_rr_ratio !== undefined) bot.risk_parameters.min_rr_ratio = Number(bodyData.min_rr_ratio) || 2.0;
+    if (bodyData.auto_position_sizing !== undefined) bot.risk_parameters.auto_position_sizing = Boolean(bodyData.auto_position_sizing);
+    if (bodyData.stop_loss_points !== undefined) bot.risk_parameters.stop_loss_points = Number(bodyData.stop_loss_points) || 15.0;
+    if (bodyData.risk_per_trade_usd !== undefined) bot.risk_parameters.risk_per_trade_usd = Number(bodyData.risk_per_trade_usd) || 150.0;
+    if (bodyData.risk_parameters) {
+      if (bodyData.risk_parameters.min_rr_ratio !== undefined) bot.risk_parameters.min_rr_ratio = Number(bodyData.risk_parameters.min_rr_ratio) || 2.0;
+      if (bodyData.risk_parameters.auto_position_sizing !== undefined) bot.risk_parameters.auto_position_sizing = Boolean(bodyData.risk_parameters.auto_position_sizing);
+      if (bodyData.risk_parameters.stop_loss_points !== undefined) bot.risk_parameters.stop_loss_points = Number(bodyData.risk_parameters.stop_loss_points) || 15.0;
+      if (bodyData.risk_parameters.risk_per_trade_usd !== undefined) bot.risk_parameters.risk_per_trade_usd = Number(bodyData.risk_parameters.risk_per_trade_usd) || 150.0;
+    }
   }
 
   const now = new Date().toLocaleTimeString();
@@ -2422,17 +2536,64 @@ app.get('/api/bots/:id/chart', async (req, res) => {
   });
 });
 
-// Simulación Directa de Operación para un Bot (DEMO Trade Launcher)
+// Simulación Directa de Operación para un Bot (DEMO Trade Launcher con Anti-Hedging y Gate Engine)
 app.post('/api/bots/:id/simulate-trade', (req, res) => {
   const bot = bots.find(b => b.id === req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { side = 'BUY', contracts = 1 } = req.body || {};
+  if (typeof side !== 'string' || !['BUY', 'SELL'].includes(side.toUpperCase())) {
+    return res.status(400).json({ detail: 'side debe ser BUY o SELL.' });
+  }
   const isBuy = side.toUpperCase() === 'BUY';
+  const requestedContracts = Number(contracts);
+  if (!Number.isInteger(requestedContracts) || requestedContracts < 1 || requestedContracts > 100) {
+    return res.status(400).json({ detail: 'contracts debe ser un entero entre 1 y 100.' });
+  }
 
+  // 1. Verificación Gate Engine (Configurable por usuario)
+  const gateCheck = checkGateEngine(bot);
+  if (!gateCheck.open) {
+    const gateMsg = `⏸️ Gate Engine: Orden bloqueada por ${gateCheck.reason}.`;
+    bot.logs.unshift({ timestamp: new Date().toLocaleTimeString(), level: 'GATE', message: gateMsg });
+    return res.status(422).json({
+      status: 'BLOCKED',
+      gate_engine_blocked: true,
+      reason: gateCheck.reason,
+      code: gateCheck.code
+    });
+  }
+
+  // 2. Regla estricta Anti-Hedging por Identidad KYC
+  const antiHedging = checkAntiHedging(bot, side);
+  if (!antiHedging.allowed) {
+    const blockMsg = `Control de exposición: ${antiHedging.identityName} ya tiene una posición ${antiHedging.opposingPosition} abierta en ${antiHedging.opposingBotName} / ${antiHedging.opposingAccountName}. La operación simulada se bloqueó por la regla configurada.`;
+    const now = new Date().toLocaleTimeString();
+    bot.logs.unshift({
+      timestamp: now,
+      level: 'ALERT',
+      message: blockMsg
+    });
+    return res.status(409).json({
+      status: 'BLOCKED',
+      anti_hedging_blocked: true,
+      detail: blockMsg,
+      identity: antiHedging.identityName,
+      opposing_position: antiHedging.opposingPosition,
+      opposing_account: antiHedging.opposingAccountName
+    });
+  }
+
+  // 3. Dimensionamiento y Sizing automático
+  const activeContracts = calculatePositionSizing(bot, requestedContracts);
+  if (activeContracts < 1) {
+    return res.status(422).json({ status: 'BLOCKED', risk_check_blocked: true, detail: 'El riesgo por contrato excede el límite configurado.' });
+  }
+
+  // 4. Ejecución en paralelo en todas las cuentas asignadas al bot
   bot.accounts.forEach(acc => {
     acc.current_position = isBuy ? 'LONG' : 'SHORT';
-    acc.active_contracts = contracts;
+    acc.active_contracts = Math.min(activeContracts, acc.max_contracts || 2);
     acc.entry_price = marketPrice;
     acc.floating_pnl = 0.0;
     acc.status = 'CONNECTED';
@@ -2444,7 +2605,7 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
     position: isBuy ? 'belowBar' : 'aboveBar',
     color: isBuy ? '#00E676' : '#FF5252',
     shape: isBuy ? 'arrowUp' : 'arrowDown',
-    text: `${bot.name}: ${side.toUpperCase()} ${contracts} MNQ @ ${marketPrice}`
+    text: `${bot.name}: ${side.toUpperCase()} ${activeContracts} MNQ @ ${marketPrice}`
   };
   chartExecutionMarkers.push(marker);
 
@@ -2452,7 +2613,7 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
   bot.logs.unshift({
     timestamp: now,
     level: 'ORDER',
-    message: `⚡ Orden SIMULADA ${side.toUpperCase()} ${contracts} MNQ @ ${marketPrice} ejecutada en ${bot.accounts.length} cuenta(s) con jitter disperso.`
+    message: `Orden simulada ${side.toUpperCase()} ${activeContracts} MNQ @ ${marketPrice}.`
   });
 
   saveConfigToDisk({
@@ -2460,20 +2621,203 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
     entity_type: 'bot',
     entity_id: bot.id,
     status: 'SIMULATED',
-    details: { side: side.toUpperCase(), contracts, market_price: marketPrice }
+    details: { side: side.toUpperCase(), contracts: activeContracts, market_price: marketPrice }
   }, [{
     bot_id: bot.id,
     operation_type: 'SIMULATED_TRADE',
     mode: 'SIMULATED',
     status: 'SIMULATED',
-    details: { side: side.toUpperCase(), contracts, market_price: marketPrice }
+    details: { side: side.toUpperCase(), contracts: activeContracts, market_price: marketPrice }
   }]);
   broadcastSnapshot();
   res.json({
     status: 'OK',
     message: `Orden ${side.toUpperCase()} simulada con éxito`,
     market_price: marketPrice,
-    bot_id: bot.id
+    bot_id: bot.id,
+    contracts: activeContracts
+  });
+});
+
+// Webhook local autenticado para señales simuladas (Node.js, puerto 3008)
+app.post('/api/webhook', (req, res) => {
+  const body = req.body || {};
+  const configuredSecret = process.env.QUANTUM_WEBHOOK_SECRET || '';
+  if (configuredSecret.length < 32) {
+    return res.status(503).json({ detail: 'Webhook deshabilitado: configura QUANTUM_WEBHOOK_SECRET con al menos 32 caracteres aleatorios.' });
+  }
+  const providedSecret = req.get('x-quantum-webhook-token') || body.token;
+  if (!secureEqual(providedSecret, configuredSecret)) {
+    return res.status(401).json({ detail: 'Token de webhook inválido.' });
+  }
+
+  const { ticker = 'MNQ', action = 'buy', price, contracts = 1, strategy, bot_id } = body;
+  const stopLossPoints = Number(body.stop_loss_points ?? body.sl_points ?? body.sl);
+  const takeProfitPoints = Number(body.take_profit_points ?? body.tp_points ?? body.tp);
+  const requestedMinRr = Number(body.min_rr);
+
+  if (typeof ticker !== 'string' || ticker.trim().toUpperCase() !== 'MNQ') {
+    return res.status(422).json({ detail: 'Este webhook solo admite el símbolo MNQ en modo simulado.' });
+  }
+
+  const side = typeof action === 'string' ? action.toUpperCase() : '';
+  if (!['BUY', 'SELL', 'FLAT', 'CLOSE'].includes(side)) {
+    return res.status(400).json({ detail: 'Acción de webhook no válida (debe ser BUY, SELL, o FLAT).' });
+  }
+
+  // Buscar bot objetivo
+  let targetBot = null;
+  if (bot_id) {
+    targetBot = bots.find(b => b.id === bot_id);
+  } else if (typeof strategy === 'string' && strategy.trim()) {
+    const strategyBots = bots.filter(b => b.strategy === strategy && b.status === 'ACTIVE');
+    if (strategyBots.length === 1) targetBot = strategyBots[0];
+    else if (strategyBots.length > 1) {
+      return res.status(400).json({ detail: 'La estrategia coincide con varios bots activos; indica bot_id explícitamente.' });
+    }
+  }
+
+  if (!targetBot) {
+    return res.status(404).json({ detail: 'No se encontró un bot objetivo. Indica un bot_id válido o una estrategia única.' });
+  }
+
+  // Si la acción es FLAT o CLOSE, cerrar posiciones
+  if (side === 'FLAT' || side === 'CLOSE') {
+    targetBot.accounts.forEach(acc => {
+      acc.current_position = 'FLAT';
+      acc.active_contracts = 0;
+      acc.floating_pnl = 0.0;
+    });
+    targetBot.total_active_contracts = 0;
+    const now = new Date().toLocaleTimeString();
+    targetBot.logs.unshift({
+      timestamp: now,
+      level: 'ORDER',
+      message: `⏹️ Alerta TradingView Webhook: Posiciones cerradas (FLAT) en ${targetBot.accounts.length} cuenta(s).`
+    });
+    broadcastSnapshot();
+    return res.json({ status: 'OK', message: 'Posiciones cerradas (FLAT)', bot_id: targetBot.id });
+  }
+
+  const contractsNumber = Number(contracts);
+  if (!Number.isInteger(contractsNumber) || contractsNumber < 1 || contractsNumber > 100) {
+    return res.status(400).json({ detail: 'contracts debe ser un entero entre 1 y 100.' });
+  }
+  if (!Number.isFinite(stopLossPoints) || stopLossPoints <= 0
+    || !Number.isFinite(takeProfitPoints) || takeProfitPoints <= 0) {
+    return res.status(400).json({ detail: 'stop_loss_points y take_profit_points deben ser números positivos.' });
+  }
+  const configuredMinRr = Number(targetBot.risk_parameters?.min_rr_ratio) || 2;
+  const minRr = Number.isFinite(requestedMinRr) && requestedMinRr > 0
+    ? Math.max(configuredMinRr, requestedMinRr)
+    : configuredMinRr;
+  const actualRr = takeProfitPoints / stopLossPoints;
+  if (actualRr + Number.EPSILON < minRr) {
+    return res.status(422).json({
+      status: 'BLOCKED',
+      risk_check_blocked: true,
+      required_rr: minRr,
+      actual_rr: Number(actualRr.toFixed(4)),
+      detail: 'La relación take-profit/stop-loss no alcanza el mínimo configurado para el bot.'
+    });
+  }
+  if (price !== undefined && (!Number.isFinite(Number(price)) || Number(price) <= 0)) {
+    return res.status(400).json({ detail: 'price debe ser un número positivo.' });
+  }
+
+  // 1. Verificación Gate Engine
+  const gateCheck = checkGateEngine(targetBot);
+  if (!gateCheck.open) {
+    const gateMsg = `⏸️ Gate Engine: Alerta webhook ${side} descartada por ${gateCheck.reason}.`;
+    targetBot.logs.unshift({ timestamp: new Date().toLocaleTimeString(), level: 'GATE', message: gateMsg });
+    return res.status(422).json({
+      status: 'BLOCKED',
+      gate_engine_blocked: true,
+      reason: gateCheck.reason,
+      code: gateCheck.code
+    });
+  }
+
+  // 2. Verificación Anti-Hedging por Identidad KYC
+  const antiHedging = checkAntiHedging(targetBot, side);
+  if (!antiHedging.allowed) {
+    const blockMsg = `Control de exposición: ${antiHedging.identityName} ya tiene una posición ${antiHedging.opposingPosition} abierta en ${antiHedging.opposingBotName} / ${antiHedging.opposingAccountName}. La operación simulada se bloqueó por la regla configurada.`;
+    targetBot.logs.unshift({
+      timestamp: new Date().toLocaleTimeString(),
+      level: 'ALERT',
+      message: blockMsg
+    });
+    return res.status(409).json({
+      status: 'BLOCKED',
+      anti_hedging_blocked: true,
+      detail: blockMsg,
+      identity: antiHedging.identityName,
+      opposing_position: antiHedging.opposingPosition,
+      opposing_account: antiHedging.opposingAccountName
+    });
+  }
+
+  // 3. Dimensionamiento y Sizing de contratos
+  const activeContracts = calculatePositionSizing(targetBot, contractsNumber, stopLossPoints);
+  if (activeContracts < 1) {
+    return res.status(422).json({
+      status: 'BLOCKED',
+      risk_check_blocked: true,
+      detail: 'El riesgo por contrato excede el límite configurado; no se abrió una posición simulada.'
+    });
+  }
+  const isBuy = side === 'BUY';
+  const execPrice = Number(price) || marketPrice;
+
+  // 4. Ejecución simultánea en paralelo con la misma operación
+  targetBot.accounts.forEach(acc => {
+    acc.current_position = isBuy ? 'LONG' : 'SHORT';
+    acc.active_contracts = Math.min(activeContracts, acc.max_contracts || 2);
+    acc.entry_price = execPrice;
+    acc.floating_pnl = 0.0;
+    acc.status = 'CONNECTED';
+  });
+  targetBot.total_active_contracts = targetBot.accounts.reduce((s, a) => s + a.active_contracts, 0);
+
+  const marker = {
+    time: marketCandles.length ? marketCandles[marketCandles.length - 1].time : Math.floor(Date.now() / 1000),
+    position: isBuy ? 'belowBar' : 'aboveBar',
+    color: isBuy ? '#00E676' : '#FF5252',
+    shape: isBuy ? 'arrowUp' : 'arrowDown',
+    text: `TV Webhook (${targetBot.name}): ${side} ${activeContracts} MNQ @ ${execPrice}`
+  };
+  chartExecutionMarkers.push(marker);
+
+  const now = new Date().toLocaleTimeString();
+  targetBot.logs.unshift({
+    timestamp: now,
+    level: 'ORDER',
+    message: `TradingView Webhook: orden simulada ${side} ${activeContracts} MNQ @ ${execPrice}.`
+  });
+
+  saveConfigToDisk({
+    action: 'webhook_trade_opened',
+    entity_type: 'bot',
+    entity_id: targetBot.id,
+    status: 'EXECUTED',
+    details: { side, contracts: activeContracts, market_price: execPrice }
+  }, [{
+    bot_id: targetBot.id,
+    operation_type: 'WEBHOOK_TRADE',
+    mode: 'SIMULATED',
+    status: 'EXECUTED',
+    details: { side, contracts: activeContracts, market_price: execPrice }
+  }]);
+
+  broadcastSnapshot();
+  return res.json({
+    status: 'OK',
+    message: `Alerta procesada con éxito para ${targetBot.name}`,
+    bot_id: targetBot.id,
+    side,
+    contracts: activeContracts,
+    price: execPrice,
+    accounts_executed: targetBot.accounts.length
   });
 });
 

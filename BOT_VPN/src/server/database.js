@@ -111,7 +111,8 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
         [
           'id', 'name', 'identity_id', 'strategy', 'outbound_ip', 'proxy_port',
           'isp_provider', 'node_location', 'geo_match_status', 'status',
-          'jitter_min_ms', 'jitter_max_ms', 'jitter_ms', 'schedule', 'circuit_breaker',
+          'schedule', 'circuit_breaker',
+          'gate_engine', 'risk_parameters',
           'net_pnl', 'today_pnl', 'today_pnl_date', 'total_trades', 'winning_trades',
           'losing_trades', 'max_drawdown', 'logs'
         ]
@@ -165,7 +166,7 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
             safeAccount.daily_metrics_date = metricsDate;
           }
           safeAccount.username = account.username ? '••••' : '';
-          safeAccount.password_masked = '••••••••';
+          safeAccount.password_masked = '';
           safeAccount.status = 'NOT_CONFIGURED';
           return safeAccount;
         });

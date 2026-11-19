@@ -1,6 +1,6 @@
 {
   "name": "bot_vpn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "productName": "QUANTUM FX",
   "description": "Panel local de escritorio para QUANTUM FX",
   "main": "desktop/main.js",
@@ -61,7 +61,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "QuantumFX-Setup-${version}.${ext}"

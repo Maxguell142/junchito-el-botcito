@@ -651,14 +651,25 @@ function renderBotGrid() {
             <span style="font-size: 0.68rem; color: var(--text-secondary);">${escapeHtml(bot.isp_provider ? bot.isp_provider.split(' ')[0] : 'ISP US')}</span>
           </div>
           
-          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04);">
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary);">
-              <span>Jitter Anti-Mirroring:</span>
-              <span class="lucid-switch-badge">ON ${bot.jitter_min_ms || 50}-${bot.jitter_max_ms || 350}ms</span>
-            </div>
+          <div style="display: flex; justify-content: flex-end; width: 100%; align-items: center; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04);">
             <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary);">
               <span>Lock:</span>
               <span class="lucid-switch-badge">+${targetProfit} ON</span>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04); font-size: 0.70rem;">
+            <div style="display: flex; align-items: center; gap: 4px; color: var(--text-secondary);">
+              <span>Gate:</span>
+              <span class="lucid-switch-badge" style="color: ${bot.gate_engine?.block_ny_open ? '#34D399' : '#A1A1AA'};">
+                ${bot.gate_engine?.block_ny_open ? '🛡️ NY Open On' : '⚡ Direct Open'}
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; color: var(--text-secondary);">
+              <span>R:R:</span>
+              <span class="lucid-switch-badge" style="color: var(--color-neon);">
+                1:${bot.risk_parameters?.min_rr_ratio || '2'} (${bot.risk_parameters?.auto_position_sizing !== false ? 'Auto Sizing' : 'Fijo'})
+              </span>
             </div>
           </div>
         </div>
@@ -953,6 +964,18 @@ function openAddAccountModalForCurrentBot() {
   }
 }
 
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🔒';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁️';
+  }
+}
+
 function closeAddAccountModal() {
   document.getElementById('add-account-modal').classList.remove('open');
 }
@@ -960,10 +983,12 @@ function closeAddAccountModal() {
 async function submitAddAccount(event) {
   event.preventDefault();
   const botId = document.getElementById('acc-target-bot').value;
+  const customId = (document.getElementById('acc-id')?.value || '').trim();
   const customName = document.getElementById('acc-custom-name').value.trim();
   const propFirm = document.getElementById('acc-prop-firm').value;
   const broker = document.getElementById('acc-broker').value;
   const environment = document.getElementById('acc-environment').value;
+  const username = (document.getElementById('acc-username')?.value || '').trim();
   const balance = parseFloat(document.getElementById('acc-balance').value) || 50000;
   const maxContracts = parseInt(document.getElementById('acc-max-contracts').value) || 2;
   const dailyLoss = parseFloat(document.getElementById('acc-daily-loss').value) || 1000;
@@ -973,12 +998,16 @@ async function submitAddAccount(event) {
     return;
   }
 
+  const effectiveId = customId || `acc_${Date.now()}`;
+
   const payload = {
-    id: `acc_${Date.now()}`,
+    id: effectiveId,
+    account_id: effectiveId,
     custom_name: customName,
     broker: broker,
     prop_firm: propFirm,
     environment: environment,
+    username: username,
     balance: balance,
     max_contracts: maxContracts,
     daily_loss_limit: dailyLoss
@@ -997,7 +1026,7 @@ async function submitAddAccount(event) {
     }
 
     closeAddAccountModal();
-    showToast(`Cuenta de prueba "${customName}" guardada. No está conectada al broker.`, 'info');
+    showToast(`Cuenta "${customName}" registrada. No hay conexión activa con el broker.`, 'success');
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
@@ -1181,9 +1210,14 @@ async function submitCreateBot(event) {
     document.querySelectorAll('input[name="new-bot-timeframe"]:checked')
   ).map(input => input.value);
   const rawProxy = document.getElementById('new-bot-proxy').value.trim();
-  const jitter = parseInt(document.getElementById('new-bot-jitter').value) || 120;
   const startTime = document.getElementById('new-bot-start').value;
   const endTime = document.getElementById('new-bot-end').value;
+
+  const rrRatio = parseFloat(document.getElementById('new-bot-rr-ratio')?.value) || 2.0;
+  const slPoints = parseFloat(document.getElementById('new-bot-sl-points')?.value) || 15.0;
+  const autoSizing = document.getElementById('new-bot-auto-sizing')?.checked ?? true;
+  const blockNyOpen = document.getElementById('new-bot-block-ny-open')?.checked ?? false;
+  const blockRedNews = document.getElementById('new-bot-block-red-news')?.checked ?? false;
 
   // Si el usuario no especificó ID, se genera uno limpio y seguro
   const botId = rawId || `bot_${name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 18)}_${Date.now().toString(36)}`;
@@ -1199,10 +1233,14 @@ async function submitCreateBot(event) {
     analysis_symbol: analysisSymbol,
     analysis_timeframes: analysisTimeframes,
     proxy_url: proxy,
-    jitter_ms: jitter,
     start_time: startTime,
     end_time: endTime,
-    strategy_file: uploadedStrategyFile
+    strategy_file: uploadedStrategyFile,
+    min_rr_ratio: rrRatio,
+    stop_loss_points: slPoints,
+    auto_position_sizing: autoSizing,
+    block_ny_open: blockNyOpen,
+    block_red_news: blockRedNews
   };
 
   if (!analysisTimeframes.length) {
@@ -1271,10 +1309,21 @@ function openEditBotModal(botId) {
   const dllInput = document.getElementById('edit-bot-dll');
   if (dllInput) dllInput.value = cb.daily_loss_limit || 1000;
 
-  const jitterInput = document.getElementById('edit-bot-jitter');
-  if (jitterInput) jitterInput.value = bot.jitter_ms || 120;
   const todayPnlInput = document.getElementById('edit-bot-today-pnl');
   if (todayPnlInput) todayPnlInput.value = Number(bot.today_pnl) || 0;
+
+  const ge = bot.gate_engine || {};
+  const rp = bot.risk_parameters || {};
+  const blockNyOpenInput = document.getElementById('edit-bot-block-ny-open');
+  if (blockNyOpenInput) blockNyOpenInput.checked = Boolean(ge.block_ny_open);
+  const blockRedNewsInput = document.getElementById('edit-bot-block-red-news');
+  if (blockRedNewsInput) blockRedNewsInput.checked = Boolean(ge.block_red_news);
+  const rrRatioInput = document.getElementById('edit-bot-rr-ratio');
+  if (rrRatioInput) rrRatioInput.value = String(rp.min_rr_ratio || '2.0');
+  const slPointsInput = document.getElementById('edit-bot-sl-points');
+  if (slPointsInput) slPointsInput.value = rp.stop_loss_points || 15.0;
+  const autoSizingInput = document.getElementById('edit-bot-auto-sizing');
+  if (autoSizingInput) autoSizingInput.checked = rp.auto_position_sizing !== undefined ? Boolean(rp.auto_position_sizing) : true;
 
   document.getElementById('edit-bot-modal')?.classList.add('open');
 }
@@ -1292,8 +1341,13 @@ async function submitEditBot(event) {
   const proxy_url = document.getElementById('edit-bot-proxy').value.trim();
   const consistency_target = Number(document.getElementById('edit-bot-target').value);
   const daily_loss_limit = Number(document.getElementById('edit-bot-dll').value);
-  const jitter_ms = Number(document.getElementById('edit-bot-jitter').value);
   const today_pnl = Number(document.getElementById('edit-bot-today-pnl').value);
+
+  const block_ny_open = document.getElementById('edit-bot-block-ny-open')?.checked ?? false;
+  const block_red_news = document.getElementById('edit-bot-block-red-news')?.checked ?? false;
+  const min_rr_ratio = Number(document.getElementById('edit-bot-rr-ratio')?.value) || 2.0;
+  const stop_loss_points = Number(document.getElementById('edit-bot-sl-points')?.value) || 15.0;
+  const auto_position_sizing = document.getElementById('edit-bot-auto-sizing')?.checked ?? true;
 
   try {
     const resp = await apiFetch(`/api/bots/${encodeURIComponent(botId)}`, {
@@ -1306,8 +1360,12 @@ async function submitEditBot(event) {
         proxy_url,
         consistency_target,
         daily_loss_limit,
-        jitter_ms,
-        today_pnl
+        today_pnl,
+        block_ny_open,
+        block_red_news,
+        min_rr_ratio,
+        stop_loss_points,
+        auto_position_sizing
       })
     });
 
@@ -1398,9 +1456,10 @@ async function submitAnalysisCsv(event) {
   try {
     const symbol = document.getElementById('analysis-symbol').value;
     const timeframe = document.getElementById('analysis-source-timeframe').value;
+    const timezone = document.getElementById('analysis-timezone').value;
     const csv = await file.text();
     const response = await apiFetch(
-      `/api/analysis/csv?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
+      `/api/analysis/csv?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&timezone=${encodeURIComponent(timezone)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'text/csv' },
@@ -1410,11 +1469,12 @@ async function submitAnalysisCsv(event) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || 'No se pudo analizar el archivo.');
     state.analysisResults = payload.results || [];
-    status.textContent = `${payload.symbol}: ${payload.candles} velas ${payload.source_timeframe} importadas. Simulación histórica, no en vivo.`;
+    status.textContent = `${payload.symbol}: ${payload.candles} velas ${payload.source_timeframe} importadas (${payload.source_timezone}). Simulación histórica, no en vivo.`;
     renderAnalysisResults(state.analysisResults);
     showToast('Simulación histórica completada. No se envió ninguna orden a un broker.', 'success');
   } catch (error) {
     status.textContent = 'No se pudo importar el CSV.';
+    status.textContent = `No se pudo cargar: ${error.message}`;
     showToast(`Error: ${error.message}`, 'error');
   } finally {
     button.disabled = false;
@@ -1438,7 +1498,7 @@ async function loadAnalysisStatus() {
     const status = document.getElementById('analysis-import-status');
     if (status && datasets.length) {
       status.textContent = `CSV históricos en memoria: ${datasets.map(([symbol, dataset]) =>
-        `${symbol} ${dataset.source_timeframe} (${dataset.candles} velas)`
+        `${symbol} ${dataset.source_timeframe} (${dataset.candles} velas, ${dataset.source_timezone || 'UTC'})`
       ).join(' · ')}. Simulaciones sin broker; se borran al reiniciar Node.`;
     }
     renderAnalysisResults(state.analysisResults);
@@ -1942,7 +2002,7 @@ async function saveCurrentModalSchedule() {
 
 function copyWebhookUrl() {
   const host = window.location.hostname || '127.0.0.1';
-  const port = window.location.port || '8000';
+  const port = window.location.port || '3008';
   const url = `http://${host}:${port}/api/webhook`;
   navigator.clipboard.writeText(url);
   showToast('URL del Webhook copiada al portapapeles', 'info');
@@ -1955,8 +2015,9 @@ function copyWebhookPayload() {
   "action": "{{strategy.order.action}}",
   "price": {{close}},
   "contracts": 1,
-  "sl": 0.0,
-  "tp": 0.0,
+  "stop_loss_points": 15.0,
+  "take_profit_points": 30.0,
+  "min_rr": 2.0,
   "strategy": "ICTStrategy",
   "comment": "TradingView Alert"
 }`;

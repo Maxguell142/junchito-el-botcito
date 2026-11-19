@@ -17,7 +17,7 @@ Esta es la **página principal de la bóveda**. En Obsidian, empieza aquí. Para
 2. [[documentacion/02_ESTADO_TECNICO_Y_SALUD|Estado técnico verificado]]: servicios, funciones comprobadas y límites actuales.
 3. [[documentacion/01_MAPA_DEL_PROYECTO|Mapa de carpetas y conexiones]]: dónde está cada parte y cómo se relaciona.
 4. [[documentacion/03_ARQUITECTURA_CONCEPTUAL|Arquitectura de referencia]]: contexto de diseño; no representa todo lo implementado.
-5. [[documentacion/planificacion/TAREAS_PENDIENTES_QUANTUM_FX|Tareas pendientes]] y [[documentacion/planificacion/PLAN_DE_IMPLEMENTACION|plan de implementación]]: trabajo futuro.
+5. [[documentacion/planificacion/TAREAS_PENDIENTES_QUANTUM_FX|Tareas pendientes]], [[documentacion/planificacion/PLAN_DE_IMPLEMENTACION|plan de implementación]] y [[documentacion/planificacion/PLAN_INTEGRACION_ECOSISTEMA_FUTUROS|plan de ecosistema futuros NQ/MNQ]]: trabajo futuro.
 
 ## Estructura para orientarse
 

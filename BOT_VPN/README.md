@@ -21,6 +21,12 @@ QUANTUM FX es una aplicación local para organizar bots de trading y revisar res
 
 **Importante:** las órdenes y los resultados del motor principal son simulados. El proyecto no acredita una conexión activa con un broker ni un feed CME en vivo. Los datos externos usados en algunos gráficos pueden ser aproximaciones o datos sintéticos.
 
+### Cómo usar el análisis histórico
+
+En **Análisis**, carga un CSV de velas para comparar las estrategias seleccionadas en tus bots con precios pasados. El archivo necesita columnas `timestamp`, `open`, `high`, `low`, `close` y `volume`; puedes usar datos de 1 minuto y elegir el instrumento y el intervalo de origen. Si las fechas no incluyen `Z` ni un desplazamiento como `-04:00`, selecciona la zona horaria en que el proveedor guardó esas fechas. Los valores con zona incluida se interpretan tal como vienen.
+
+La pantalla muestra indicadores, señales y operaciones hipotéticas con entrada, stop y objetivo. Sirve para explorar y revisar una estrategia; no predice resultados ni envía órdenes. El CSV queda en memoria hasta reiniciar el servidor. Con velas OHLCV no se puede calcular Order Flow real porque faltan transacciones y datos bid/ask.
+
 ## Instalar y ejecutar en Windows
 
 1. Instala Node.js 22.13 o posterior.
@@ -61,6 +67,10 @@ La aplicación guarda datos en SQLite, un archivo de base de datos local. La apl
 - `raw/`: fuentes originales de referencia, conservadas sin editar.
 
 Para recorrer la arquitectura, abre [[documentacion/01_MAPA_DEL_PROYECTO|el mapa del código]] o [[documentacion/02_ESTADO_TECNICO_Y_SALUD|el estado técnico verificado]]. El [plan](documentacion/planificacion/PLAN_DE_IMPLEMENTACION.md) y las [tareas pendientes](documentacion/planificacion/TAREAS_PENDIENTES_QUANTUM_FX.md) están dentro de `documentacion/planificacion/`.
+
+### Webhook local de prueba
+
+El endpoint `/api/webhook` solo crea operaciones **simuladas** y exige un secreto de al menos 32 caracteres. Node escucha en `127.0.0.1`, por lo que una alerta de TradingView en la nube no puede conectarse directamente; no expongas el puerto a Internet. Para pruebas locales, genera un secreto con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`, guárdalo como `QUANTUM_WEBHOOK_SECRET` en tu `.env` local y úsalo en el campo `token` del JSON. La plantilla está en [.env.example](.env.example).
 
 ## Publicación
 

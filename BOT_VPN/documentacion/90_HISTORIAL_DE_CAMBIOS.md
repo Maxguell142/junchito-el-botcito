@@ -9,6 +9,25 @@ last_updated: "2026-11-13"
 
 # Historial de cambios de la documentación
 
+## [2026-11-18] fix | Renovación de sesión durante el uso
+- Corregido el vencimiento fijo de 30 minutos: la sesión ahora dura 12 horas desde la última solicitud autenticada y se renueva con actividad del panel.
+- Los snapshots periódicos del WebSocket ya no renuevan por sí solos la sesión; al reiniciar Node, la sesión en memoria debe iniciarse otra vez.
+- Regenerado el instalador NSIS x64 para incluir el ajuste: `dist-desktop/QuantumFX-Setup-1.0.1.exe`.
+- Verificación: sintaxis JavaScript correcta, 31 notas Obsidian revisadas sin enlaces rotos y `git diff --check` sin errores. No se ejecutó la suite de pruebas.
+
+## [2026-11-18] fix | Zona horaria y guía para el análisis CSV
+- La captura del usuario mostraba que el importador rechazaba timestamps sin zona horaria. Se agregó una selección explícita para interpretar esas fechas; si el CSV incluye `Z` u offset, se respeta el valor original.
+- Mejorada la explicación en la pantalla y el README: utilidad del análisis, columnas requeridas, carácter hipotético, datos en memoria y limitación de Order Flow con datos OHLCV.
+- Verificación: sintaxis JavaScript correcta; 31 notas Obsidian revisadas y enlaces correctos; `git diff --check` sin errores. No se ejecutó la suite de pruebas.
+
+## [2026-11-18] audit | Revisión segura del plan de integración NQ/MNQ
+- Contrastado el plan con las rutas, los servicios y las pruebas existentes; separado lo implementado de lo propuesto y enlazado desde el índice de Obsidian.
+- Protegido `/api/webhook` con secreto obligatorio y validaciones de destino, instrumento, contratos, stop, objetivo y presupuesto de riesgo. El endpoint sigue siendo local y solo genera operaciones simuladas.
+- Corregida la información de cuentas: no se guardan contraseñas ni se abre una sesión de broker; las cuentas se muestran como `NOT_CONFIGURED`.
+- Retirados el ajuste y las afirmaciones de jitter anti-mirroring. No se agregaron mecanismos para esconder copias de operaciones o evadir controles.
+- Actualizado el estado técnico y la guía principal para describir estos límites y cómo configurar el secreto local.
+- Verificación: 13/13 pruebas Node pasaron; 31 notas Obsidian revisadas, 26 con metadatos y sin enlaces rotos; sintaxis JavaScript y `git diff --check` correctos. Las pruebas Python no se ejecutaron.
+
 Registro cronológico append-only de ingestas, compilaciones, consultas y pasadas de auditoría (lint) de la base de conocimiento de QUANTUM FX.
 
 ---

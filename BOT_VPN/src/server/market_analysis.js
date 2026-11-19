@@ -62,7 +62,58 @@ function parseNumber(value, column) {
   return number;
 }
 
-function parseCsv(text, symbol, sourceTimeframe) {
+function parseLocalTimestamp(timestampText, timeZone, rowNumber) {
+  if (!timeZone) {
+    throw new Error(`La fecha de la fila ${rowNumber} debe incluir zona horaria, por ejemplo Z o -04:00, o indicar la zona del CSV.`);
+  }
+  const match = timestampText.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/);
+  if (!match) {
+    throw new Error(`Fecha inválida en la fila ${rowNumber}. Usa AAAA-MM-DD HH:mm:ss o incluye Z/offset.`);
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText = '0', millisecondText = '0'] = match;
+  const target = {
+    year: Number(yearText),
+    month: Number(monthText),
+    day: Number(dayText),
+    hour: Number(hourText),
+    minute: Number(minuteText),
+    second: Number(secondText),
+    millisecond: Number(millisecondText.padEnd(3, '0'))
+  };
+  const targetUtc = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute, target.second, target.millisecond);
+  const check = new Date(targetUtc);
+  if (check.getUTCFullYear() !== target.year || check.getUTCMonth() !== target.month - 1
+    || check.getUTCDate() !== target.day || target.hour > 23 || target.minute > 59 || target.second > 59) {
+    throw new Error(`Fecha inválida en la fila ${rowNumber}.`);
+  }
+
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    });
+  } catch {
+    throw new Error('La zona horaria seleccionada no es válida.');
+  }
+  let epoch = targetUtc;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(epoch))
+      .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+    const representedUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    epoch = targetUtc - (representedUtc - epoch);
+  }
+  const finalParts = Object.fromEntries(formatter.formatToParts(new Date(epoch))
+    .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  if (finalParts.year !== target.year || finalParts.month !== target.month || finalParts.day !== target.day
+    || finalParts.hour !== target.hour || finalParts.minute !== target.minute || finalParts.second !== target.second) {
+    throw new Error(`La hora de la fila ${rowNumber} no existe en ${timeZone} por el cambio horario. Revisa esa fila.`);
+  }
+  return epoch;
+}
+
+function parseCsv(text, symbol, sourceTimeframe, timestampTimeZone = null) {
   if (typeof text !== 'string' || !text.trim()) throw new Error('El archivo CSV está vacío.');
   if (text.length > 5 * 1024 * 1024) throw new Error('El CSV supera el límite de 5 MB.');
   if (!['NQ', 'ES'].includes(symbol)) throw new Error('El instrumento debe ser NQ o ES.');
@@ -95,10 +146,10 @@ function parseCsv(text, symbol, sourceTimeframe) {
   const bars = rows.slice(1).map((row, rowIndex) => {
     if (row.length !== headers.length) throw new Error(`La fila ${rowIndex + 2} tiene columnas incompletas.`);
     const timestampText = row[indexes.timestamp];
-    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(timestampText)) {
-      throw new Error(`La fecha de la fila ${rowIndex + 2} debe incluir zona horaria, por ejemplo Z o -04:00.`);
-    }
-    const timestamp = Date.parse(timestampText);
+    const hasExplicitTimeZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(timestampText);
+    const timestamp = hasExplicitTimeZone
+      ? Date.parse(timestampText)
+      : parseLocalTimestamp(timestampText, timestampTimeZone, rowIndex + 2);
     if (!Number.isFinite(timestamp)) throw new Error(`Fecha inválida en la fila ${rowIndex + 2}.`);
     const bar = {
       timestamp,
@@ -121,7 +172,7 @@ function parseCsv(text, symbol, sourceTimeframe) {
       throw new Error('El CSV contiene velas con la misma fecha y hora.');
     }
   }
-  return { symbol, sourceTimeframe, bars };
+  return { symbol, sourceTimeframe, timestampTimeZone, bars };
 }
 
 function aggregateBars(bars, sourceTimeframe, targetTimeframe) {

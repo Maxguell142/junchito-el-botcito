@@ -64,7 +64,7 @@ test('Bot & Identity CRUD and Ledger dynamic integration', { timeout: 25000 }, a
       BOT_VPN_AUTH_USERNAME: username,
       BOT_VPN_AUTH_PASSWORD: password,
       BOT_VPN_PII_ENCRYPTION_KEY: 'a'.repeat(64),
-      QUANTUM_WEBHOOK_SECRET: 'test-secret',
+      QUANTUM_WEBHOOK_SECRET: 'test-webhook-secret-with-at-least-32-chars',
       NODE_ENV: 'test',
       MARKET_DATA_PROVIDER: 'synthetic'
     },

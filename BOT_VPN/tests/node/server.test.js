@@ -343,17 +343,31 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   });
   assert.equal(invalidSchedule.status, 400);
 
-  const accountResponse = await fetch(`${baseUrl}/api/bots/security-test-bot/accounts`, {
+  const rejectedCredentialResponse = await fetch(`${baseUrl}/api/bots/security-test-bot/accounts`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      id: 'security-test-account',
-      custom_name: 'Security account',
+      id: 'security-test-creds-account',
+      custom_name: 'Security creds account',
       username: 'broker-login',
       password: 'broker-password-not-to-persist'
     })
   });
-  assert.equal(accountResponse.status, 400, 'broker credentials must not be accepted');
+  assert.equal(rejectedCredentialResponse.status, 400, 'broker passwords must not be collected without a broker connector');
+
+  const accountResponse = await fetch(`${baseUrl}/api/bots/security-test-bot/accounts`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'security-test-creds-account',
+      custom_name: 'Security creds account',
+      username: 'broker-login'
+    })
+  });
+  assert.equal(accountResponse.status, 200, 'account reference metadata should be accepted');
+  const accountCredsResult = await accountResponse.json();
+  assert.equal(accountCredsResult.account.password_masked, '');
+  assert.equal(accountCredsResult.account.status, 'NOT_CONFIGURED');
 
   const metadataResponse = await fetch(`${baseUrl}/api/bots/security-test-bot/accounts`, {
     method: 'POST',
