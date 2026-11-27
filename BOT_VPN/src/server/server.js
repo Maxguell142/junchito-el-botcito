@@ -3,8 +3,10 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { WebSocketServer } = require('ws');
 const { SQLiteStore } = require('./database');
+const { NeonStore } = require('./neon-store');
 const { getCandles } = require('../marketData');
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -41,6 +43,12 @@ const {
 
 const app = express();
 const server = http.createServer(app);
+const isVercel = Boolean(process.env.VERCEL);
+const requestContext = new AsyncLocalStorage();
+let cloudStore = null;
+let cloudReady = Promise.resolve();
+let cloudRequestQueue = Promise.resolve();
+let cloudLedgerTransactions = null;
 const PORT = Number(process.env.PORT || 3008);
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = Number(process.env.BOT_VPN_LOGIN_WINDOW_MS || 1000);
@@ -103,6 +111,29 @@ if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
 }
 
 app.use(express.json({ limit: '32kb' }));
+
+function applyLoadedSnapshot(snapshot, revision) {
+  persistenceRevision = revision;
+  configData = {
+    ...snapshot,
+    server: { host: '127.0.0.1', port: PORT },
+    auth: {
+      username: process.env.BOT_VPN_AUTH_USERNAME || (snapshot.auth && snapshot.auth.username) || '',
+      password: process.env.BOT_VPN_AUTH_PASSWORD || (snapshot.auth && snapshot.auth.password) || '',
+      role: snapshot.auth?.role || 'ADMIN_TRADER'
+    }
+  };
+  identities = configData.identities || [];
+  bots = (configData.bots || []).map(toRuntimeBot);
+  if (Array.isArray(snapshot.ledger_transactions)) cloudLedgerTransactions = snapshot.ledger_transactions;
+}
+
+function acquireCloudRequest() {
+  const previous = cloudRequestQueue;
+  let release;
+  cloudRequestQueue = new Promise(resolve => { release = resolve; });
+  return previous.then(() => release);
+}
 
 function sanitizeProxyUrl(value) {
   if (typeof value !== 'string' || !value) return '';
@@ -225,14 +256,89 @@ function loginRateLimit(req, res, next) {
   next();
 }
 
-app.use('/api', (req, res, next) => {
+app.use('/api', async (req, res, next) => {
+  if (isVercel) {
+    let release;
+    try {
+      await cloudReady;
+      release = await acquireCloudRequest();
+      const loaded = await cloudStore.load();
+      loadConfig(loaded.snapshot, loaded.revision);
+      if (Array.isArray(cloudLedgerTransactions)) ledgerTransactions = cloudLedgerTransactions;
+      res.locals.cloudRevision = loaded.revision;
+
+      let released = false;
+      const releaseOnce = () => {
+        if (released) return;
+        released = true;
+        release();
+      };
+      res.once('finish', releaseOnce);
+      res.once('close', releaseOnce);
+      const originalEnd = res.end.bind(res);
+      let endStarted = false;
+      res.end = (...args) => {
+        if (endStarted) return res;
+        endStarted = true;
+        const pendingSave = res.locals.cloudSavePromise;
+        if (!pendingSave) {
+          releaseOnce();
+          return originalEnd(...args);
+        }
+        pendingSave.then(() => {
+          releaseOnce();
+          originalEnd(...args);
+        }).catch(error => {
+          releaseOnce();
+          console.error('No se pudo persistir el estado cloud.');
+          if (res.headersSent) return;
+          res.statusCode = error.statusCode === 409 ? 409 : 503;
+          res.removeHeader('Content-Length');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          originalEnd(JSON.stringify({ detail: error.statusCode === 409
+            ? 'Los datos cambiaron en otra solicitud. Reintenta la operación.'
+            : 'No se pudo guardar el estado persistido.' }));
+        });
+        return res;
+      };
+      if (!['/auth/login', '/auth/me', '/webhook'].includes(req.path)) {
+        const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+        const session = match ? await cloudStore.getSession(match[1]) : null;
+        if (!session) return res.status(401).json({ detail: 'Autenticación requerida.' });
+        sessions.set(match[1], session);
+      }
+      return requestContext.run(res, () => next());
+    } catch (error) {
+      if (release) release();
+      console.error('Cloud API initialization failed.', {
+        name: error?.name || 'Error',
+        code: typeof error?.code === 'string' ? error.code : undefined,
+        message: typeof error?.message === 'string'
+          ? error.message.replace(/postgres(?:ql)?:\/\/[^\s]+/gi, 'postgresql://[redacted]')
+          : undefined,
+        stack: typeof error?.stack === 'string' ? error.stack.split('\n').slice(1, 5).join(' ') : undefined
+      });
+      return next(error);
+    }
+  }
+
   if (req.path === '/auth/login' || req.path === '/auth/me' || req.path === '/webhook') {
     return next();
   }
 
   const authorization = req.get('authorization') || '';
   const match = /^Bearer (.+)$/i.exec(authorization);
-  if (!match || !hasValidSessionToken(match[1])) {
+  let valid = Boolean(match && hasValidSessionToken(match[1]));
+  if (isVercel && match) {
+    try {
+      const session = await cloudStore.getSession(match[1]);
+      valid = Boolean(session);
+      if (session) sessions.set(match[1], session);
+    } catch (error) {
+      return next(error);
+    }
+  }
+  if (!valid) {
     return res.status(401).json({ detail: 'Autenticación requerida.' });
   }
   try {
@@ -252,12 +358,18 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
+app.get('/demo-mode', (req, res) => {
+  res.json({ isDemo: isVercel });
+});
+
 // ======================================================================
 // ESTADO EN MEMORIA Y TELEMETRÍA (QUANTUM FX)
 // ======================================================================
 
 const configFile = path.join(projectRoot, 'config.json');
-const database = new SQLiteStore(process.env.BOT_VPN_DB_PATH || path.join(projectRoot, 'bot_vpn.sqlite3'));
+const database = new SQLiteStore(isVercel
+  ? ':memory:'
+  : (process.env.BOT_VPN_DB_PATH || path.join(projectRoot, 'bot_vpn.sqlite3')));
 let persistenceRevision = 0;
 let configData = {
   server: { port: PORT },
@@ -425,25 +537,90 @@ function calculatePositionSizing(bot, baseContracts, stopLossPoints = null) {
   return Math.floor(riskUsd / riskPerContract);
 }
 
-function loadConfig() {
+function loadConfig(cloudSnapshot = null, cloudRevision = null) {
   const legacyConfig = fs.existsSync(configFile)
     ? JSON.parse(fs.readFileSync(configFile, 'utf-8'))
     : { server: { port: PORT }, identities: [], bots: [] };
+  if (cloudSnapshot) {
+    applyLoadedSnapshot(cloudSnapshot, cloudRevision);
+    return;
+  }
   const loaded = database.loadOrImport(legacyConfig);
-  persistenceRevision = loaded.revision;
-  configData = {
-    ...loaded.snapshot,
-    server: { host: '127.0.0.1', port: PORT },
-    auth: {
-      username: process.env.BOT_VPN_AUTH_USERNAME || (legacyConfig.auth && legacyConfig.auth.username) || 'admin',
-      password: process.env.BOT_VPN_AUTH_PASSWORD || (legacyConfig.auth && legacyConfig.auth.password) || 'quantum2026',
-      role: loaded.snapshot.auth.role || 'ADMIN_TRADER'
-    }
-  };
-  identities = configData.identities || [];
-  bots = (configData.bots || []).map(toRuntimeBot);
+  applyLoadedSnapshot(loaded.snapshot, loaded.revision);
 }
 loadConfig();
+
+if (isVercel) {
+  cloudStore = new NeonStore();
+  const demoDate = new Date().toISOString().slice(0, 10);
+  const initialSnapshot = {
+    server: { host: '127.0.0.1', port: PORT },
+    auth: { role: configData.auth.role || 'ADMIN_TRADER' },
+    identities: [
+      {
+        id: 'demo_ana', full_name: 'Ana Demo', alias: 'ana_demo', country: 'AR',
+        city: 'Ciudad de prueba', province: 'Buenos Aires', postal_code: '0000',
+        address: 'Dirección ficticia 100', kyc_status: 'PENDING',
+        email: 'ana.demo@example.com', phone: '+54 11 0000-0101', dni: 'DEMO-0001',
+        crypto_wallet_name: 'Wallet de muestra A', crypto_network: 'Testnet',
+        crypto_wallet_address: 'WALLET-DEMO-0001', crypto_transfer_alias: 'ana-demo',
+        notes: 'Perfil ficticio de la maqueta. No corresponde a una persona real.'
+      },
+      {
+        id: 'demo_lucas', full_name: 'Lucas Demo', alias: 'lucas_demo', country: 'AR',
+        city: 'Localidad de prueba', province: 'Córdoba', postal_code: '5000',
+        address: 'Dirección ficticia 200', kyc_status: 'PENDING',
+        email: 'lucas.demo@example.com', phone: '+54 351 000-0202', dni: 'DEMO-0002',
+        crypto_wallet_name: 'Wallet de muestra B', crypto_network: 'Testnet',
+        crypto_wallet_address: 'WALLET-DEMO-0002', crypto_transfer_alias: 'lucas-demo',
+        notes: 'Perfil ficticio de la maqueta. No corresponde a una persona real.'
+      }
+    ],
+    bots: [
+      {
+        id: 'bot_demo_ict', name: 'MNQ ICT Scalper · DEMO', identity_id: 'demo_ana',
+        strategy: 'ICTStrategy', analysis_symbol: 'NQ', status: 'ACTIVE',
+        schedule: { start_time: '09:30', end_time: '12:00', timezone: 'America/New_York' },
+        circuit_breaker: { daily_loss_limit: 400, consistency_target: 150, auto_lock_consistency: true, pause_on_red_news: true, status: 'NORMAL' },
+        risk_parameters: { min_rr_ratio: 2, auto_position_sizing: true, risk_per_trade_usd: 50, stop_loss_points: 12 },
+        net_pnl: 326.5, today_pnl: 42.5, today_pnl_date: demoDate,
+        total_trades: 18, winning_trades: 11, losing_trades: 7, max_drawdown: 85,
+        logs: [{ timestamp: '09:42', level: 'INFO', message: 'Actividad simulada para la maqueta.' }],
+        accounts: [{ id: 'demo_acc_ict', custom_name: 'Cuenta Demo 50K · A', titular_name: 'Ana Demo', environment: 'EVALUATION', broker: 'Simulado', prop_firm: 'Firma Demo', balance: 50326.5, max_contracts: 2, daily_loss_limit: 400, daily_pnl: 42.5, orders_today: 3, daily_metrics_date: demoDate, floating_pnl: 0, realized_pnl: 326.5, active_contracts: 0, current_position: 'FLAT' }]
+      },
+      {
+        id: 'bot_demo_smt', name: 'MNQ SMT Reversal · DEMO', identity_id: 'demo_lucas',
+        strategy: 'SMTStrategy', analysis_symbol: 'NQ', status: 'ACTIVE',
+        schedule: { start_time: '10:00', end_time: '13:00', timezone: 'America/New_York' },
+        circuit_breaker: { daily_loss_limit: 350, consistency_target: 150, auto_lock_consistency: true, pause_on_red_news: true, status: 'NORMAL' },
+        risk_parameters: { min_rr_ratio: 2, auto_position_sizing: true, risk_per_trade_usd: 40, stop_loss_points: 10 },
+        net_pnl: 118.25, today_pnl: -12.75, today_pnl_date: demoDate,
+        total_trades: 12, winning_trades: 7, losing_trades: 5, max_drawdown: 64,
+        logs: [{ timestamp: '10:18', level: 'INFO', message: 'Actividad simulada para la maqueta.' }],
+        accounts: [{ id: 'demo_acc_smt', custom_name: 'Cuenta Demo 50K · B', titular_name: 'Lucas Demo', environment: 'EVALUATION', broker: 'Simulado', prop_firm: 'Firma Demo', balance: 50118.25, max_contracts: 2, daily_loss_limit: 350, daily_pnl: -12.75, orders_today: 2, daily_metrics_date: demoDate, floating_pnl: 0, realized_pnl: 118.25, active_contracts: 0, current_position: 'FLAT' }]
+      },
+      {
+        id: 'bot_demo_flow', name: 'MNQ Order Flow · DEMO', identity_id: 'demo_ana',
+        strategy: 'OrderFlowStrategy', analysis_symbol: 'NQ', status: 'PAUSED',
+        schedule: { start_time: '09:30', end_time: '11:30', timezone: 'America/New_York' },
+        circuit_breaker: { daily_loss_limit: 500, consistency_target: 150, auto_lock_consistency: true, pause_on_red_news: true, status: 'NORMAL' },
+        risk_parameters: { min_rr_ratio: 2, auto_position_sizing: true, risk_per_trade_usd: 35, stop_loss_points: 10 },
+        net_pnl: 204, today_pnl: 24, today_pnl_date: demoDate,
+        total_trades: 9, winning_trades: 6, losing_trades: 3, max_drawdown: 39,
+        logs: [{ timestamp: '11:06', level: 'INFO', message: 'Bot pausado en datos ficticios de demostración.' }],
+        accounts: [{ id: 'demo_acc_flow', custom_name: 'Cuenta Demo 25K · C', titular_name: 'Ana Demo', environment: 'EVALUATION', broker: 'Simulado', prop_firm: 'Firma Demo', balance: 25204, max_contracts: 1, daily_loss_limit: 250, daily_pnl: 24, orders_today: 1, daily_metrics_date: demoDate, floating_pnl: 0, realized_pnl: 204, active_contracts: 0, current_position: 'FLAT' }]
+      }
+    ],
+    ledger_transactions: [
+      { id: 'demo_tx_01', date: demoDate, identity_id: 'demo_ana', identity_name: 'Ana Demo', account_name: 'Cuenta Demo 50K · A', prop_firm: 'Firma Demo', type: 'INVESTMENT_EVAL', amount: -75, status: 'COMPLETED', notes: 'Movimiento ficticio de demostración.' },
+      { id: 'demo_tx_02', date: demoDate, identity_id: 'demo_lucas', identity_name: 'Lucas Demo', account_name: 'Cuenta Demo 50K · B', prop_firm: 'Firma Demo', type: 'PROP_FIRM_PAYOUT', amount: 240, status: 'COMPLETED', notes: 'Movimiento ficticio de demostración.' }
+    ]
+  };
+  cloudReady = cloudStore.initialize(initialSnapshot).then(({ snapshot, revision }) => {
+    loadConfig(snapshot, revision);
+    ledgerTransactions = cloudLedgerTransactions || [];
+  });
+}
 
 let marketPrice = 28245.50;
 
@@ -501,14 +678,16 @@ getCandles('MNQ', '1m', 120).then(res => {
 });
 
 // Sincronización periódica de precio real cada 30 segundos
-setInterval(async () => {
-  try {
-    const data = await getCandles('MNQ', '1m', 5);
-    if (data.candles && data.candles.length) {
-      marketPrice = data.candles[data.candles.length - 1].close;
-    }
-  } catch (e) {}
-}, 30000);
+if (!isVercel) {
+  setInterval(async () => {
+    try {
+      const data = await getCandles('MNQ', '1m', 5);
+      if (data.candles && data.candles.length) {
+        marketPrice = data.candles[data.candles.length - 1].close;
+      }
+    } catch (e) {}
+  }, 30000);
+}
 
 function updateCandleOnTick(price) {
   const nowSec = Math.floor(Date.now() / 1000);
@@ -871,303 +1050,8 @@ const economicEvents = [
 // 3. LEDGER FINANCIERO Y REPARTO A TITULARES KYC
 // ======================================================================
 
-const ledgerTransactions = [
-  // --- CARLOS MENDOZA (id_carlos) ---
-  {
-    id: 'tx_101',
-    date: '2026-10-14',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #1',
-    prop_firm: 'Apex Trader Funding',
-    type: 'INVESTMENT_EVAL',
-    amount: -35.00,
-    status: 'COMPLETED',
-    notes: 'Compra de evaluación Apex 50k (80% off)'
-  },
-  {
-    id: 'tx_103',
-    date: '2026-10-18',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #1',
-    prop_firm: 'Apex Trader Funding',
-    type: 'INVESTMENT_PA_FEE',
-    amount: -140.00,
-    status: 'COMPLETED',
-    notes: 'Activación de Performance Account (PA)'
-  },
-  {
-    id: 'tx_104',
-    date: '2026-10-22',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #1',
-    prop_firm: 'Apex Trader Funding',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 2500.00,
-    status: 'COMPLETED',
-    notes: 'Primer payout aprobado por Apex (100% primeros $25k)'
-  },
-  {
-    id: 'tx_105',
-    date: '2026-10-23',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #1',
-    prop_firm: 'Apex Trader Funding',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -500.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Carlos Mendoza. Hash: 0x8a...41f'
-  },
-  {
-    id: 'tx_108',
-    date: '2026-11-02',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #2',
-    prop_firm: 'Apex Trader Funding',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 3200.00,
-    status: 'COMPLETED',
-    notes: 'Retiro quincenal de PA #2 aprobado'
-  },
-  {
-    id: 'tx_109',
-    date: '2026-11-03',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #2',
-    prop_firm: 'Apex Trader Funding',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -640.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Carlos Mendoza. Hash: 0x9b...112'
-  },
-  {
-    id: 'tx_110',
-    date: '2026-11-09',
-    identity_id: 'id_carlos',
-    identity_name: 'Carlos Mendoza',
-    account_name: 'Apex 50k PA #1',
-    prop_firm: 'Apex Trader Funding',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 2000.00,
-    status: 'COMPLETED',
-    notes: 'Retiro quincenal noviembre aprobado'
-  },
+let ledgerTransactions = [];
 
-  // --- VALERIA RAMOS (id_valeria) ---
-  {
-    id: 'tx_102',
-    date: '2026-10-16',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Scalp',
-    prop_firm: 'Topstep',
-    type: 'INVESTMENT_EVAL',
-    amount: -49.00,
-    status: 'COMPLETED',
-    notes: 'Suscripción Topstep 50k'
-  },
-  {
-    id: 'tx_111',
-    date: '2026-10-20',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Express',
-    prop_firm: 'Topstep',
-    type: 'INVESTMENT_PA_FEE',
-    amount: -149.00,
-    status: 'COMPLETED',
-    notes: 'Activación Express Funded Account'
-  },
-  {
-    id: 'tx_106',
-    date: '2026-10-25',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Express',
-    prop_firm: 'Topstep',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 3200.00,
-    status: 'COMPLETED',
-    notes: 'Retiro bancario aprobado por Topstep'
-  },
-  {
-    id: 'tx_107',
-    date: '2026-10-26',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Express',
-    prop_firm: 'Topstep',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -640.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Valeria Ramos. Hash: 0x4f...99d'
-  },
-  {
-    id: 'tx_112',
-    date: '2026-11-04',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Leelo Express #1',
-    prop_firm: 'Leelo Trading',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 4100.00,
-    status: 'COMPLETED',
-    notes: 'Payout aprobado en Leelo Trading'
-  },
-  {
-    id: 'tx_113',
-    date: '2026-11-05',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Leelo Express #1',
-    prop_firm: 'Leelo Trading',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -820.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Valeria Ramos. Hash: 0x1a...54c'
-  },
-  {
-    id: 'tx_114',
-    date: '2026-11-10',
-    identity_id: 'id_valeria',
-    identity_name: 'Valeria Ramos',
-    account_name: 'Topstep 50k Scalp',
-    prop_firm: 'Topstep',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 2750.00,
-    status: 'COMPLETED',
-    notes: 'Segundo retiro Topstep quincenal'
-  },
-
-  // --- DIEGO FERNÁNDEZ (id_diego) ---
-  {
-    id: 'tx_115',
-    date: '2026-10-15',
-    identity_id: 'id_diego',
-    identity_name: 'Diego Fernández',
-    account_name: 'Blue Guardian 100k',
-    prop_firm: 'Blue Guardian',
-    type: 'INVESTMENT_EVAL',
-    amount: -95.00,
-    status: 'COMPLETED',
-    notes: 'Compra evaluación Unlimited Challenge 100k'
-  },
-  {
-    id: 'tx_116',
-    date: '2026-10-21',
-    identity_id: 'id_diego',
-    identity_name: 'Diego Fernández',
-    account_name: 'Blue Guardian 100k',
-    prop_firm: 'Blue Guardian',
-    type: 'INVESTMENT_PA_FEE',
-    amount: -150.00,
-    status: 'COMPLETED',
-    notes: 'Fee activación cuenta fondeada Blue Guardian'
-  },
-  {
-    id: 'tx_117',
-    date: '2026-10-28',
-    identity_id: 'id_diego',
-    identity_name: 'Diego Fernández',
-    account_name: 'Blue Guardian 100k',
-    prop_firm: 'Blue Guardian',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 3850.00,
-    status: 'COMPLETED',
-    notes: 'Retiro aprobado y liquidado por Blue Guardian'
-  },
-  {
-    id: 'tx_118',
-    date: '2026-10-29',
-    identity_id: 'id_diego',
-    identity_name: 'Diego Fernández',
-    account_name: 'Blue Guardian 100k',
-    prop_firm: 'Blue Guardian',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -770.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Diego Fernández. Hash: 0x7c...88e'
-  },
-  {
-    id: 'tx_119',
-    date: '2026-11-06',
-    identity_id: 'id_diego',
-    identity_name: 'Diego Fernández',
-    account_name: 'Cuenta 2 de Asia',
-    prop_firm: 'Apex Trader Funding',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 2100.00,
-    status: 'COMPLETED',
-    notes: 'Payout Apex Asia aprobado'
-  },
-
-  // --- JUAN PABLO (juan pablo) ---
-  {
-    id: 'tx_120',
-    date: '2026-10-18',
-    identity_id: 'juan pablo',
-    identity_name: 'Juan Pablo',
-    account_name: 'TradeDay 50k PA',
-    prop_firm: 'TradeDay',
-    type: 'INVESTMENT_EVAL',
-    amount: -45.00,
-    status: 'COMPLETED',
-    notes: 'Evaluación TradeDay 50k con descuento'
-  },
-  {
-    id: 'tx_121',
-    date: '2026-10-24',
-    identity_id: 'juan pablo',
-    identity_name: 'Juan Pablo',
-    account_name: 'TradeDay 50k PA',
-    prop_firm: 'TradeDay',
-    type: 'INVESTMENT_PA_FEE',
-    amount: -130.00,
-    status: 'COMPLETED',
-    notes: 'Activación PA TradeDay Live-Sim'
-  },
-  {
-    id: 'tx_122',
-    date: '2026-10-31',
-    identity_id: 'juan pablo',
-    identity_name: 'Juan Pablo',
-    account_name: 'TradeDay 50k PA',
-    prop_firm: 'TradeDay',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 2600.00,
-    status: 'COMPLETED',
-    notes: 'Primer retiro aprobado TradeDay'
-  },
-  {
-    id: 'tx_123',
-    date: '2026-11-01',
-    identity_id: 'juan pablo',
-    identity_name: 'Juan Pablo',
-    account_name: 'TradeDay 50k PA',
-    prop_firm: 'TradeDay',
-    type: 'TITULAR_SPLIT_PAYOUT',
-    amount: -520.00,
-    status: 'COMPLETED',
-    notes: 'Transferencia split 20% a Juan Pablo. Hash: 0x3d...72b'
-  },
-  {
-    id: 'tx_124',
-    date: '2026-11-08',
-    identity_id: 'juan pablo',
-    identity_name: 'Juan Pablo',
-    account_name: 'Apex 25k PA',
-    prop_firm: 'Apex Trader Funding',
-    type: 'PROP_FIRM_PAYOUT',
-    amount: 1900.00,
-    status: 'COMPLETED',
-    notes: 'Payout Apex aprobado'
-  }
-];
 
 function getLedgerSummary(identityFilter = null) {
   let txs = ledgerTransactions;
@@ -1281,6 +1165,7 @@ function saveConfigToDisk(event, operations = []) {
     server: { host: '127.0.0.1', port: PORT },
     auth: { role: configData.auth.role || 'ADMIN_TRADER' },
     identities,
+    ledger_transactions: ledgerTransactions,
     bots: bots.map(b => ({
         id: b.id,
         name: b.name,
@@ -1305,6 +1190,19 @@ function saveConfigToDisk(event, operations = []) {
         }))
       }))
   };
+  if (isVercel) {
+    const response = requestContext.getStore();
+    if (!response) throw new Error('No se encontró el contexto de la solicitud para persistir en Neon.');
+    const previousSave = response.locals.cloudSavePromise || Promise.resolve();
+    response.locals.cloudSavePromise = previousSave
+      .then(() => cloudStore.save(snapshot, response.locals.cloudRevision))
+      .then(revision => {
+        response.locals.cloudRevision = revision;
+        persistenceRevision = revision;
+        return revision;
+      });
+    return;
+  }
   try {
     persistenceRevision = database.saveSnapshot(snapshot, persistenceRevision, event || {
       action: 'state_changed',
@@ -1346,6 +1244,7 @@ function getSystemSnapshot() {
 
   return {
     type: 'SNAPSHOT',
+    demo_mode: isVercel,
     execution_mode: 'SIMULATED',
     paper_trading_available: false,
     risk_policy: { type: 'DEMO_ONLY', limits: DEMO_RISK_LIMITS },
@@ -1408,7 +1307,7 @@ function broadcastSnapshot() {
 }
 
 // Simulación de fluctuación de mercado en vivo y reloj NY cada 1 seg
-setInterval(() => {
+if (!isVercel) setInterval(() => {
   try {
     refreshConfigIfChanged();
   } catch (error) {
@@ -1580,9 +1479,12 @@ app.post(
   }
 );
 
-app.get('/healthz', (req, res, next) => {
+app.get('/healthz', async (req, res, next) => {
   try {
-    if (!database.healthCheck()) {
+    const persistenceHealthy = isVercel
+      ? (await cloudReady, await cloudStore.healthCheck())
+      : database.healthCheck();
+    if (!persistenceHealthy) {
       return res.status(503).json({
         status: 'unhealthy',
         service: 'node-dashboard',
@@ -1610,12 +1512,21 @@ app.get('/healthz', (req, res, next) => {
         components: { persistence: 'unavailable' }
       });
     }
+    console.error('Health check failed.', {
+      name: error?.name || 'Error',
+      code: typeof error?.code === 'string' ? error.code : undefined,
+      message: typeof error?.message === 'string'
+        ? error.message.replace(/postgres(?:ql)?:\/\/[^\s]+/gi, 'postgresql://[redacted]')
+        : undefined,
+      causeCode: typeof error?.cause?.code === 'string' ? error.cause.code : undefined,
+      causeName: typeof error?.cause?.name === 'string' ? error.cause.name : undefined
+    });
     return next(error);
   }
 });
 
 // Autenticación
-app.post('/api/auth/login', loginRateLimit, (req, res) => {
+app.post('/api/auth/login', loginRateLimit, async (req, res) => {
   const { username, password } = req.body || {};
   const auth = configData.auth || {};
 
@@ -1634,7 +1545,9 @@ app.post('/api/auth/login', loginRateLimit, (req, res) => {
       if (session.expiresAt <= Date.now()) sessions.delete(activeToken);
     }
     const token = crypto.randomBytes(32).toString('base64url');
-    sessions.set(token, { username: auth.username, role: auth.role || 'ADMIN_TRADER', expiresAt: Date.now() + SESSION_TTL_MS });
+    const session = { username: auth.username, role: auth.role || 'ADMIN_TRADER', expiresAt: Date.now() + SESSION_TTL_MS };
+    sessions.set(token, session);
+    if (isVercel) await cloudStore.createSession(token, session);
     return res.json({
       status: 'SUCCESS',
       token,
@@ -1647,17 +1560,20 @@ app.post('/api/auth/login', loginRateLimit, (req, res) => {
   res.status(401).json({ detail: 'Usuario o contraseña incorrectos.' });
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   const token = getBearerToken(req);
-  const session = sessions.get(token);
+  const session = isVercel ? await cloudStore.getSession(token) : sessions.get(token);
+  if (session && isVercel) sessions.set(token, session);
   if (hasValidSessionToken(token) && session) {
     return res.json({ authenticated: true, username: session.username, role: session.role });
   }
   res.status(401).json({ authenticated: false });
 });
 
-app.post('/api/auth/logout', (req, res) => {
-  revokeSession(getBearerToken(req));
+app.post('/api/auth/logout', async (req, res) => {
+  const token = getBearerToken(req);
+  revokeSession(token);
+  if (isVercel) await cloudStore.deleteSession(token);
   res.sendStatus(204);
 });
 
@@ -2979,6 +2895,16 @@ app.post('/api/ledger/payout', (req, res) => {
   };
 
   ledgerTransactions.unshift(newTx);
+  if (isVercel && !database.canEncryptIdentityPii) {
+    ledgerTransactions.shift();
+    return res.status(503).json({ detail: 'Configura la clave sensible BOT_VPN_PII_ENCRYPTION_KEY en Vercel para cifrar el ledger.' });
+  }
+  saveConfigToDisk({
+    action: 'ledger_transaction_created',
+    entity_type: 'ledger',
+    entity_id: newTx.id,
+    details: { transaction_type: newTx.type, amount: newTx.amount }
+  });
   res.status(201).json({ status: 'CREATED', transaction: newTx });
 });
 
@@ -3010,14 +2936,16 @@ app.use((err, req, res, next) => {
 // INICIO DEL SERVIDOR EN PUERTO 3008
 // ======================================================================
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`======================================================================`);
-  console.log(`🚀 QUANTUM FX: SERVIDOR NODE.JS INSTITUCIONAL ACTIVO`);
-  console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
-  console.log(`⚡ WebSocket:     ws://localhost:${PORT}/ws`);
-  console.log(`👤 Identidades:   ${identities.length} Titulares KYC cargados`);
-  console.log(`======================================================================`);
-});
+if (!isVercel) {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`======================================================================`);
+    console.log(`QUANTUM FX: SERVIDOR NODE.JS ACTIVO`);
+    console.log(`Web Dashboard: http://localhost:${PORT}`);
+    console.log(`WebSocket:     ws://localhost:${PORT}/ws`);
+    console.log(`Identidades:   ${identities.length} Titulares KYC cargados`);
+    console.log(`======================================================================`);
+  });
+}
 
 if (process.parentPort) {
   process.parentPort.on('message', event => {
@@ -3030,3 +2958,6 @@ if (process.parentPort) {
     });
   });
 }
+
+server.app = app;
+module.exports = server;

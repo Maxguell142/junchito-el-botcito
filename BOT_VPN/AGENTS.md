@@ -4,19 +4,22 @@ doc_type: "instrucciones_para_agentes"
 status: "vigente"
 summary: "Reglas de código, seguridad y mantenimiento de la documentación."
 tags: [quantum-fx, agentes, reglas, seguridad]
-last_updated: "2026-11-13"
+last_updated: "2026-11-19"
 ---
 
 # Reglas de trabajo del proyecto QUANTUM FX
 
 ## Proyecto y tecnologías
 
-QUANTUM FX organiza bots y cuentas en una aplicación local para Windows. El servidor principal usa Node.js y Express; la interfaz usa HTML, CSS y JavaScript. Electron ofrece la ventana de escritorio. `fastapi_service/` contiene un servicio Python opcional. Ambos servicios usan SQLite. El trading de la aplicación es simulado; no afirmar que hay broker, precios CME en vivo o túneles VPN operativos sin confirmación del código.
+QUANTUM FX organiza bots y cuentas en una aplicación para Windows y una demo pública en Vercel. Node.js/Express sirve la interfaz HTML/CSS/JavaScript; Electron ofrece la ventana de escritorio. En Windows, Node y el servicio FastAPI opcional usan SQLite; el adaptador Vercel de Node usa Neon para estado y sesiones. El trading de la aplicación es simulado; no afirmar que hay broker, precios CME en vivo o túneles VPN operativos sin confirmación del código.
 
 ## Carpetas
 
 - `public/`: interfaz y recursos.
 - `src/server/`: servidor Express, persistencia y análisis histórico.
+- `src/index.js`: entrada del servidor Express para Vercel.
+- `api/index.js`, `vercel.json`: rutas serverless para API, salud y modo demo.
+- `src/server/neon-store.js`: persistencia cloud de estado y sesiones en Neon mediante el driver serverless.
 - `src/marketData.js`: datos externos o sintéticos para gráficos.
 - `fastapi_service/`: servicio FastAPI y motor Python opcional.
 - `desktop/`: aplicación Electron.

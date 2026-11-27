@@ -8,7 +8,7 @@ const ENCRYPTED_IDENTITY_FIELDS = [
   'email', 'phone_country_code', 'phone_country_iso', 'phone', 'dni', 'crypto_wallet_name',
   'crypto_network', 'crypto_wallet_address', 'crypto_transfer_alias',
   'card_brand', 'card_last4', 'card_exp_month', 'card_exp_year',
-  'payment_provider', 'payment_reference', 'notes'
+  'payment_provider', 'payment_reference', 'notes', 'ledger_transactions'
 ];
 
 function parseIdentityKey(value = process.env.BOT_VPN_PII_ENCRYPTION_KEY) {
@@ -174,12 +174,22 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
     });
   const server = snapshot.server && typeof snapshot.server === 'object' ? snapshot.server : {};
   const auth = snapshot.auth && typeof snapshot.auth === 'object' ? snapshot.auth : {};
-  return {
+  const safeSnapshot = {
     server: { host: '127.0.0.1', port: server.port || 8000 },
     auth: { role: auth.role || 'ADMIN_TRADER' },
     identities,
     bots
   };
+  if (Array.isArray(snapshot.ledger_transactions)) {
+    safeSnapshot.ledger_transactions = snapshot.ledger_transactions
+      .filter(transaction => transaction && typeof transaction.id === 'string')
+      .map(transaction => Object.fromEntries(
+        ['id', 'date', 'identity_id', 'identity_name', 'account_name', 'prop_firm', 'type', 'amount', 'status', 'notes']
+          .filter(key => Object.hasOwn(transaction, key))
+          .map(key => [key, transaction[key]])
+      ));
+  }
+  return safeSnapshot;
 }
 
 class SQLiteStore {
@@ -386,4 +396,11 @@ class SQLiteStore {
   }
 }
 
-module.exports = { PersistenceConflict, SQLiteStore, sanitizeLegacySnapshot };
+module.exports = {
+  PersistenceConflict,
+  SQLiteStore,
+  sanitizeLegacySnapshot,
+  parseIdentityKey,
+  encryptIdentityFields,
+  decryptIdentityFields
+};

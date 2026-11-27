@@ -2,7 +2,7 @@
 title: "Estado técnico verificado y salud"
 category: sistema
 tags: [stack, health, frontend, backend, ai, obsidian, quantum-fx, estado, verificacion, salud]
-last_updated: "2026-11-18"
+last_updated: "2026-11-19"
 doc_type: "estado_tecnico"
 status: "verificado"
 summary: "Inventario de tecnologías y capacidades comprobadas, con límites conocidos."
@@ -24,7 +24,7 @@ summary: "Inventario de tecnologías y capacidades comprobadas, con límites con
 | Análisis histórico | `src/server/market_analysis.js` | Análisis de archivos CSV; no es un feed en vivo. |
 | Datos para gráficos | `src/marketData.js` (Node) | Consultas HTTP a Yahoo/Finnhub/Alpha Vantage y velas sintéticas de fallback; separado de los precios simulados de ejecución. |
 | Tiempo real | WebSocket (`ws` en Node y soporte WebSocket de FastAPI) | Se usa para las funciones de telemetría implementadas por cada servidor. |
-| Persistencia | SQLite | Node usa `node:sqlite`; Python usa `sqlite3`. Ambos apuntan a la misma base local. |
+| Persistencia | SQLite local y Neon alojado | Node usa `node:sqlite` para Windows; `src/server/neon-store.js` usa el driver HTTP de `@neondatabase/serverless` con la URL directa de Neon en Vercel. El servicio Python continúa separado y usa SQLite. |
 | IA de la aplicación | No hay proveedor ni modelo integrado | No se encontraron SDK de OpenAI, Anthropic, Gemini, Ollama u otro LLM en los manifiestos actuales. |
 | IA para desarrollo y documentación | `AGENTS.md` y configuraciones en `.agents/` | Instrucciones y habilidades para asistentes; no son un motor de IA ejecutado por el servidor. |
 | Wiki personal | Obsidian sobre esta carpeta del proyecto | El índice maestro está en `documentacion/00_INICIO_OBSIDIAN.md`; esta nota es la referencia técnica principal. |
@@ -37,7 +37,9 @@ summary: "Inventario de tecnologías y capacidades comprobadas, con límites con
 - El análisis histórico importa velas OHLCV en CSV y simula señales según estrategia e intervalo configurados en cada bot. Para timestamps sin zona, el formulario solicita zona horaria; timestamps con `Z` u offset conservan esa zona. Los datos importados viven en memoria y se borran al reiniciar Node.
 - La simulación histórica no envía órdenes y no representa resultados futuros; Order Flow requiere datos de operaciones y bid/ask que un CSV OHLCV no contiene.
 - No hay conector de broker activo. La API rechaza contraseñas de broker y las cuentas registradas quedan como `NOT_CONFIGURED`.
-- La sesión del panel vence tras 12 horas sin solicitudes autenticadas; cada solicitud válida renueva ese plazo. Los procesos de Node mantienen sesiones en memoria, así que al reiniciar el servidor hay que iniciar sesión nuevamente.
+- La sesión del panel vence tras 12 horas sin solicitudes autenticadas; cada solicitud válida renueva ese plazo. En Windows, Node mantiene sesiones en memoria; en Vercel se guardan en Neon.
+- En Vercel, estado de bots, sesiones y ledger se cargan desde Neon; las solicitudes de API se serializan por instancia y las escrituras usan revisión para detectar conflictos entre instancias. Perfiles y ledger se cifran con `BOT_VPN_PII_ENCRYPTION_KEY`. La interfaz alojada consulta el snapshot por HTTP; el escritorio sigue usando WebSocket.
+- El proyecto Vercel `quantum-fx` está publicado como demo pública en `https://quantum-fx-pi.vercel.app/`, con raíz `BOT_VPN/` y las rutas serverless definidas en `api/index.js` y `vercel.json`. El acceso a la aplicación requiere el login compartido del demo. Si Neon no tiene un snapshot, el servidor siembra titulares, bots y movimientos ficticios. No se migró SQLite local a Neon.
 - La interfaz de jitter anti-mirroring se retiró; el sistema no incorpora demoras, rotación de IP ni identidades para ocultar replicación.
 - El [[documentacion/planificacion/PLAN_INTEGRACION_ECOSISTEMA_FUTUROS|plan de ecosistema NQ/MNQ]] es una propuesta; sus repositorios candidatos no implican integración verificada.
 

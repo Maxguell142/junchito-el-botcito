@@ -31,6 +31,7 @@ const state = {
 
 let ws = null;
 let reconnectTimer = null;
+let snapshotPollingTimer = null;
 let confirmResolver = null;
 
 // ======================================================================
@@ -215,9 +216,12 @@ function updateHeaderUser() {
 }
 
 async function apiFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
-  const response = await fetch(url, { ...options, headers });
+  const makeRequest = () => {
+    const headers = new Headers(options.headers || {});
+    if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+    return fetch(url, { ...options, headers });
+  };
+  const response = await makeRequest();
   if (response.status === 401) {
     state.token = null;
     localStorage.removeItem('quantum_auth_token');
@@ -320,6 +324,36 @@ function switchTab(tabName) {
 // ======================================================================
 
 function initWebSocket() {
+  if (window.location.protocol === 'https:') {
+    clearInterval(snapshotPollingTimer);
+    updateWsStatus('Conectando...', false);
+    const refreshSnapshot = async () => {
+      if (!state.token) return;
+      try {
+        let response = await fetch('/api/system/snapshot', {
+          headers: { Authorization: `Bearer ${state.token}` }
+        });
+        if (response.status === 401) {
+          state.token = null;
+          localStorage.removeItem('quantum_auth_token');
+          goToLoginScreen();
+          clearInterval(snapshotPollingTimer);
+          return;
+        }
+        if (!response.ok) throw new Error('No se pudo actualizar el panel.');
+        handleStateSnapshot(await response.json());
+        state.wsConnected = true;
+        updateWsStatus('En línea', true);
+      } catch {
+        state.wsConnected = false;
+        updateWsStatus('Reintentando...', false);
+      }
+    };
+    refreshSnapshot();
+    snapshotPollingTimer = setInterval(refreshSnapshot, 2000);
+    return;
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -386,6 +420,7 @@ function updateWsStatus(text, connected) {
 }
 
 function handleStateSnapshot(snapshot) {
+  document.getElementById('demo-mode-banner')?.classList.toggle('hidden', !snapshot.demo_mode);
   state.bots = snapshot.bots || [];
   state.identities = snapshot.identities || [];
   state.riskPolicy = snapshot.risk_policy || null;
@@ -2875,6 +2910,9 @@ function initLucidSidebarPreferences() {
 document.addEventListener('DOMContentLoaded', () => {
   initLucidSidebarPreferences();
   initAuth();
+  fetch('/demo-mode').then(response => response.ok ? response.json() : null).then(info => {
+    document.getElementById('login-demo-notice')?.classList.toggle('hidden', !info?.isDemo);
+  }).catch(() => {});
   if (state.token) initWebSocket();
 });
 

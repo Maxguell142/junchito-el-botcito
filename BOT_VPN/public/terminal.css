@@ -123,6 +123,8 @@
 .bot-net-strip { border: 1px solid rgba(39,39,42,.7); border-radius: 7px; background: #0C0C0F; }
 .lucid-sidebar { box-shadow: none; }
 .workspace-topbar { backdrop-filter: blur(16px); background: rgba(9,9,11,.92); }
+.demo-mode-banner { display:inline-flex; align-items:center; white-space:nowrap; border:1px solid rgba(245,158,11,.35); border-radius:999px; padding:5px 9px; color:#fbbf24; background:rgba(245,158,11,.08); font:600 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; }
+.login-demo-notice { margin:14px 0 0; border:1px solid rgba(245,158,11,.28); border-radius:8px; padding:10px 12px; color:#fcd34d; background:rgba(245,158,11,.07); font-size:12px; line-height:1.5; }
 .topbar-telemetry-strip { background: #101013; border-color: #27272A; border-radius: 9px; }
 .market-badge, .ws-status { border-radius: 7px; }
 .btn { border-radius: 7px; }

@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__route=/api/:path*" },
+    { "source": "/healthz", "destination": "/api/index?__route=/healthz" },
+    { "source": "/demo-mode", "destination": "/api/index?__route=/demo-mode" }
+  ]
+}

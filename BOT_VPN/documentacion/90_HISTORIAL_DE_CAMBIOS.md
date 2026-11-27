@@ -9,6 +9,15 @@ last_updated: "2026-11-13"
 
 # Historial de cambios de la documentación
 
+## [2026-11-19] feature | Preparación de persistencia para Vercel
+- Añadido un adaptador Neon para estado y sesiones persistentes; SQLite sigue siendo el almacenamiento local de escritorio.
+- El estado cloud incluye el ledger, que se cifra junto con los perfiles para evitar guardar nombres y notas financieros en texto plano.
+- El servidor exporta una entrada Express para Vercel y el frontend alojado consulta el estado por HTTP; el escritorio conserva su canal WebSocket.
+- Añadida dependencia `@neondatabase/serverless`, datos ficticios de demostración y un aviso visible en login/panel. El README y estado técnico describen la configuración cloud.
+- Vercel project `quantum-fx` quedó configurado con raíz `BOT_VPN/`, Node 22 y Neon gratuito. El usuario autorizó el acceso público con login compartido y datos ficticios.
+- Las variables de acceso y cifrado están guardadas en Vercel como sensibles. No se copió ni migró información local.
+- Verificación: sintaxis JavaScript revisada. No se comprobó una conexión contra Neon ni se publicó por faltar la configuración segura pendiente.
+
 ## [2026-11-18] fix | Renovación de sesión durante el uso
 - Corregido el vencimiento fijo de 30 minutos: la sesión ahora dura 12 horas desde la última solicitud autenticada y se renueva con actividad del panel.
 - Los snapshots periódicos del WebSocket ya no renuevan por sí solos la sesión; al reiniciar Node, la sesión en memoria debe iniciarse otra vez.
@@ -213,3 +222,15 @@ Registro cronológico append-only de ingestas, compilaciones, consultas y pasada
 - Retirados `types/financial_types.ts` (sin importadores, compilador ni inclusión en la app), el directorio `dist/` vacío y dos metadatos de empaquetado sin función de actualización. Se conservaron `node_modules`, SQLite, configuración local y `dist-desktop/win-unpacked`, que contiene la aplicación de escritorio ejecutable.
 - El auditor ahora valida enlaces y metadatos: 30 notas detectadas, 25 notas documentales con ficha completa, sin enlaces rotos. La skill de Codex conserva su formato propio.
 - Obsidian abre la portada nueva, usa colores del grafo para las carpetas renombradas y guarda nuevas notas en `documentacion/` por defecto.
+# 2026-11-19 — Publicación de la demo QUANTUM FX
+
+- Se desplegó la maqueta pública en Vercel con Neon para persistencia mediante el controlador serverless.
+- Se añadieron rutas serverless Express para las API, el chequeo de salud y el modo demo.
+- Se quitaron del código publicado los movimientos de ledger de muestra con nombres y montos específicos y la contraseña predeterminada.
+- Se verificó la página pública, el endpoint de salud y la ruta de modo demo.
+
+## [2026-11-19] fix | Recursos estáticos de la demo pública
+- Corregidas en `public/index.html` las rutas de estilos, logo y scripts: Vercel los sirve desde la raíz del sitio, no desde `/static/`.
+- La aplicación local sigue compatible porque Express también publica esos archivos en la raíz.
+- Desplegada la corrección en producción; el dominio `quantum-fx-pi.vercel.app` quedó asociado a la nueva versión.
+- Verificación en producción: página, hojas de estilo, logo y scripts respondieron HTTP 200. No se probó el flujo de inicio de sesión en esta corrección.

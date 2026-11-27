@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QUANTUM FX // Plataforma Institucional Multi-Bot MNQ</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/terminal.css">
-  <link rel="stylesheet" href="/static/landing.css">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/terminal.css">
+  <link rel="stylesheet" href="/landing.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="icon" type="image/png" href="/logo.png">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
     <header class="public-landing-header">
       <div class="brand">
         <div class="brand-logo">
-          <img src="/static/logo.png" class="landing-header-logo" alt="QUANTUM FX Logo">
+          <img src="/logo.png" class="landing-header-logo" alt="QUANTUM FX Logo">
           <div class="brand-text">
             <span class="brand-title">QUANTUM FX</span>
             <span class="brand-subtitle">ORQUESTACIÓN MULTI-BOT // CME MNQ FUTURES</span>
@@ -57,7 +57,7 @@
           <div class="landing-hero-note"><span class="landing-note-icon">◈</span> Dashboard multi-bot · Gestión de cuentas · Análisis histórico</div>
         </div>
         <div class="landing-product-preview" aria-label="Vista conceptual de la terminal QUANTUM FX">
-          <div class="preview-topbar"><div class="preview-brand"><img src="/static/logo.png" alt=""><span>QUANTUM FX</span></div><span class="preview-mode"><i></i> ENTORNO DEMO</span></div>
+          <div class="preview-topbar"><div class="preview-brand"><img src="/logo.png" alt=""><span>QUANTUM FX</span></div><span class="preview-mode"><i></i> ENTORNO DEMO</span></div>
           <div class="preview-content">
             <div class="preview-sidebar"><span class="selected">▦</span><span>⌁</span><span>◫</span><span>⌖</span></div>
             <div class="preview-main">
@@ -234,13 +234,14 @@
       <div class="login-card">
         <div class="login-header">
           <div class="login-brand">
-            <img src="/static/logo.png" alt="QUANTUM FX Logo" class="brand-logo-img">
+            <img src="/logo.png" alt="QUANTUM FX Logo" class="brand-logo-img">
             <div class="login-brand-text">
               <h1>QUANTUM FX</h1>
               <span>INSTITUTIONAL FUTURES TRADING // CME MNQ</span>
             </div>
           </div>
           <p class="login-sub">Acceso Seguro a la Terminal Multi-Bot & Replicación Prop Firms</p>
+          <p class="login-demo-notice hidden" id="login-demo-notice">Maqueta pública con datos ficticios. No ingreses información personal o financiera real.</p>
         </div>
 
         <form id="login-form" onsubmit="handleLoginSubmit(event)">
@@ -299,7 +300,7 @@
       <aside class="lucid-sidebar" id="app-sidebar" aria-label="Navegación principal">
         <!-- Encabezado de Marca con Logo Oficial Interactivo -->
         <div class="sidebar-brand" onclick="toggleSidebarCollapse()" title="Haz clic para abrir o cerrar opciones de navegación" style="cursor: pointer;">
-          <img src="/static/logo.png" class="sidebar-brand-logo" alt="QUANTUM FX Logo">
+          <img src="/logo.png" class="sidebar-brand-logo" alt="QUANTUM FX Logo">
           <div class="sidebar-brand-text">
             <span class="sidebar-brand-title">QUANTUM FX</span>
             <span class="sidebar-brand-sub">MULTI-BOT TRADING</span>
@@ -395,6 +396,7 @@
               <span class="ws-dot"></span>
               <span class="ws-text">Conectando...</span>
             </div>
+            <span class="demo-mode-banner hidden" id="demo-mode-banner">MAQUETA · DATOS FICTICIOS</span>
           </div>
 
           <!-- Resumen de sesión -->
@@ -1700,7 +1702,7 @@
   <div class="toast-container" id="toast-container"></div>
 
 
-  <script src="/static/lightweight-charts.standalone.production.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/lightweight-charts.standalone.production.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

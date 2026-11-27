@@ -4,7 +4,7 @@ doc_type: "readme_principal"
 status: "vigente"
 summary: "Instalación, ejecución, privacidad y estructura de la aplicación para Windows."
 tags: [quantum-fx, readme, instalacion, windows, inicio]
-last_updated: "2026-11-13"
+last_updated: "2026-11-19"
 ---
 
 # Guía principal del proyecto QUANTUM FX
@@ -43,7 +43,15 @@ El servicio FastAPI es un servidor adicional y separado; el panel Node no lo nec
 
 ## Datos y privacidad
 
-La aplicación guarda datos en SQLite, un archivo de base de datos local. La aplicación de escritorio guarda su base de datos y la clave de cifrado en el perfil del usuario de Windows. Los perfiles con datos personales se cifran; para registrarlos o editarlos, usa la aplicación de escritorio (`npm run start:desktop`), que habilita el cifrado del sistema. El servidor abierto con `npm start` no habilita esa función por sí solo. No compartas `.env`, `config.json`, bases de datos ni credenciales. Las carpetas `raw/` y `documentacion/` pertenecen a la bóveda Obsidian; `raw/` contiene fuentes de solo lectura.
+La aplicación de escritorio guarda datos en SQLite en el perfil de Windows y cifra los perfiles personales con una clave local. El modo alojado en Vercel usa Neon para conservar el estado, el ledger y las sesiones entre solicitudes; los perfiles personales y los registros financieros solo se pueden guardar si `BOT_VPN_PII_ENCRYPTION_KEY` está configurada como variable sensible en Vercel.
+
+Si Neon no tiene estado previo, la versión alojada crea dos titulares, tres bots y movimientos ficticios para la maqueta; nunca importa el archivo SQLite local ni sus perfiles. El acceso del demo se configura con `BOT_VPN_AUTH_USERNAME` y `BOT_VPN_AUTH_PASSWORD`; los perfiles y el ledger se cifran con `BOT_VPN_PII_ENCRYPTION_KEY`. La clave debe tener 64 caracteres hexadecimales y conservarse para poder leer los perfiles guardados. No ingreses información real en la maqueta ni pegues credenciales o claves en el código, los documentos o el chat.
+
+No compartas `.env`, `config.json`, bases de datos ni credenciales. Las carpetas `raw/` y `documentacion/` pertenecen a la bóveda Obsidian; `raw/` contiene fuentes de solo lectura.
+
+## Demo pública alojada en Vercel
+
+La demo está disponible en [quantum-fx-pi.vercel.app](https://quantum-fx-pi.vercel.app/). El proyecto `quantum-fx` usa `BOT_VPN/` como carpeta raíz, Node 22 y Neon como persistencia. La API del entorno alojado usa consultas HTTP periódicas; el modo de escritorio conserva su WebSocket local. Para ingresar, usa el usuario y la contraseña compartidos para la maqueta. La base cloud se mantiene separada de los datos locales y contiene solo datos ficticios iniciales.
 
 ## Tecnologías
 
