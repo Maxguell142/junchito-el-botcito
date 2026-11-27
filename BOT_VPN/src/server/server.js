@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { promisify } = require('node:util');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const { WebSocketServer } = require('ws');
 const { SQLiteStore } = require('./database');
@@ -51,6 +52,7 @@ let cloudRequestQueue = Promise.resolve();
 let cloudLedgerTransactions = null;
 const PORT = Number(process.env.PORT || 3008);
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const scryptAsync = promisify(crypto.scrypt);
 const LOGIN_WINDOW_MS = Number(process.env.BOT_VPN_LOGIN_WINDOW_MS || 1000);
 const LOGIN_MAX_ATTEMPTS = 5;
 const sessions = new Map();
@@ -214,6 +216,88 @@ function secureEqual(value, expected) {
     && crypto.timingSafeEqual(valueBuffer, expectedBuffer);
 }
 
+function passwordHash(password) {
+  const salt = crypto.randomBytes(16);
+  return scryptAsync(password, salt, 64).then(hash => `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`);
+}
+
+async function passwordMatches(password, encoded) {
+  if (typeof encoded !== 'string') return false;
+  const [algorithm, saltHex, hashHex] = encoded.split('$');
+  if (algorithm !== 'scrypt' || !/^[a-f0-9]{32}$/i.test(saltHex || '') || !/^[a-f0-9]{128}$/i.test(hashHex || '')) return false;
+  const actual = await scryptAsync(password, Buffer.from(saltHex, 'hex'), 64);
+  return crypto.timingSafeEqual(actual, Buffer.from(hashHex, 'hex'));
+}
+
+function authStore() { return isVercel ? cloudStore : database; }
+
+async function createBootstrapUser(store, account) {
+  try {
+    await store.createUser(account);
+  } catch (error) {
+    if (error?.code === '23505' || error?.code?.startsWith('SQLITE_CONSTRAINT')) {
+      if (await store.getUser(account.username)) return;
+    }
+    throw error;
+  }
+}
+
+async function initializeUserAccounts(store, cloud = false) {
+  const legacyUsername = configData.auth.username;
+  const legacyPassword = configData.auth.password;
+  const adminUsername = (process.env.BOT_VPN_ADMIN_USERNAME || 'V8').trim();
+  const adminPassword = process.env.BOT_VPN_ADMIN_PASSWORD;
+  if (adminPassword && adminPassword.length < 12) {
+    console.error('No se creó el usuario administrador: BOT_VPN_ADMIN_PASSWORD debe tener al menos 12 caracteres.');
+    return;
+  }
+  if (legacyUsername && legacyPassword && legacyUsername.toLowerCase() !== adminUsername.toLowerCase()
+    && !await store.getUser(legacyUsername)) {
+    await createBootstrapUser(store, {
+      username: legacyUsername,
+      passwordHash: await passwordHash(legacyPassword),
+      role: cloud && adminPassword ? 'USER' : 'ADMIN',
+      status: 'ACTIVE'
+    });
+  }
+  if (cloud && adminPassword && legacyUsername && legacyUsername.toLowerCase() !== adminUsername.toLowerCase()) {
+    await store.updateUserRole(legacyUsername, 'USER');
+  }
+  if (adminPassword && !await store.getUser(adminUsername)) {
+    await createBootstrapUser(store, {
+      username: adminUsername,
+      passwordHash: await passwordHash(adminPassword),
+      role: 'ADMIN',
+      status: 'ACTIVE'
+    });
+  }
+  if (cloud) {
+    const demoUsers = [
+      { username: 'lucas.romero', displayName: 'Lucas Romero', email: 'lucas.romero@example.com', status: 'ACTIVE' },
+      { username: 'camila.torres', displayName: 'Camila Torres', email: 'camila.torres@example.com', status: 'ACTIVE' },
+      { username: 'martin.silva', displayName: 'Martín Silva', email: 'martin.silva@example.com', status: 'PENDING' },
+      { username: 'sofia.mendez', displayName: 'Sofía Méndez', email: 'sofia.mendez@example.com', status: 'PENDING' },
+      { username: 'nicolas.vega', displayName: 'Nicolás Vega', email: 'nicolas.vega@example.com', status: 'FROZEN' }
+    ];
+    for (const demoUser of demoUsers) {
+      if (!await store.getUser(demoUser.username)) {
+        await createBootstrapUser(store, {
+          ...demoUser,
+          passwordHash: await passwordHash(crypto.randomBytes(32).toString('base64url')),
+          role: 'USER'
+        });
+      }
+    }
+  }
+}
+
+let userStoreReady = Promise.resolve();
+
+function requireAdmin(req, res, next) {
+  if (req.authUser?.role !== 'ADMIN') return res.status(403).json({ detail: 'Se requieren permisos de administración.' });
+  next();
+}
+
 function hasValidSessionToken(token, refreshActivity = true) {
   if (typeof token !== 'string' || token.length > 256) return false;
   const session = sessions.get(token);
@@ -254,6 +338,15 @@ function loginRateLimit(req, res, next) {
     return res.status(429).json({ detail: 'Demasiados intentos. Espera unos segundos e intenta nuevamente.' });
   }
   next();
+}
+
+function registrationRateLimit(req, res, next) {
+  loginRateLimit(req, res, error => {
+    if (error) return next(error);
+    const attempt = loginAttempts.get(req.socket.remoteAddress || 'unknown');
+    attempt.count += 1;
+    next();
+  });
 }
 
 app.use('/api', async (req, res, next) => {
@@ -301,10 +394,17 @@ app.use('/api', async (req, res, next) => {
         });
         return res;
       };
-      if (!['/auth/login', '/auth/me', '/webhook'].includes(req.path)) {
+      if (!['/auth/login', '/auth/me', '/auth/register', '/webhook'].includes(req.path)) {
         const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
         const session = match ? await cloudStore.getSession(match[1]) : null;
         if (!session) return res.status(401).json({ detail: 'Autenticación requerida.' });
+        const account = await cloudStore.getUser(session.username);
+        if (!account || account.status !== 'ACTIVE') {
+          await cloudStore.deleteSession(match[1]);
+          return res.status(401).json({ detail: 'La cuenta no está activa.' });
+        }
+        session.role = account.role;
+        req.authUser = { username: account.username, role: account.role };
         sessions.set(match[1], session);
       }
       return requestContext.run(res, () => next());
@@ -322,7 +422,7 @@ app.use('/api', async (req, res, next) => {
     }
   }
 
-  if (req.path === '/auth/login' || req.path === '/auth/me' || req.path === '/webhook') {
+  if (req.path === '/auth/login' || req.path === '/auth/me' || req.path === '/auth/register' || req.path === '/webhook') {
     return next();
   }
 
@@ -342,6 +442,12 @@ app.use('/api', async (req, res, next) => {
     return res.status(401).json({ detail: 'Autenticación requerida.' });
   }
   try {
+    const account = await database.getUser(sessions.get(match[1]).username);
+    if (!account || account.status !== 'ACTIVE') {
+      revokeSession(match[1]);
+      return res.status(401).json({ detail: 'La cuenta no está activa.' });
+    }
+    req.authUser = { username: account.username, role: account.role };
     refreshConfigIfChanged();
     next();
   } catch (error) {
@@ -549,6 +655,7 @@ function loadConfig(cloudSnapshot = null, cloudRevision = null) {
   applyLoadedSnapshot(loaded.snapshot, loaded.revision);
 }
 loadConfig();
+if (!isVercel) userStoreReady = initializeUserAccounts(database, false);
 
 if (isVercel) {
   cloudStore = new NeonStore();
@@ -619,7 +726,8 @@ if (isVercel) {
   cloudReady = cloudStore.initialize(initialSnapshot).then(({ snapshot, revision }) => {
     loadConfig(snapshot, revision);
     ledgerTransactions = cloudLedgerTransactions || [];
-  });
+  }).then(() => initializeUserAccounts(cloudStore, true));
+  userStoreReady = cloudReady;
 }
 
 let marketPrice = 28245.50;
@@ -1528,44 +1636,69 @@ app.get('/healthz', async (req, res, next) => {
 // Autenticación
 app.post('/api/auth/login', loginRateLimit, async (req, res) => {
   const { username, password } = req.body || {};
-  const auth = configData.auth || {};
+  await userStoreReady;
 
   if (typeof username !== 'string' || username.length > 128
     || typeof password !== 'string' || password.length > 1024) {
     return res.status(400).json({ detail: 'Credenciales inválidas.' });
   }
-  if (!auth.username || !auth.password) {
-    return res.status(503).json({ detail: 'Autenticación no configurada.' });
-  }
-
-  if (secureEqual(username, auth.username) && secureEqual(password, auth.password)) {
+  const account = await authStore().getUser(username.trim());
+  if (account && await passwordMatches(password, account.password_hash) && account.status === 'ACTIVE') {
     const key = req.socket.remoteAddress || 'unknown';
     loginAttempts.delete(key);
     for (const [activeToken, session] of sessions) {
       if (session.expiresAt <= Date.now()) sessions.delete(activeToken);
     }
     const token = crypto.randomBytes(32).toString('base64url');
-    const session = { username: auth.username, role: auth.role || 'ADMIN_TRADER', expiresAt: Date.now() + SESSION_TTL_MS };
+    const session = { username: account.username, role: account.role, expiresAt: Date.now() + SESSION_TTL_MS };
     sessions.set(token, session);
     if (isVercel) await cloudStore.createSession(token, session);
     return res.json({
       status: 'SUCCESS',
       token,
       expires_in: SESSION_TTL_MS / 1000,
-      user: { username: auth.username, role: auth.role || 'ADMIN_TRADER' }
+      user: { username: account.username, role: account.role }
     });
   }
   const key = req.socket.remoteAddress || 'unknown';
   loginAttempts.get(key).count += 1;
-  res.status(401).json({ detail: 'Usuario o contraseña incorrectos.' });
+  const detail = account?.status === 'PENDING'
+    ? 'La solicitud de cuenta todavía espera aprobación del administrador.'
+    : account?.status === 'FROZEN' ? 'La cuenta está congelada. Contacta al administrador.' : 'Usuario o contraseña incorrectos.';
+  res.status(401).json({ detail });
+});
+
+app.post('/api/auth/register', registrationRateLimit, async (req, res) => {
+  await userStoreReady;
+  const { username, password } = req.body || {};
+  const cleanUsername = typeof username === 'string' ? username.trim() : '';
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$/.test(cleanUsername)) {
+    return res.status(400).json({ detail: 'El usuario debe tener entre 3 y 32 caracteres: letras, números, punto, guion o guion bajo.' });
+  }
+  if (typeof password !== 'string' || password.length < 12 || password.length > 1024) {
+    return res.status(400).json({ detail: 'La contraseña debe tener al menos 12 caracteres.' });
+  }
+  if (await authStore().getUser(cleanUsername)) return res.status(409).json({ detail: 'Ese nombre de usuario ya está registrado.' });
+  try {
+    await authStore().createUser({ username: cleanUsername, passwordHash: await passwordHash(password), role: 'USER', status: 'PENDING' });
+    return res.status(201).json({ status: 'PENDING', detail: 'Solicitud enviada. El administrador debe aprobar la cuenta.' });
+  } catch (error) {
+    if (error?.code === '23505' || error?.code?.startsWith('SQLITE_CONSTRAINT')) {
+      return res.status(409).json({ detail: 'Ese nombre de usuario ya está registrado.' });
+    }
+    throw error;
+  }
 });
 
 app.get('/api/auth/me', async (req, res) => {
+  await userStoreReady;
   const token = getBearerToken(req);
   const session = isVercel ? await cloudStore.getSession(token) : sessions.get(token);
-  if (session && isVercel) sessions.set(token, session);
-  if (hasValidSessionToken(token) && session) {
-    return res.json({ authenticated: true, username: session.username, role: session.role });
+  const account = session ? await authStore().getUser(session.username) : null;
+  if (session && account?.status === 'ACTIVE' && session.expiresAt > Date.now()) {
+    sessions.set(token, { ...session, role: account.role });
+    if (!isVercel) hasValidSessionToken(token);
+    return res.json({ authenticated: true, username: account.username, role: account.role });
   }
   res.status(401).json({ authenticated: false });
 });
@@ -1576,6 +1709,45 @@ app.post('/api/auth/logout', async (req, res) => {
   if (isVercel) await cloudStore.deleteSession(token);
   res.sendStatus(204);
 });
+
+app.get('/api/admin/users', requireAdmin, async (_req, res) => {
+  await userStoreReady;
+  res.json({ users: await authStore().listUsers() });
+});
+
+app.patch('/api/admin/users/:username', requireAdmin, async (req, res) => {
+  await userStoreReady;
+  const target = await authStore().getUser(req.params.username);
+  const status = req.body?.status;
+  if (!target) return res.status(404).json({ detail: 'No se encontró el usuario.' });
+  if (!['ACTIVE', 'FROZEN'].includes(status)) return res.status(400).json({ detail: 'Estado inválido.' });
+  if (target.role === 'ADMIN') return res.status(403).json({ detail: 'No se puede congelar una cuenta administradora desde esta pantalla.' });
+  await authStore().updateUserStatus(target.username, status);
+  if (status === 'FROZEN') await revokeUserSessions(target.username);
+  res.json({ username: target.username, status });
+});
+
+app.delete('/api/admin/users/:username', requireAdmin, async (req, res) => {
+  await userStoreReady;
+  const target = await authStore().getUser(req.params.username);
+  if (!target) return res.status(404).json({ detail: 'No se encontró el usuario.' });
+  if (target.username.toLowerCase() === req.authUser.username.toLowerCase()) {
+    return res.status(400).json({ detail: 'No puedes eliminar tu propia cuenta.' });
+  }
+  if (target.role === 'ADMIN' && await authStore().countActiveAdmins() <= 1) {
+    return res.status(409).json({ detail: 'Debe quedar al menos un administrador activo.' });
+  }
+  await revokeUserSessions(target.username);
+  await authStore().deleteUser(target.username);
+  res.sendStatus(204);
+});
+
+async function revokeUserSessions(username) {
+  for (const [token, session] of sessions) {
+    if (session.username.toLowerCase() === username.toLowerCase()) revokeSession(token);
+  }
+  if (isVercel) await cloudStore.deleteUserSessions(username);
+}
 
 // Controles de Pánico Institucionales
 app.post('/api/emergency/flatten-all', (req, res) => {

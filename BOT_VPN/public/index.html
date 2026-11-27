@@ -57,15 +57,14 @@
           <div class="landing-hero-note"><span class="landing-note-icon">◈</span> Dashboard multi-bot · Gestión de cuentas · Análisis histórico</div>
         </div>
         <div class="landing-product-preview" aria-label="Vista conceptual de la terminal QUANTUM FX">
-          <div class="preview-topbar"><div class="preview-brand"><img src="/logo.png" alt=""><span>QUANTUM FX</span></div><span class="preview-mode"><i></i> ENTORNO DEMO</span></div>
+          <div class="preview-topbar"><div class="preview-brand"><img src="/logo.png" alt=""><span>QUANTUM FX</span></div><span class="preview-mode"><i></i> PLATAFORMA</span></div>
           <div class="preview-content">
             <div class="preview-sidebar"><span class="selected">▦</span><span>⌁</span><span>◫</span><span>⌖</span></div>
             <div class="preview-main">
-              <div class="preview-heading"><div><span class="preview-overline">WORKSPACE</span><strong>Resumen de operación</strong></div><span class="preview-date">MNQ · SIMULADO</span></div>
+              <div class="preview-heading"><div><span class="preview-overline">WORKSPACE</span><strong>Resumen de operación</strong></div><span class="preview-date">CME · MNQ</span></div>
               <div class="preview-metrics"><div><span>P&amp;L DE SESIÓN</span><b>— —</b></div><div><span>BOTS</span><b>Multi-bot</b></div><div><span>CUENTAS</span><b>Unificadas</b></div></div>
               <div class="preview-chart"><div class="preview-chart-label"><span>Vista de mercado</span><span>GRÁFICO</span></div><svg viewBox="0 0 540 150" role="img" aria-label="Ilustración decorativa de un gráfico"><defs><linearGradient id="preview-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399" stop-opacity=".2"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/></linearGradient></defs><path class="preview-area" d="M0 121 C35 116 44 95 73 101 S111 116 143 86 181 96 211 72 248 83 282 62 320 76 347 50 390 67 421 40 458 56 487 26 519 40 540 16 V150 H0Z"/><path class="preview-line" d="M0 121 C35 116 44 95 73 101 S111 116 143 86 181 96 211 72 248 83 282 62 320 76 347 50 390 67 421 40 458 56 487 26 519 40 540 16"/></svg></div>
               <div class="preview-bot-list"><div><i class="preview-dot"></i><span>Unidades de ejecución</span><b>Vista centralizada</b></div><div><i class="preview-dot muted"></i><span>Riesgo y horarios</span><b>Configurables</b></div></div>
-              <span class="preview-disclaimer">Ilustración de interfaz · sin datos de mercado reales</span>
             </div>
           </div>
         </div>
@@ -132,7 +131,7 @@
             <ul class="pillar-bullets">
               <li>Horarios por unidad</li>
               <li>Límites y objetivos editables</li>
-              <li>Controles de pausa y cierre simulados</li>
+              <li>Controles de pausa y cierre desde el panel</li>
             </ul>
           </div>
 
@@ -144,7 +143,7 @@
             <ul class="pillar-bullets">
               <li>Gráficos por instrumento y bot</li>
               <li>Importación de velas CSV</li>
-              <li>Resultados hipotéticos claramente identificados</li>
+              <li>Resultados y métricas de estrategia</li>
             </ul>
           </div>
         </div>
@@ -176,7 +175,7 @@
           <div class="wf-step">
             <div class="wf-step-idx">4</div>
             <h4>Ajusta</h4>
-            <p>Actualiza parámetros y consulta las operaciones simuladas registradas.</p>
+            <p>Actualiza parámetros y consulta las operaciones registradas.</p>
           </div>
         </div>
       </div>
@@ -219,9 +218,6 @@
         <div class="footer-brand">
           <span class="logo-icon">▲</span> QUANTUM FX · TERMINAL MULTI-BOT
         </div>
-        <p class="footer-copy">
-          Entorno de monitoreo y simulación. No conecta con brokers ni ejecuta operaciones reales. Los resultados históricos e indicadores de mercado son informativos y no garantizan resultados futuros.
-        </p>
       </footer>
     </div>
   </div>
@@ -241,7 +237,6 @@
             </div>
           </div>
           <p class="login-sub">Acceso Seguro a la Terminal Multi-Bot & Replicación Prop Firms</p>
-          <p class="login-demo-notice hidden" id="login-demo-notice">Maqueta pública con datos ficticios. No ingreses información personal o financiera real.</p>
         </div>
 
         <form id="login-form" onsubmit="handleLoginSubmit(event)">
@@ -267,6 +262,25 @@
           <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-login-submit">
             <span>Ingresar a la terminal</span> →
           </button>
+        </form>
+
+        <div class="login-register-action" id="login-register-action">
+          <span>¿Todavía no tienes acceso?</span>
+          <button type="button" class="btn-link" onclick="toggleRegistrationForm(true)">Solicitar una cuenta</button>
+        </div>
+
+        <form id="register-form" class="hidden" onsubmit="handleRegisterSubmit(event)">
+          <div class="form-group">
+            <label for="register-username">Nombre de usuario</label>
+            <input id="register-username" type="text" minlength="3" maxlength="32" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="register-password">Contraseña</label>
+            <input id="register-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required>
+            <small class="form-hint">Mínimo 12 caracteres. La cuenta queda pendiente hasta que un administrador la apruebe.</small>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Enviar solicitud</button>
+          <button type="button" class="btn-link" onclick="toggleRegistrationForm(false)">Volver al inicio de sesión</button>
         </form>
 
         <div class="login-back-action">
@@ -367,6 +381,12 @@
             <span class="nav-icon" aria-hidden="true">↗</span>
             <span class="nav-label">Alertas</span>
           </button>
+
+          <button class="sidebar-nav-item tab-link hidden" id="admin-users-nav" onclick="switchTab('users')" title="Administración de usuarios">
+            <span class="nav-icon" aria-hidden="true">◎</span>
+            <span class="nav-label">Usuarios</span>
+            <span class="sidebar-pill-badge" id="count-pending-users">0</span>
+          </button>
         </nav>
 
         <!-- Footer de Barra Lateral -->
@@ -387,7 +407,7 @@
         <header class="workspace-topbar" id="main-header">
           <!-- Estado del mercado y conexión -->
           <div class="topbar-left-zone">
-            <div class="market-badge" title="Precio de demostración simulado MNQ (CME)">
+            <div class="market-badge" title="Contrato CME MNQ">
               <span class="pulse-dot"></span>
               <span class="ticker-label">SIM-MNQ</span>
               <span class="market-price" id="market-price-val">28,245.50</span>
@@ -396,7 +416,6 @@
               <span class="ws-dot"></span>
               <span class="ws-text">Conectando...</span>
             </div>
-            <span class="demo-mode-banner hidden" id="demo-mode-banner">MAQUETA · DATOS FICTICIOS</span>
           </div>
 
           <!-- Resumen de sesión -->
@@ -425,7 +444,8 @@
               <button class="btn btn-emergency-flatten" onclick="promptFlattenAll()" title="Cerrar todas las posiciones abiertas">Cerrar órdenes</button>
               <button class="btn btn-emergency-stop" onclick="promptStopAll()" title="Pausar todos los bots activos">Pausar bots</button>
             </div>
-            <div class="lucid-diamond-banner" title="Cuenta de usuario">
+            <div class="user-menu-wrap" id="user-menu-wrap">
+            <div class="lucid-diamond-banner" id="user-menu-button" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false" onclick="toggleUserMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserMenu()}" title="Cuenta de usuario">
               <div class="diamond-avatar-wrap">
                 <div class="diamond-avatar" id="header-user-avatar">AD</div>
               </div>
@@ -434,6 +454,11 @@
                   <span class="diamond-handle" id="header-user-name">V8_NAHUEL</span>
                 </div>
               </div>
+            </div>
+            <div class="user-menu hidden" id="user-menu" role="menu">
+              <span class="user-menu-role" id="header-user-role">Usuario</span>
+              <button type="button" role="menuitem" onclick="logoutUser()">Cerrar sesión</button>
+            </div>
             </div>
           </div>
         </header>
@@ -934,6 +959,18 @@
           </p>
         </div>
       </section>
+    </section>
+
+    <section class="tab-view" id="view-users">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <div class="terminal-eyebrow">ADMINISTRACIÓN</div>
+          <h2>Usuarios</h2>
+          <span class="section-sub">Aprueba solicitudes, congela accesos o elimina cuentas.</span>
+        </div>
+        <button class="btn btn-secondary" type="button" onclick="loadAdminUsers()">Actualizar</button>
+      </div>
+      <div class="admin-users-list" id="admin-users-list" aria-live="polite"></div>
     </section>
 
   

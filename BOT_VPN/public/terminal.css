@@ -344,3 +344,57 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+.hidden { display: none !important; }
+
+.user-menu-wrap { position: relative; }
+.user-menu {
+  position: absolute;
+  z-index: 140;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 190px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #101013;
+  box-shadow: 0 12px 28px rgba(0,0,0,.4);
+}
+.user-menu-role { display: block; padding: 7px 9px; color: #A1A1AA; font-size: 11px; }
+.user-menu button { width: 100%; border: 0; border-radius: 5px; padding: 9px; text-align: left; color: #F4F4F5; background: transparent; cursor: pointer; }
+.user-menu button:hover { background: #27272A; }
+.admin-users-list { display: grid; gap: 10px; margin-top: 18px; }
+.admin-user-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid var(--border-subtle); border-radius: 9px; background: #101013; }
+.admin-user-card > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.admin-user-card strong { color: #F4F4F5; font-size: 14px; }
+.admin-user-card span { color: #A1A1AA; font: 11px var(--font-mono); }
+.admin-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.login-register-action { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 16px; color: #A1A1AA; font-size: 12px; }
+.login-register-action .btn-link,
+#register-form > .btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid #27272A;
+  border-radius: 7px;
+  color: #D4D4D8;
+  background: #101013;
+  font: 600 12px/1.2 var(--font-sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+.login-register-action .btn-link:hover,
+#register-form > .btn-link:hover {
+  border-color: rgba(52, 211, 153, .55);
+  color: #6EE7B7;
+  background: rgba(52, 211, 153, .08);
+}
+#register-form { display: grid; gap: 12px; }
+#register-form .form-hint { display: block; margin-top: 6px; }
+#register-form > .btn-link { justify-self: center; }
+@media (max-width: 640px) {
+  .admin-user-card { align-items: flex-start; flex-direction: column; }
+  .admin-user-actions { width: 100%; }
+}

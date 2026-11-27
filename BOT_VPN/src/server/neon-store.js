@@ -38,6 +38,21 @@ class NeonStore {
         expires_at timestamptz NOT NULL
       )
     `);
+    await this.sql.query(`
+      CREATE TABLE IF NOT EXISTS quantum_fx_users (
+        username text PRIMARY KEY,
+        display_name text NOT NULL DEFAULT '',
+        email text NOT NULL DEFAULT '',
+        password_hash text NOT NULL,
+        role text NOT NULL CHECK (role IN ('ADMIN', 'USER')),
+        status text NOT NULL CHECK (status IN ('PENDING', 'ACTIVE', 'FROZEN')),
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await this.sql.query('ALTER TABLE quantum_fx_users ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT \'\'');
+    await this.sql.query('ALTER TABLE quantum_fx_users ADD COLUMN IF NOT EXISTS email text NOT NULL DEFAULT \'\'');
+    await this.sql.query('CREATE UNIQUE INDEX IF NOT EXISTS quantum_fx_users_username_ci_idx ON quantum_fx_users (lower(username))');
     const seed = this.encodeSnapshot(initialSnapshot);
     await this.sql.query(
       'INSERT INTO quantum_fx_state (id, revision, snapshot) VALUES (1, 0, $1::jsonb) ON CONFLICT (id) DO NOTHING',
@@ -125,6 +140,61 @@ class NeonStore {
   async deleteSession(token) {
     if (!token || typeof token !== 'string') return;
     await this.sql.query('DELETE FROM quantum_fx_sessions WHERE token_hash = $1', [tokenHash(token)]);
+  }
+
+  async getUser(username) {
+    const rows = await this.sql.query(
+      'SELECT username, display_name, email, password_hash, role, status, created_at FROM quantum_fx_users WHERE lower(username) = lower($1)',
+      [username]
+    );
+    return rows[0] || null;
+  }
+
+  async listUsers() {
+    return this.sql.query(
+      'SELECT username, display_name, email, role, status, created_at FROM quantum_fx_users ORDER BY created_at, username'
+    );
+  }
+
+  async createUser({ username, displayName = '', email = '', passwordHash, role = 'USER', status = 'PENDING' }) {
+    await this.sql.query(
+      'INSERT INTO quantum_fx_users (username, display_name, email, password_hash, role, status) VALUES ($1, $2, $3, $4, $5, $6)',
+      [username, displayName, email, passwordHash, role, status]
+    );
+  }
+
+  async updateUserStatus(username, status) {
+    const rows = await this.sql.query(
+      'UPDATE quantum_fx_users SET status = $2, updated_at = now() WHERE lower(username) = lower($1) RETURNING username',
+      [username, status]
+    );
+    return rows.length;
+  }
+
+  async updateUserRole(username, role) {
+    await this.sql.query(
+      'UPDATE quantum_fx_users SET role = $2, updated_at = now() WHERE lower(username) = lower($1)',
+      [username, role]
+    );
+  }
+
+  async deleteUser(username) {
+    const rows = await this.sql.query(
+      'DELETE FROM quantum_fx_users WHERE lower(username) = lower($1) RETURNING username',
+      [username]
+    );
+    return rows.length;
+  }
+
+  async deleteUserSessions(username) {
+    await this.sql.query('DELETE FROM quantum_fx_sessions WHERE lower(username) = lower($1)', [username]);
+  }
+
+  async countActiveAdmins() {
+    const rows = await this.sql.query(
+      "SELECT count(*)::int AS count FROM quantum_fx_users WHERE role = 'ADMIN' AND status = 'ACTIVE'"
+    );
+    return Number(rows[0]?.count || 0);
   }
 
   async healthCheck() {

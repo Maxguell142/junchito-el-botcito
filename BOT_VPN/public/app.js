@@ -14,7 +14,7 @@
 // Estado global de la aplicación
 const state = {
   token: localStorage.getItem('quantum_auth_token') || null,
-  currentUser: { username: 'admin', role: 'ADMIN_TRADER' },
+  currentUser: null,
   activeTab: 'dashboard',
   bots: [],
   identities: [],
@@ -159,6 +159,7 @@ function goToTerminalScreen() {
   showScreen('screen-terminal');
   initLucidSidebarPreferences();
   updateHeaderUser();
+  updateUserManagementAccess();
   if (!state.wsConnected) {
     initWebSocket();
   }
@@ -177,7 +178,7 @@ function updateLandingAuthUI() {
   const box = document.getElementById('landing-auth-action-box');
   if (!box) return;
   if (state.token) {
-    const username = state.currentUser?.username || 'admin';
+    const username = state.currentUser?.username || 'usuario';
     box.innerHTML = `
       <button class="btn btn-primary" onclick="goToTerminalScreen()">
         <span>Ir a la terminal (${escapeHtml(username)})</span> →
@@ -202,7 +203,18 @@ function updateLandingAuthUI() {
 function initAuth() {
   updateAudioButtonUI();
   if (state.token) {
-    goToTerminalScreen();
+    fetch('/api/auth/me', { cache: 'no-store', headers: { Authorization: `Bearer ${state.token}` } })
+      .then(async response => {
+        if (!response.ok) throw new Error('Sesión no válida');
+        const user = await response.json();
+        state.currentUser = { username: user.username, role: user.role };
+        goToTerminalScreen();
+      })
+      .catch(() => {
+        state.token = null;
+        localStorage.removeItem('quantum_auth_token');
+        goToLandingScreen();
+      });
   } else {
     goToLandingScreen();
   }
@@ -211,9 +223,31 @@ function initAuth() {
 function updateHeaderUser() {
   const avatar = document.getElementById('header-user-avatar');
   const nameElem = document.getElementById('header-user-name');
-  if (avatar) avatar.textContent = (state.currentUser.username || 'AD').substring(0, 2).toUpperCase();
-  if (nameElem) nameElem.textContent = state.currentUser.username || 'admin';
+  const roleElem = document.getElementById('header-user-role');
+  const account = state.currentUser || { username: 'usuario', role: 'USER' };
+  if (avatar) avatar.textContent = account.username.substring(0, 2).toUpperCase();
+  if (nameElem) nameElem.textContent = account.username;
+  if (roleElem) roleElem.textContent = account.role === 'ADMIN' ? 'Administrador' : 'Usuario';
 }
+
+function updateUserManagementAccess() {
+  const admin = state.currentUser?.role === 'ADMIN';
+  document.getElementById('admin-users-nav')?.classList.toggle('hidden', !admin);
+  if (!admin && state.activeTab === 'users') switchTab('dashboard');
+}
+
+function toggleUserMenu(force) {
+  const menu = document.getElementById('user-menu');
+  const button = document.getElementById('user-menu-button');
+  if (!menu || !button) return;
+  const open = typeof force === 'boolean' ? force : menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !open);
+  button.setAttribute('aria-expanded', String(open));
+}
+
+document.addEventListener('click', event => {
+  if (!event.target.closest('#user-menu-wrap')) toggleUserMenu(false);
+});
 
 async function apiFetch(url, options = {}) {
   const makeRequest = () => {
@@ -237,6 +271,33 @@ function togglePasswordVisibility(inputId) {
   input.type = input.type === 'password' ? 'text' : 'password';
 }
 
+function toggleRegistrationForm(show) {
+  document.getElementById('login-form')?.classList.toggle('hidden', show);
+  document.getElementById('login-register-action')?.classList.toggle('hidden', show);
+  document.getElementById('register-form')?.classList.toggle('hidden', !show);
+  if (show) document.getElementById('register-username')?.focus();
+}
+
+async function handleRegisterSubmit(event) {
+  event.preventDefault();
+  const username = document.getElementById('register-username').value.trim();
+  const password = document.getElementById('register-password').value;
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || 'No se pudo enviar la solicitud.');
+    document.getElementById('register-form').reset();
+    toggleRegistrationForm(false);
+    showToast(result.detail, 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
 async function handleLoginSubmit(event) {
   event.preventDefault();
   const user = document.getElementById('login-username').value.trim();
@@ -257,7 +318,7 @@ async function handleLoginSubmit(event) {
 
     const data = await resp.json();
     state.token = data.token;
-    state.currentUser = data.user || { username: user, role: 'ADMIN_TRADER' };
+    state.currentUser = data.user || { username: user, role: 'USER' };
 
     if (remember) {
       localStorage.setItem('quantum_auth_token', state.token);
@@ -312,11 +373,72 @@ function switchTab(tabName) {
   if (tabName === 'ledger') loadLedgerData();
   if (tabName === 'analysis') loadAnalysisStatus();
   if (tabName === 'noticias') loadEconomicNews();
+  if (tabName === 'users') loadAdminUsers();
     if (tabName === 'charts') {
     setTimeout(() => {
       initLightweightChart();
     }, 50);
   }
+}
+
+async function loadAdminUsers() {
+  const container = document.getElementById('admin-users-list');
+  if (!container || state.currentUser?.role !== 'ADMIN') return;
+  container.innerHTML = '<div class="bento-loading">Cargando usuarios…</div>';
+  try {
+    const response = await apiFetch('/api/admin/users');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'No se pudo cargar la lista.');
+    const users = data.users || [];
+    const pending = users.filter(user => user.status === 'PENDING').length;
+    const badge = document.getElementById('count-pending-users');
+    if (badge) badge.textContent = String(pending);
+    if (!users.length) {
+      container.innerHTML = '<div class="card-empty-state">Todavía no hay cuentas registradas.</div>';
+      return;
+    }
+    container.innerHTML = users.map(user => {
+      const protectedAdmin = user.role === 'ADMIN';
+      const primaryAction = user.status === 'PENDING'
+        ? `<button class="btn btn-primary btn-sm" onclick="setAdminUserStatus('${encodeURIComponent(user.username)}','ACTIVE')">Aprobar</button>`
+        : protectedAdmin ? '' : `<button class="btn btn-secondary btn-sm" onclick="setAdminUserStatus('${encodeURIComponent(user.username)}','${user.status === 'FROZEN' ? 'ACTIVE' : 'FROZEN'}')">${user.status === 'FROZEN' ? 'Reactivar' : 'Congelar'}</button>`;
+      const deleteAction = user.username.toLowerCase() === state.currentUser.username.toLowerCase() ? ''
+        : `<button class="btn btn-danger btn-sm" onclick="deleteAdminUser('${encodeURIComponent(user.username)}')">Eliminar</button>`;
+      const displayName = user.display_name || user.username;
+      const contact = user.email ? ` · ${escapeHtml(user.email)}` : '';
+      const created = user.created_at ? new Date(user.created_at).toLocaleDateString() : '—';
+      return `<article class="admin-user-card"><div><strong>${escapeHtml(displayName)}</strong><span>@${escapeHtml(user.username)}${contact}</span><span>${protectedAdmin ? 'Administrador' : 'Usuario'} · ${escapeHtml(user.status)} · Alta ${escapeHtml(created)}</span></div><div class="admin-user-actions">${primaryAction}${deleteAction}</div></article>`;
+    }).join('');
+  } catch (error) {
+    container.innerHTML = `<div class="card-empty-state">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function setAdminUserStatus(encodedUsername, status) {
+  const username = decodeURIComponent(encodedUsername);
+  try {
+    const response = await apiFetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'No se pudo actualizar la cuenta.');
+    showToast(status === 'ACTIVE' ? 'Cuenta aprobada o reactivada.' : 'Cuenta congelada.', 'success');
+    loadAdminUsers();
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+async function deleteAdminUser(encodedUsername) {
+  const username = decodeURIComponent(encodedUsername);
+  if (!await confirmModal('Eliminar usuario', `Se eliminará el acceso de ${username}.`, true)) return;
+  try {
+    const response = await apiFetch(`/api/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'No se pudo eliminar la cuenta.');
+    }
+    showToast('Cuenta eliminada.', 'success');
+    loadAdminUsers();
+  } catch (error) { showToast(error.message, 'error'); }
 }
 
 // ======================================================================
@@ -420,7 +542,6 @@ function updateWsStatus(text, connected) {
 }
 
 function handleStateSnapshot(snapshot) {
-  document.getElementById('demo-mode-banner')?.classList.toggle('hidden', !snapshot.demo_mode);
   state.bots = snapshot.bots || [];
   state.identities = snapshot.identities || [];
   state.riskPolicy = snapshot.risk_policy || null;
@@ -2910,9 +3031,6 @@ function initLucidSidebarPreferences() {
 document.addEventListener('DOMContentLoaded', () => {
   initLucidSidebarPreferences();
   initAuth();
-  fetch('/demo-mode').then(response => response.ok ? response.json() : null).then(info => {
-    document.getElementById('login-demo-notice')?.classList.toggle('hidden', !info?.isDemo);
-  }).catch(() => {});
   if (state.token) initWebSocket();
 });
 

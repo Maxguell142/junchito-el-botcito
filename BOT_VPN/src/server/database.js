@@ -391,6 +391,47 @@ class SQLiteStore {
     ).get(prefix.length, prefix));
   }
 
+  getUser(username) {
+    return this.database.prepare(
+      'SELECT username, display_name, email, password_hash, role, status, created_at FROM app_users WHERE username = ? COLLATE NOCASE'
+    ).get(username) || null;
+  }
+
+  listUsers() {
+    return this.database.prepare(
+      'SELECT username, display_name, email, role, status, created_at FROM app_users ORDER BY created_at, username'
+    ).all();
+  }
+
+  createUser({ username, displayName = '', email = '', passwordHash, role = 'USER', status = 'PENDING' }) {
+    const timestamp = now();
+    this.database.prepare(
+      'INSERT INTO app_users (username, display_name, email, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(username, displayName, email, passwordHash, role, status, timestamp, timestamp);
+  }
+
+  updateUserStatus(username, status) {
+    return this.database.prepare(
+      'UPDATE app_users SET status = ?, updated_at = ? WHERE username = ? COLLATE NOCASE'
+    ).run(status, now(), username).changes;
+  }
+
+  updateUserRole(username, role) {
+    return this.database.prepare(
+      'UPDATE app_users SET role = ?, updated_at = ? WHERE username = ? COLLATE NOCASE'
+    ).run(role, now(), username).changes;
+  }
+
+  deleteUser(username) {
+    return this.database.prepare('DELETE FROM app_users WHERE username = ? COLLATE NOCASE').run(username).changes;
+  }
+
+  countActiveAdmins() {
+    return this.database.prepare(
+      "SELECT COUNT(*) AS count FROM app_users WHERE role = 'ADMIN' AND status = 'ACTIVE'"
+    ).get().count;
+  }
+
   close() {
     this.database.close();
   }

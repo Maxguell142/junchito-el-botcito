@@ -4,10 +4,24 @@ doc_type: "historial"
 status: "historico"
 summary: "Registro cronológico de cambios y auditorías del proyecto."
 tags: [quantum-fx, historial, cambios, documentacion]
-last_updated: "2026-11-13"
+last_updated: "2026-11-25"
 ---
 
 # Historial de cambios de la documentación
+
+## [2026-11-20] feature | Cuentas individuales y aprobación administrativa
+- Se incorporaron usuarios persistentes en SQLite local y Neon alojado, con contraseñas derivadas mediante scrypt.
+- Las solicitudes de registro quedan pendientes; el admin puede aprobar, congelar con revocación de sesiones y eliminar cuentas, sin poder borrar su propio acceso ni el último administrador activo.
+- El acceso legado conserva su cuenta; en la demo se convierte a usuario normal cuando se inicializa el nuevo admin con `BOT_VPN_ADMIN_PASSWORD`.
+- Añadidos acceso de cierre de sesión en el menú superior y la vista administrativa de usuarios.
+- La clave inicial del admin se configura como variable sensible en Vercel; no se guarda en el repositorio.
+- Publicada la versión de administración de usuarios en producción; `/`, `/healthz`, `/demo-mode` y los recursos de interfaz respondieron correctamente.
+
+## [2026-11-25] update | Estilo de registro y usuarios de muestra
+- Se añadieron cinco cuentas ficticias de usuarios con estados activos, pendientes y congelados, y correos en el dominio reservado `.example`.
+- El listado administrativo muestra nombre, usuario, correo, rol, estado y fecha de alta.
+- Se quitaron de la interfaz pública los avisos y etiquetas de demo agregados al login, encabezado y presentación; se conservaron los bots, cuentas de muestra y el indicador de precio `SIM-MNQ`.
+- La variable sensible `BOT_VPN_ADMIN_PASSWORD` no figura configurada en el inventario de Vercel consultado; Juan conserva su rol hasta configurar V8.
 
 ## [2026-11-19] feature | Preparación de persistencia para Vercel
 - Añadido un adaptador Neon para estado y sesiones persistentes; SQLite sigue siendo el almacenamiento local de escritorio.

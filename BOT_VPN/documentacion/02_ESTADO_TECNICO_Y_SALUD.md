@@ -2,7 +2,7 @@
 title: "Estado técnico verificado y salud"
 category: sistema
 tags: [stack, health, frontend, backend, ai, obsidian, quantum-fx, estado, verificacion, salud]
-last_updated: "2026-11-19"
+last_updated: "2026-11-25"
 doc_type: "estado_tecnico"
 status: "verificado"
 summary: "Inventario de tecnologías y capacidades comprobadas, con límites conocidos."
@@ -39,7 +39,7 @@ summary: "Inventario de tecnologías y capacidades comprobadas, con límites con
 - No hay conector de broker activo. La API rechaza contraseñas de broker y las cuentas registradas quedan como `NOT_CONFIGURED`.
 - La sesión del panel vence tras 12 horas sin solicitudes autenticadas; cada solicitud válida renueva ese plazo. En Windows, Node mantiene sesiones en memoria; en Vercel se guardan en Neon.
 - En Vercel, estado de bots, sesiones y ledger se cargan desde Neon; las solicitudes de API se serializan por instancia y las escrituras usan revisión para detectar conflictos entre instancias. Perfiles y ledger se cifran con `BOT_VPN_PII_ENCRYPTION_KEY`. La interfaz alojada consulta el snapshot por HTTP; el escritorio sigue usando WebSocket.
-- El proyecto Vercel `quantum-fx` está publicado como demo pública en `https://quantum-fx-pi.vercel.app/`, con raíz `BOT_VPN/` y las rutas serverless definidas en `api/index.js` y `vercel.json`. El acceso a la aplicación requiere el login compartido del demo. Si Neon no tiene un snapshot, el servidor siembra titulares, bots y movimientos ficticios. No se migró SQLite local a Neon.
+- El proyecto Vercel `quantum-fx` está publicado en `https://quantum-fx-pi.vercel.app/`, con raíz `BOT_VPN/` y rutas serverless definidas en `api/index.js` y `vercel.json`. Las cuentas individuales se almacenan en Neon; las contraseñas usan hash scrypt. Los registros nuevos esperan aprobación de un administrador, que puede congelar o eliminar usuarios. El usuario antiguo conserva el rol administrador hasta que `BOT_VPN_ADMIN_PASSWORD` esté configurada en Vercel; al inicializar el nuevo admin (`V8` por defecto), pasa al rol normal. El panel incluye cinco usuarios de muestra con datos de contacto reservados `.example` y estados variados. No se migró SQLite local a Neon.
 - La interfaz de jitter anti-mirroring se retiró; el sistema no incorpora demoras, rotación de IP ni identidades para ocultar replicación.
 - El [[documentacion/planificacion/PLAN_INTEGRACION_ECOSISTEMA_FUTUROS|plan de ecosistema NQ/MNQ]] es una propuesta; sus repositorios candidatos no implican integración verificada.
 
