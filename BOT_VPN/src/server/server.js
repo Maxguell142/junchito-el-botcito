@@ -8,6 +8,7 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 const { WebSocketServer } = require('ws');
 const { SQLiteStore } = require('./database');
 const { NeonStore } = require('./neon-store');
+const { applySampleData } = require('./sample-data');
 const { getCandles } = require('../marketData');
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -263,30 +264,38 @@ async function initializeUserAccounts(store, cloud = false) {
   if (cloud && adminPassword && legacyUsername && legacyUsername.toLowerCase() !== adminUsername.toLowerCase()) {
     await store.updateUserRole(legacyUsername, 'USER');
   }
-  if (adminPassword && !await store.getUser(adminUsername)) {
-    await createBootstrapUser(store, {
-      username: adminUsername,
-      passwordHash: await passwordHash(adminPassword),
-      role: 'ADMIN',
-      status: 'ACTIVE'
-    });
-  }
-  if (cloud) {
-    const demoUsers = [
-      { username: 'lucas.romero', displayName: 'Lucas Romero', email: 'lucas.romero@example.com', status: 'ACTIVE' },
-      { username: 'camila.torres', displayName: 'Camila Torres', email: 'camila.torres@example.com', status: 'ACTIVE' },
-      { username: 'martin.silva', displayName: 'Martín Silva', email: 'martin.silva@example.com', status: 'PENDING' },
-      { username: 'sofia.mendez', displayName: 'Sofía Méndez', email: 'sofia.mendez@example.com', status: 'PENDING' },
-      { username: 'nicolas.vega', displayName: 'Nicolás Vega', email: 'nicolas.vega@example.com', status: 'FROZEN' }
-    ];
-    for (const demoUser of demoUsers) {
-      if (!await store.getUser(demoUser.username)) {
-        await createBootstrapUser(store, {
-          ...demoUser,
-          passwordHash: await passwordHash(crypto.randomBytes(32).toString('base64url')),
-          role: 'USER'
-        });
+  if (adminPassword) {
+    const adminAccount = await store.getUser(adminUsername);
+    if (!adminAccount) {
+      await createBootstrapUser(store, {
+        username: adminUsername,
+        passwordHash: await passwordHash(adminPassword),
+        role: 'ADMIN',
+        status: 'ACTIVE'
+      });
+    } else {
+      if (!await passwordMatches(adminPassword, adminAccount.password_hash)) {
+        const updated = await store.updateUserPassword(adminUsername, await passwordHash(adminPassword));
+        if (!updated) throw new Error('No se pudo sincronizar la contraseña del administrador.');
       }
+      if (adminAccount.role !== 'ADMIN') await store.updateUserRole(adminUsername, 'ADMIN');
+      if (adminAccount.status !== 'ACTIVE') await store.updateUserStatus(adminUsername, 'ACTIVE');
+    }
+  }
+  const sampleUsers = [
+    { username: 'lucas.romero', displayName: 'Luciano Romero', email: 'luciano.romero@example.com', status: 'ACTIVE' },
+    { username: 'camila.torres', displayName: 'Camila Torres', email: 'camila.torres@example.com', status: 'ACTIVE' },
+    { username: 'martin.silva', displayName: 'Martín Silva', email: 'martin.silva@example.com', status: 'PENDING' },
+    { username: 'sofia.mendez', displayName: 'Sofía Méndez', email: 'sofia.mendez@example.com', status: 'PENDING' },
+    { username: 'nicolas.vega', displayName: 'Nicolás Vega', email: 'nicolas.vega@example.com', status: 'FROZEN' }
+  ];
+  for (const sampleUser of sampleUsers) {
+    if (!await store.getUser(sampleUser.username)) {
+      await createBootstrapUser(store, {
+        ...sampleUser,
+        passwordHash: await passwordHash(crypto.randomBytes(32).toString('base64url')),
+        role: 'USER'
+      });
     }
   }
 }
@@ -296,6 +305,34 @@ let userStoreReady = Promise.resolve();
 function requireAdmin(req, res, next) {
   if (req.authUser?.role !== 'ADMIN') return res.status(403).json({ detail: 'Se requieren permisos de administración.' });
   next();
+}
+
+function ownerMatchesRequest(req, record) {
+  if (req.authUser?.role === 'ADMIN') return true;
+  const owner = record?.owner_username;
+  return Boolean(owner && req.authUser?.username
+    && owner.toLowerCase() === req.authUser.username.toLowerCase());
+}
+
+function visibleIdentities(req) {
+  return identities.filter(identity => ownerMatchesRequest(req, identity));
+}
+
+function visibleBots(req) {
+  return bots.filter(bot => ownerMatchesRequest(req, bot));
+}
+
+function findVisibleIdentity(req, identityId) {
+  return identities.find(identity => identity.id === identityId && ownerMatchesRequest(req, identity)) || null;
+}
+
+function findVisibleBot(req, botId) {
+  return bots.find(bot => bot.id === botId && ownerMatchesRequest(req, bot)) || null;
+}
+
+function visibleChartMarkers(req) {
+  return chartExecutionMarkers.filter(marker => !marker.owner_username
+    || ownerMatchesRequest(req, { owner_username: marker.owner_username }));
 }
 
 function hasValidSessionToken(token, refreshActivity = true) {
@@ -350,6 +387,11 @@ function registrationRateLimit(req, res, next) {
 }
 
 app.use('/api', async (req, res, next) => {
+  try {
+    await userStoreReady;
+  } catch (error) {
+    return next(error);
+  }
   if (isVercel) {
     let release;
     try {
@@ -487,9 +529,12 @@ let identities = [];
 let bots = [];
 
 function toRuntimeBot(b) {
-  const ident = identities.find(i => i.id === b.identity_id) || null;
+  const ident = identities.find(i => i.id === b.identity_id
+    && (!b.owner_username || i.owner_username?.toLowerCase() === b.owner_username.toLowerCase())) || null;
   return {
     id: b.id,
+    owner_username: b.owner_username || '',
+    record_source: b.record_source || '',
     name: b.name,
     strategy: b.strategy,
     analysis_symbol: ['NQ', 'ES'].includes(b.analysis_symbol) ? b.analysis_symbol : 'NQ',
@@ -580,7 +625,8 @@ function checkAntiHedging(bot, requestedSide) {
   const opposingPosition = isBuy ? 'SHORT' : 'LONG';
 
   // Buscar todos los bots vinculados a la MISMA identidad
-  const sameIdentityBots = bots.filter(b => (b.identity && b.identity.id === identId) || (b.identity_id === identId));
+  const sameIdentityBots = bots.filter(b => b.owner_username?.toLowerCase() === bot.owner_username?.toLowerCase()
+    && ((b.identity && b.identity.id === identId) || (b.identity_id === identId)));
 
   for (const b of sameIdentityBots) {
     for (const acc of (b.accounts || [])) {
@@ -655,7 +701,34 @@ function loadConfig(cloudSnapshot = null, cloudRevision = null) {
   applyLoadedSnapshot(loaded.snapshot, loaded.revision);
 }
 loadConfig();
-if (!isVercel) userStoreReady = initializeUserAccounts(database, false);
+
+async function persistSampleDataIfNeeded() {
+  const adminUser = (await authStore().listUsers()).find(user => user.role === 'ADMIN' && user.status === 'ACTIVE');
+  const adminUsername = adminUser?.username || process.env.BOT_VPN_ADMIN_USERNAME || 'V8';
+  const { snapshot, changed } = applySampleData({
+    ...configData,
+    identities,
+    bots,
+    ledger_transactions: ledgerTransactions
+  }, adminUsername);
+  if (!changed) return;
+  if (isVercel) {
+    const revision = await cloudStore.save(snapshot, persistenceRevision);
+    loadConfig(snapshot, revision);
+    ledgerTransactions = snapshot.ledger_transactions;
+    cloudLedgerTransactions = snapshot.ledger_transactions;
+    return;
+  }
+  persistenceRevision = database.saveSnapshot(snapshot, persistenceRevision, {
+    action: 'sample_data_initialized',
+    entity_type: 'application',
+    details: { sample_data_version: snapshot.sample_data_version }
+  });
+  loadConfig(snapshot, persistenceRevision);
+  ledgerTransactions = snapshot.ledger_transactions;
+}
+
+if (!isVercel) userStoreReady = initializeUserAccounts(database, false).then(persistSampleDataIfNeeded);
 
 if (isVercel) {
   cloudStore = new NeonStore();
@@ -726,7 +799,7 @@ if (isVercel) {
   cloudReady = cloudStore.initialize(initialSnapshot).then(({ snapshot, revision }) => {
     loadConfig(snapshot, revision);
     ledgerTransactions = cloudLedgerTransactions || [];
-  }).then(() => initializeUserAccounts(cloudStore, true));
+  }).then(() => initializeUserAccounts(cloudStore, true)).then(persistSampleDataIfNeeded);
   userStoreReady = cloudReady;
 }
 
@@ -1161,8 +1234,17 @@ const economicEvents = [
 let ledgerTransactions = [];
 
 
-function getLedgerSummary(identityFilter = null) {
-  let txs = ledgerTransactions;
+function getLedgerSummary(identityFilter = null, ownerUsername = null) {
+  const ownerKey = ownerUsername?.toLowerCase();
+  const scopedIdentities = ownerKey
+    ? identities.filter(identity => identity.owner_username?.toLowerCase() === ownerKey)
+    : identities;
+  const scopedBots = ownerKey
+    ? bots.filter(bot => bot.owner_username?.toLowerCase() === ownerKey)
+    : bots;
+  let txs = ownerKey
+    ? ledgerTransactions.filter(transaction => transaction.owner_username?.toLowerCase() === ownerKey)
+    : ledgerTransactions;
   if (identityFilter && identityFilter !== 'ALL') {
     txs = txs.filter(t => t.identity_id === identityFilter);
   }
@@ -1183,8 +1265,8 @@ function getLedgerSummary(identityFilter = null) {
 
   const titularSplitRate = 0.20;
 
-  const identityBreakdown = identities.map(ident => {
-    const identTxs = ledgerTransactions.filter(t => t.identity_id === ident.id);
+  const identityBreakdown = scopedIdentities.map(ident => {
+    const identTxs = txs.filter(t => t.identity_id === ident.id);
     let inv = 0;
     let gross = 0;
     let paid = 0;
@@ -1195,7 +1277,7 @@ function getLedgerSummary(identityFilter = null) {
     });
 
     // Calcular ganancias en vivo generadas por los bots asignados a este titular
-    const identBots = bots.filter(b => b.identity_id === ident.id || (b.identity && b.identity.id === ident.id));
+    const identBots = scopedBots.filter(b => b.identity_id === ident.id || (b.identity && b.identity.id === ident.id));
     const liveTradingPnl = identBots.reduce((sum, b) => sum + (Number(b.net_pnl) || 0) + (Number(b.today_pnl) || 0), 0);
     const effectiveGross = Number((gross + Math.max(0, liveTradingPnl)).toFixed(2));
     const share = Number((effectiveGross * titularSplitRate).toFixed(2));
@@ -1215,7 +1297,7 @@ function getLedgerSummary(identityFilter = null) {
     };
   });
 
-  const totalLiveTradingPnl = bots.reduce((sum, b) => sum + (Number(b.net_pnl) || 0) + (Number(b.today_pnl) || 0), 0);
+  const totalLiveTradingPnl = scopedBots.reduce((sum, b) => sum + (Number(b.net_pnl) || 0) + (Number(b.today_pnl) || 0), 0);
   const effectiveTotalGross = Number((totalGrossPayouts + Math.max(0, totalLiveTradingPnl)).toFixed(2));
   const effectiveTotalTitularShare = Number((effectiveTotalGross * titularSplitRate).toFixed(2));
   const effectivePendingToTitulares = Number((effectiveTotalTitularShare - totalPaidToTitulares).toFixed(2));
@@ -1237,14 +1319,16 @@ function getLedgerSummary(identityFilter = null) {
   };
 }
 
-function getAnalysisResultsForConfiguredBots() {
+function getAnalysisResultsForConfiguredBots(configuredBots = bots) {
   const results = [];
   const analysisCache = new Map();
-  for (const bot of bots) {
-    const dataset = analysisDatasets.get(bot.analysis_symbol);
+  for (const bot of configuredBots) {
+    const ownerKey = String(bot.owner_username || '').toLowerCase();
+    const ownerDatasets = analysisDatasets.get(ownerKey) || new Map();
+    const dataset = ownerDatasets.get(bot.analysis_symbol);
     if (!dataset) continue;
     const pairedSymbol = bot.analysis_symbol === 'NQ' ? 'ES' : 'NQ';
-    const pairedDataset = analysisDatasets.get(pairedSymbol) || null;
+    const pairedDataset = ownerDatasets.get(pairedSymbol) || null;
     for (const timeframe of bot.analysis_timeframes) {
       const cacheKey = `${bot.analysis_symbol}:${bot.strategy}:${timeframe}`;
       if (!analysisCache.has(cacheKey)) {
@@ -1272,10 +1356,13 @@ function saveConfigToDisk(event, operations = []) {
   const snapshot = {
     server: { host: '127.0.0.1', port: PORT },
     auth: { role: configData.auth.role || 'ADMIN_TRADER' },
+    sample_data_version: configData.sample_data_version || 0,
     identities,
     ledger_transactions: ledgerTransactions,
     bots: bots.map(b => ({
         id: b.id,
+        owner_username: b.owner_username || '',
+        record_source: b.record_source || '',
         name: b.name,
         identity_id: b.identity ? b.identity.id : null,
         strategy: b.strategy,
@@ -1294,6 +1381,8 @@ function saveConfigToDisk(event, operations = []) {
         max_drawdown: b.max_drawdown,
         accounts: b.accounts.map(account => ({
           ...account,
+          record_source: account.record_source || '',
+          mode: account.mode || '',
           username: account.username ? '••••' : ''
         }))
       }))
@@ -1345,10 +1434,12 @@ function getNewYorkTimeString() {
   }
 }
 
-function getSystemSnapshot() {
-  const totalPnl = bots.reduce((sum, b) => sum + (b.net_pnl || 0), 0);
-  const activeBotsCount = bots.filter(b => b.status === 'ACTIVE').length;
-  const totalContracts = bots.reduce((sum, b) => sum + (b.total_active_contracts || 0), 0);
+function getSystemSnapshot(req = null) {
+  const scopedIdentities = req ? visibleIdentities(req) : [];
+  const scopedBots = req ? visibleBots(req) : [];
+  const totalPnl = scopedBots.reduce((sum, b) => sum + (b.net_pnl || 0), 0);
+  const activeBotsCount = scopedBots.filter(b => b.status === 'ACTIVE').length;
+  const totalContracts = scopedBots.reduce((sum, b) => sum + (b.total_active_contracts || 0), 0);
 
   return {
     type: 'SNAPSHOT',
@@ -1362,12 +1453,12 @@ function getSystemSnapshot() {
     global_stats: {
       total_pnl: Number(totalPnl.toFixed(2)),
       active_bots: activeBotsCount,
-      total_bots: bots.length,
+      total_bots: scopedBots.length,
       total_active_contracts: totalContracts,
-      total_identities: identities.length
+      total_identities: scopedIdentities.length
     },
-    identities: identities,
-    bots: bots.map(bot => ({
+    identities: scopedIdentities,
+    bots: scopedBots.map(bot => ({
       ...bot,
       proxy_url: sanitizeProxyUrl(bot.proxy_url),
       accounts: bot.accounts.map(account => ({
@@ -1402,13 +1493,12 @@ function resetBotDailyMetrics(bot) {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 });
 
 function broadcastSnapshot() {
-  const payload = JSON.stringify(getSystemSnapshot());
   wss.clients.forEach(client => {
     if (client.isAuthenticated && client.readyState === 1) {
       if (!hasValidSessionToken(client.sessionToken, false)) {
         client.close(4401, 'Session expired');
       } else {
-        client.send(payload);
+        client.send(JSON.stringify(getSystemSnapshot({ authUser: client.authUser })));
       }
     }
   });
@@ -1502,6 +1592,8 @@ wss.on('connection', ws => {
       }
       ws.isAuthenticated = true;
       ws.sessionToken = data.token;
+      const sessionUser = sessions.get(data.token);
+      ws.authUser = sessionUser ? { username: sessionUser.username, role: sessionUser.role } : null;
       clearTimeout(authTimeout);
       try {
         refreshConfigIfChanged();
@@ -1509,7 +1601,7 @@ wss.on('connection', ws => {
         ws.close(1011, 'Persistent state unavailable');
         return;
       }
-      ws.send(JSON.stringify(getSystemSnapshot()));
+      ws.send(JSON.stringify(getSystemSnapshot({ authUser: ws.authUser })));
       return;
     }
 
@@ -1537,15 +1629,28 @@ server.on('upgrade', (request, socket, head) => {
 // ======================================================================
 
 app.get('/api/system/snapshot', (req, res) => {
-  res.json(getSystemSnapshot());
+  res.json(getSystemSnapshot(req));
 });
 
 app.get('/api/analysis/status', (req, res) => {
-  latestAnalysisResults = getAnalysisResultsForConfiguredBots();
+  const scopedBots = visibleBots(req);
+  latestAnalysisResults = getAnalysisResultsForConfiguredBots(scopedBots);
+  const ownerKeys = req.authUser?.role === 'ADMIN'
+    ? new Set(scopedBots.map(bot => String(bot.owner_username || '').toLowerCase()))
+    : new Set([String(req.authUser?.username || '').toLowerCase()]);
+  const scopedDatasets = new Map();
+  for (const ownerKey of ownerKeys) {
+    const ownerDatasets = analysisDatasets.get(ownerKey);
+    if (!ownerDatasets) continue;
+    for (const [symbol, dataset] of ownerDatasets) {
+      const key = ownerKeys.size > 1 ? `${ownerKey}:${symbol}` : symbol;
+      scopedDatasets.set(key, dataset);
+    }
+  }
   res.json({
     source: 'CSV histórico importado',
     data_type: 'HISTORICAL',
-    datasets: Object.fromEntries([...analysisDatasets].map(([symbol, dataset]) => [
+    datasets: Object.fromEntries([...scopedDatasets].map(([symbol, dataset]) => [
       symbol,
       {
         source_timeframe: dataset.sourceTimeframe,
@@ -1573,8 +1678,10 @@ app.post(
     }
 
     dataset.importedAt = new Date().toISOString();
-    analysisDatasets.set(symbol, dataset);
-    latestAnalysisResults = getAnalysisResultsForConfiguredBots();
+    const ownerKey = String(req.authUser?.username || '').toLowerCase();
+    if (!analysisDatasets.has(ownerKey)) analysisDatasets.set(ownerKey, new Map());
+    analysisDatasets.get(ownerKey).set(symbol, dataset);
+    latestAnalysisResults = getAnalysisResultsForConfiguredBots(visibleBots(req));
     return res.json({
       symbol,
       source_timeframe: sourceTimeframe,
@@ -1710,9 +1817,86 @@ app.post('/api/auth/logout', async (req, res) => {
   res.sendStatus(204);
 });
 
-app.get('/api/admin/users', requireAdmin, async (_req, res) => {
+app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
   await userStoreReady;
-  res.json({ users: await authStore().listUsers() });
+  const users = await authStore().listUsers();
+  const adminBots = bots;
+  const sessionsByUser = isVercel
+    ? await cloudStore.countActiveSessionsByUser()
+    : [...sessions.values()].filter(session => session.expiresAt > Date.now())
+      .reduce((counts, session) => counts.set(session.username, (counts.get(session.username) || 0) + 1), new Map())
+      .entries();
+  const activeSessions = Array.isArray(sessionsByUser)
+    ? sessionsByUser.reduce((sum, entry) => sum + Number(entry.count || 0), 0)
+    : [...sessionsByUser].reduce((sum, [, count]) => sum + count, 0);
+  res.json({
+    total_users: users.length,
+    active_users: users.filter(user => user.status === 'ACTIVE').length,
+    pending_users: users.filter(user => user.status === 'PENDING').length,
+    active_sessions: activeSessions,
+    total_bots: adminBots.length,
+    active_bots: adminBots.filter(bot => bot.status === 'ACTIVE').length,
+    inactive_bots: adminBots.filter(bot => bot.status !== 'ACTIVE').length,
+    bots_with_errors: adminBots.filter(bot => bot.status === 'ERROR'
+      || (bot.logs || []).some(log => log.level === 'ERROR')).length,
+    sample_data: Number(configData.sample_data_version || 0) > 0
+  });
+});
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  await userStoreReady;
+  const allUsers = await authStore().listUsers();
+  const cloudSessionRows = isVercel ? await cloudStore.countActiveSessionsByUser() : [];
+  const sessionCounts = new Map(cloudSessionRows.map(row => [String(row.username).toLowerCase(), Number(row.count || 0)]));
+  if (!isVercel) {
+    for (const session of sessions.values()) {
+      if (session.expiresAt > Date.now()) {
+        const key = session.username.toLowerCase();
+        sessionCounts.set(key, (sessionCounts.get(key) || 0) + 1);
+      }
+    }
+  }
+  const query = typeof req.query.search === 'string' ? req.query.search.trim().toLocaleLowerCase() : '';
+  const status = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : '';
+  const role = typeof req.query.role === 'string' ? req.query.role.toUpperCase() : '';
+  const users = allUsers.filter(user => {
+    const matchesSearch = !query || [user.username, user.display_name, user.email]
+      .some(value => String(value || '').toLocaleLowerCase().includes(query));
+    return matchesSearch && (!status || user.status === status) && (!role || user.role === role);
+  }).map(user => {
+    const owner = user.username.toLowerCase();
+    const ownedIdentities = identities.filter(identity => identity.owner_username?.toLowerCase() === owner);
+    const ownedBots = bots.filter(bot => bot.owner_username?.toLowerCase() === owner);
+    return {
+      ...user,
+      active_sessions: sessionCounts.get(owner) || 0,
+      identity_count: ownedIdentities.length,
+      bot_count: ownedBots.length,
+      account_count: ownedBots.reduce((sum, bot) => sum + (bot.accounts || []).length, 0)
+    };
+  });
+  const pendingCount = allUsers.filter(user => user.status === 'PENDING').length;
+  res.json({ users, total: users.length, pending_count: pendingCount });
+});
+
+app.get('/api/admin/users/:username', requireAdmin, async (req, res) => {
+  await userStoreReady;
+  const user = await authStore().getUser(req.params.username);
+  if (!user) return res.status(404).json({ detail: 'No se encontró el usuario.' });
+  const owner = user.username.toLowerCase();
+  const userIdentities = identities.filter(identity => identity.owner_username?.toLowerCase() === owner);
+  const userBots = bots.filter(bot => bot.owner_username?.toLowerCase() === owner);
+  const identityIds = new Set(userIdentities.map(identity => identity.id));
+  const transactions = ledgerTransactions.filter(transaction => transaction.owner_username?.toLowerCase() === owner
+    || identityIds.has(transaction.identity_id));
+  const { password_hash: _passwordHash, ...safeUser } = user;
+  res.json({
+    user: safeUser,
+    identities: userIdentities,
+    bots: userBots.map(bot => ({ ...bot, accounts: bot.accounts || [] })),
+    accounts: userBots.flatMap(bot => (bot.accounts || []).map(account => ({ ...account, bot_id: bot.id, bot_name: bot.name }))),
+    finance: { ...getLedgerSummary(null, user.username), transactions }
+  });
 });
 
 app.patch('/api/admin/users/:username', requireAdmin, async (req, res) => {
@@ -1754,7 +1938,7 @@ app.post('/api/emergency/flatten-all', (req, res) => {
   let totalRealized = 0;
   const now = new Date().toLocaleTimeString();
 
-  bots.forEach(bot => {
+  visibleBots(req).forEach(bot => {
     let botRealized = 0;
     bot.accounts.forEach(acc => {
       resetAccountDailyMetrics(acc);
@@ -1786,7 +1970,7 @@ app.post('/api/emergency/flatten-all', (req, res) => {
     entity_type: 'application',
     status: 'SIMULATED',
     details: { market_price: marketPrice, realized_pnl: Number(totalRealized.toFixed(2)) }
-  }, bots.map(bot => ({
+  }, visibleBots(req).map(bot => ({
     bot_id: bot.id,
     operation_type: 'FLATTEN_POSITIONS',
     mode: 'SIMULATED',
@@ -1806,7 +1990,7 @@ app.post('/api/emergency/stop-all', (req, res) => {
   let pausedCount = 0;
   const now = new Date().toLocaleTimeString();
 
-  bots.forEach(bot => {
+  visibleBots(req).forEach(bot => {
     if (bot.status === 'ACTIVE') {
       bot.status = 'PAUSED';
       bot.logs.unshift({
@@ -1829,7 +2013,7 @@ app.post('/api/emergency/stop-all', (req, res) => {
 
 // Identidades (Titulares KYC)
 app.get('/api/identities', (req, res) => {
-  res.json(identities);
+  res.json(visibleIdentities(req));
 });
 
 app.post('/api/identities', (req, res) => {
@@ -1850,6 +2034,7 @@ app.post('/api/identities', (req, res) => {
 
   const newIdent = {
     id,
+    owner_username: req.authUser.username,
     full_name,
     alias: alias || full_name,
     country: country || 'AR',
@@ -1888,7 +2073,7 @@ app.post('/api/identities', (req, res) => {
 });
 
 app.put('/api/identities/:id', (req, res) => {
-  const identity = identities.find(item => item.id === req.params.id);
+  const identity = findVisibleIdentity(req, req.params.id);
   if (!identity) return res.status(404).json({ detail: 'Identidad no encontrada.' });
   if (!database.canEncryptIdentityPii) return res.status(503).json({ detail: 'Para guardar identidades, abre QUANTUM FX desde la aplicación de escritorio de Windows, que cifra estos datos con tu usuario de Windows.' });
   const body = req.body || {};
@@ -1921,13 +2106,14 @@ app.put('/api/identities/:id', (req, res) => {
 });
 
 app.delete('/api/identities/:id', (req, res) => {
-  const identIndex = identities.findIndex(i => i.id === req.params.id);
+  const targetIdentity = findVisibleIdentity(req, req.params.id);
+  const identIndex = targetIdentity ? identities.indexOf(targetIdentity) : -1;
   if (identIndex === -1) {
     return res.status(404).json({ detail: 'Identidad no encontrada' });
   }
   identities.splice(identIndex, 1);
   // Desvincular de cualquier bot que la tuviera asignada
-  bots.forEach(b => {
+  bots.filter(bot => ownerMatchesRequest(req, bot)).forEach(b => {
     if (b.identity_id === req.params.id || (b.identity && b.identity.id === req.params.id)) {
       b.identity_id = null;
       b.identity = null;
@@ -1944,7 +2130,7 @@ app.delete('/api/identities/:id', (req, res) => {
 
 // Verificación de Proxy
 app.post('/api/bots/:id/proxy-test', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   if (bot.proxy_url && (bot.proxy_url.includes('example') || bot.proxy_url.includes('invalid'))) {
@@ -1994,7 +2180,7 @@ app.post('/api/bots/:id/proxy-test', (req, res) => {
 
 // Control de Bots
 app.post('/api/bots/:id/toggle', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   bot.status = bot.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
@@ -2011,7 +2197,7 @@ app.post('/api/bots/:id/toggle', (req, res) => {
 });
 
 app.route('/api/bots/:id/schedule').post((req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { start_time, end_time, timezone } = req.body || {};
@@ -2041,7 +2227,7 @@ app.route('/api/bots/:id/schedule').post((req, res) => {
 });
 
 app.post('/api/bots/:id/close', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   let closedPnl = 0;
@@ -2084,7 +2270,7 @@ app.post('/api/bots/:id/close', (req, res) => {
 
 // Vincular Cuenta Extendida (con Titular, Credenciales, Entorno, Riesgo)
 app.post('/api/bots/:id/accounts', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { id, account_id, custom_name, titular_name, broker, prop_firm, environment, username, password, balance, max_contracts, daily_loss_limit } = req.body || {};
@@ -2162,7 +2348,7 @@ app.post('/api/bots/:id/accounts', (req, res) => {
 });
 
 app.delete('/api/bots/:botId/accounts/:accountId', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.botId);
+  const bot = findVisibleBot(req, req.params.botId);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
   const accIndex = (bot.accounts || []).findIndex(a => a.id === req.params.accountId);
   if (accIndex === -1) {
@@ -2242,10 +2428,12 @@ app.post('/api/bots', (req, res) => {
     return res.status(400).json({ detail: `Ya existe bot con id '${id}'` });
   }
 
-  const ident = identities.find(i => i.id === identity_id) || null;
+  const ident = identity_id ? findVisibleIdentity(req, identity_id) : null;
+  if (identity_id && !ident) return res.status(404).json({ detail: 'Identidad no encontrada.' });
 
   const newBot = {
     id,
+    owner_username: req.authUser.username,
     name,
     identity: ident,
     strategy: selectedStrategy,
@@ -2314,7 +2502,7 @@ app.post('/api/bots', (req, res) => {
 
 // Editar Bot existente (Nombre, estrategia, titular, VPN/proxy, límites de ganancia y pérdida)
 app.put('/api/bots/:id', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { name, strategy, identity_id, proxy_url, consistency_target, daily_loss_limit, today_pnl, start_time, end_time } = req.body || {};
@@ -2340,7 +2528,8 @@ app.put('/api/bots/:id', (req, res) => {
       bot.identity_id = null;
       bot.identity = null;
     } else {
-      const ident = identities.find(i => i.id === identity_id);
+      const ident = findVisibleIdentity(req, identity_id);
+      if (identity_id && !ident) return res.status(404).json({ detail: 'Identidad no encontrada.' });
       bot.identity_id = ident ? ident.id : null;
       bot.identity = ident || null;
     }
@@ -2466,7 +2655,8 @@ app.put('/api/bots/:id', (req, res) => {
 
 // Eliminar Bot
 app.delete('/api/bots/:id', (req, res) => {
-  const botIndex = bots.findIndex(b => b.id === req.params.id);
+  const ownedBot = findVisibleBot(req, req.params.id);
+  const botIndex = ownedBot ? bots.indexOf(ownedBot) : -1;
   if (botIndex === -1) {
     return res.status(404).json({ detail: 'Bot no encontrado' });
   }
@@ -2554,7 +2744,7 @@ app.post('/api/bots/verify-strategy-file', express.json({ limit: '2mb' }), (req,
 // 1. Datos de velas históricas y marcadores para Lightweight Charts
 // Mock API de Proxies Residenciales (Pool SOCKS5 en Entorno DEMO)
 app.get('/api/vpn/proxies', (req, res) => {
-  const proxyPool = bots.map(b => ({
+  const proxyPool = visibleBots(req).map(b => ({
     bot_id: b.id,
     bot_name: b.name,
     titular: b.identity ? b.identity.full_name : 'Sin Titular',
@@ -2571,10 +2761,11 @@ app.get('/api/vpn/proxies', (req, res) => {
 
 // Telemetría de Velas y Operaciones Específicas por Bot (Modal de Inspección)
 app.get('/api/bots/:id/chart', async (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
-  const botMarkers = chartExecutionMarkers.filter(m => m.text?.includes(bot.id) || m.text?.includes(bot.name));
+  const botMarkers = chartExecutionMarkers.filter(marker => marker.bot_id === bot.id
+    && marker.owner_username?.toLowerCase() === bot.owner_username?.toLowerCase());
   const activeAccount = bot.accounts.find(a => a.active_contracts > 0 && a.current_position !== 'FLAT');
   const position = activeAccount ? {
     in_position: true,
@@ -2626,7 +2817,7 @@ app.get('/api/bots/:id/chart', async (req, res) => {
 
 // Simulación Directa de Operación para un Bot (DEMO Trade Launcher con Anti-Hedging y Gate Engine)
 app.post('/api/bots/:id/simulate-trade', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { side = 'BUY', contracts = 1 } = req.body || {};
@@ -2689,6 +2880,8 @@ app.post('/api/bots/:id/simulate-trade', (req, res) => {
   bot.total_active_contracts = bot.accounts.reduce((s, a) => s + a.active_contracts, 0);
 
   const marker = {
+    bot_id: bot.id,
+    owner_username: bot.owner_username,
     time: marketCandles.length ? marketCandles[marketCandles.length - 1].time : Math.floor(Date.now() / 1000),
     position: isBuy ? 'belowBar' : 'aboveBar',
     color: isBuy ? '#00E676' : '#FF5252',
@@ -2868,6 +3061,8 @@ app.post('/api/webhook', (req, res) => {
   targetBot.total_active_contracts = targetBot.accounts.reduce((s, a) => s + a.active_contracts, 0);
 
   const marker = {
+    bot_id: targetBot.id,
+    owner_username: targetBot.owner_username,
     time: marketCandles.length ? marketCandles[marketCandles.length - 1].time : Math.floor(Date.now() / 1000),
     position: isBuy ? 'belowBar' : 'aboveBar',
     color: isBuy ? '#00E676' : '#FF5252',
@@ -2924,7 +3119,7 @@ app.get('/api/market/candles', async (req, res) => {
       symbol: 'MNQ (Micro E-mini Nasdaq)',
       timeframe,
       candles: data.candles,
-      markers: chartExecutionMarkers,
+      markers: visibleChartMarkers(req),
       last_price: marketPrice,
       provider: data.provider
     });
@@ -2934,7 +3129,7 @@ app.get('/api/market/candles', async (req, res) => {
       symbol: 'MNQ (Micro E-mini Nasdaq)',
       timeframe: req.query.tf || '1m',
       candles: marketCandles,
-      markers: chartExecutionMarkers,
+      markers: visibleChartMarkers(req),
       last_price: marketPrice
     });
   }
@@ -2959,6 +3154,7 @@ app.get('/api/candles', async (req, res) => {
 app.get('/api/bot/:botId/candles', async (req, res) => {
   try {
     const botId = req.params.botId;
+    if (!findVisibleBot(req, botId)) return res.status(404).json({ detail: 'Bot no encontrado.' });
     let symbolMap = { bot_1: 'MNQ', bot_2: 'NQ', bot_3: 'ES', default: 'MNQ' };
     try {
       const symbolsPath = path.join(projectRoot, 'public', 'data', 'botSymbols.json');
@@ -2993,7 +3189,7 @@ app.get('/api/news/calendar', (req, res) => {
 
 // 3. Ajuste y activación de Circuit Breaker por Bot
 app.put('/api/bots/:id/circuit-breaker', (req, res) => {
-  const bot = bots.find(b => b.id === req.params.id);
+  const bot = findVisibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ detail: 'Bot no encontrado' });
 
   const { daily_loss_limit, consistency_target, auto_lock_consistency, pause_on_red_news } = req.body || {};
@@ -3042,7 +3238,7 @@ app.put('/api/bots/:id/circuit-breaker', (req, res) => {
 // 4. Ledger Financiero y Reparto a Titulares
 app.get('/api/ledger/summary', (req, res) => {
   const { identity } = req.query;
-  res.json(getLedgerSummary(identity));
+  res.json(getLedgerSummary(identity, req.authUser?.role === 'ADMIN' ? null : req.authUser?.username));
 });
 
 // 5. Registrar Transacción o Retiro en el Ledger
@@ -3052,9 +3248,13 @@ app.post('/api/ledger/payout', (req, res) => {
     return res.status(400).json({ detail: 'Datos de transacción o monto inválidos' });
   }
 
-  const ident = identities.find(i => i.id === identity_id);
+  const ident = findVisibleIdentity(req, identity_id);
+  if (!ident) return res.status(404).json({ detail: 'Titular no encontrado.' });
   const newTx = {
     id: `tx_${Date.now()}`,
+    owner_username: req.authUser.username,
+    record_source: 'USER',
+    mode: 'SIMULATED',
     date: new Date().toISOString().slice(0, 10),
     identity_id,
     identity_name: ident ? ident.full_name : 'Titular Desconocido',

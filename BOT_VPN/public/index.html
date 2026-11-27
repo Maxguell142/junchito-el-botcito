@@ -355,9 +355,9 @@
             <span class="nav-label">Calendario</span>
           </button>
 
-          <button class="sidebar-nav-item tab-link" onclick="switchTab('analysis')" title="Análisis histórico">
+          <button class="sidebar-nav-item tab-link" onclick="switchTab('analysis')" title="Bots y pruebas históricas">
             <span class="nav-icon" aria-hidden="true">⌕</span>
-            <span class="nav-label">Análisis</span>
+            <span class="nav-label">Bot</span>
           </button>
 
           <button class="sidebar-nav-item tab-link" onclick="switchTab('titulares')" title="Titulares">
@@ -382,12 +382,15 @@
             <span class="nav-label">Alertas</span>
           </button>
 
+        </nav>
+
+        <div class="sidebar-admin-slot">
           <button class="sidebar-nav-item tab-link hidden" id="admin-users-nav" onclick="switchTab('users')" title="Administración de usuarios">
             <span class="nav-icon" aria-hidden="true">◎</span>
-            <span class="nav-label">Usuarios</span>
+            <span class="nav-label">Admin</span>
             <span class="sidebar-pill-badge" id="count-pending-users">0</span>
           </button>
-        </nav>
+        </div>
 
         <!-- Footer de Barra Lateral -->
         <div class="sidebar-footer">
@@ -495,10 +498,22 @@
     <section class="tab-view" id="view-analysis">
       <div class="section-header">
         <div class="section-title-wrap">
-          <h2>Análisis histórico NQ / ES</h2>
-          <span class="section-sub">Sirve para revisar cómo habrían respondido las estrategias de tus bots ante precios históricos; no envía órdenes.</span>
+          <h2>Bots y pruebas históricas</h2>
+          <span class="section-sub">Consulta tus bots guardados o prueba sus estrategias con archivos CSV históricos.</span>
         </div>
       </div>
+      <div class="bot-workspace-tabs" role="tablist" aria-label="Secciones de bots">
+        <button class="btn btn-secondary active" id="bot-workspace-saved-tab" type="button" role="tab" aria-selected="true" onclick="showBotWorkspace('saved')">Bots guardados</button>
+        <button class="btn btn-secondary" id="bot-workspace-history-tab" type="button" role="tab" aria-selected="false" onclick="showBotWorkspace('history')">Prueba histórica CSV</button>
+      </div>
+      <section id="saved-bots-panel" class="bot-workspace-panel" role="tabpanel" aria-labelledby="bot-workspace-saved-tab">
+        <div class="subsection-heading">
+          <div><h3>Unidades guardadas</h3><p class="card-desc">Bots configurados en tu espacio de trabajo.</p></div>
+          <button class="btn btn-primary btn-sm" type="button" onclick="openAddBotModal()">Nuevo bot</button>
+        </div>
+        <div class="saved-bots-grid" id="saved-bots-grid" aria-live="polite"></div>
+      </section>
+      <section id="historical-analysis-panel" class="bot-workspace-panel hidden" role="tabpanel" aria-labelledby="bot-workspace-history-tab">
       <div class="analysis-warning">
         No es un feed en vivo ni una operación real. La simulación entra en la apertura de la vela siguiente a la señal,
         usa stop basado en 1,5 × ATR y TP de 2R; si una vela toca TP y stop, cuenta primero el stop.
@@ -549,6 +564,7 @@
       <div id="analysis-results" class="analysis-results">
         <div class="empty-state">Carga un CSV para ver los análisis por bot e intervalo.</div>
       </div>
+      </section>
     </section>
 
 
@@ -965,10 +981,17 @@
       <div class="section-header">
         <div class="section-title-wrap">
           <div class="terminal-eyebrow">ADMINISTRACIÓN</div>
-          <h2>Usuarios</h2>
+          <h2>Admin</h2>
           <span class="section-sub">Aprueba solicitudes, congela accesos o elimina cuentas.</span>
         </div>
         <button class="btn btn-secondary" type="button" onclick="loadAdminUsers()">Actualizar</button>
+      </div>
+      <p class="admin-sample-note hidden" id="admin-sample-note">Los registros precargados son datos ficticios de práctica y las métricas de trading son simuladas.</p>
+      <div class="admin-stats-grid" id="admin-stats-grid" aria-live="polite"></div>
+      <div class="admin-user-toolbar">
+        <label class="admin-search"><span>Buscar</span><input id="admin-user-search" type="search" placeholder="Nombre, usuario o correo" autocomplete="off"></label>
+        <label><span>Estado</span><select id="admin-user-status-filter"><option value="">Todos</option><option value="ACTIVE">Activos</option><option value="PENDING">Pendientes</option><option value="FROZEN">Congelados</option></select></label>
+        <label><span>Rol</span><select id="admin-user-role-filter"><option value="">Todos</option><option value="ADMIN">Administradores</option><option value="USER">Usuarios</option></select></label>
       </div>
       <div class="admin-users-list" id="admin-users-list" aria-live="polite"></div>
     </section>

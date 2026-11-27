@@ -4,7 +4,7 @@ doc_type: "indice_principal"
 status: "vigente"
 summary: "Portada de Obsidian y navegación a guías, estado, mapa y referencias."
 tags: [quantum-fx, inicio, indice, obsidian]
-last_updated: "2026-11-13"
+last_updated: "2026-11-27"
 ---
 
 # Inicio de la documentación de QUANTUM FX
@@ -26,6 +26,11 @@ Esta es la **página principal de la bóveda**. En Obsidian, empieza aquí. Para
 | `src/server/` | Servidor principal Node, base SQLite y análisis CSV. |
 | `public/` | Interfaz web y recursos. |
 | `desktop/` | Aplicación de escritorio Electron para Windows. |
+
+## Administración
+
+- [[documentacion/ADMINISTRACION_USUARIOS]]: resumen del panel, perfiles, muestra precargada y prueba local.
+- [[documentacion/ACCESO_Y_USUARIOS]]: roles y estados consultados en producción; no contiene contraseñas.
 | `fastapi_service/` | Servicio Python opcional, separado del servidor Node. |
 | `tests/node/`, `tests/python/` | Pruebas organizadas por servicio. |
 | `scripts/` | Validación de enlaces y mantenimiento de la base. |
@@ -40,6 +45,7 @@ Esta es la **página principal de la bóveda**. En Obsidian, empieza aquí. Para
 | [[documentacion/02_ESTADO_TECNICO_Y_SALUD]] | Estado comprobado del proyecto. |
 | [[documentacion/01_MAPA_DEL_PROYECTO]] | Estructura y rutas vigentes. |
 | [[documentacion/03_ARQUITECTURA_CONCEPTUAL]] | Diseño conceptual, no prueba de integraciones activas. |
+| [[documentacion/ACCESO_Y_USUARIOS]] | Usuarios, roles y estados verificados; no contiene contraseñas. |
 | [[documentacion/FUENTES_PRIMARIAS_Y_CATALOGO]] | Catálogo descriptivo de archivos originales en `raw/`. |
 | [[documentacion/90_HISTORIAL_DE_CAMBIOS]] | Historial cronológico de documentación y estructura. |
 | [[documentacion/AGENTS]] | Reglas para mantener las notas y enlaces. |

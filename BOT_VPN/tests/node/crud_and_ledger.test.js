@@ -49,6 +49,8 @@ test('Bot & Identity CRUD and Ledger dynamic integration', { timeout: 25000 }, a
   fs.mkdirSync(tempServerDir, { recursive: true });
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'server.js'), path.join(tempServerDir, 'server.js'));
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'database.js'), path.join(tempServerDir, 'database.js'));
+  fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'neon-store.js'), path.join(tempServerDir, 'neon-store.js'));
+  fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'sample-data.js'), path.join(tempServerDir, 'sample-data.js'));
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'market_analysis.js'), path.join(tempServerDir, 'market_analysis.js'));
   fs.cpSync(path.join(projectRoot, 'migrations'), path.join(tempRoot, 'migrations'), { recursive: true });
   fs.cpSync(path.join(projectRoot, 'public'), path.join(tempRoot, 'public'), { recursive: true });

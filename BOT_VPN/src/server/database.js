@@ -82,7 +82,7 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
     .filter(identity => identity && typeof identity.id === 'string')
     .map(identity => Object.fromEntries(
       [
-        'id', 'full_name', 'alias', 'country', 'city', 'province', 'postal_code',
+        'id', 'owner_username', 'record_source', 'full_name', 'alias', 'country', 'city', 'province', 'postal_code',
         'address', 'flag', 'kyc_status', 'email', 'phone_country_code', 'phone',
         'phone_country_iso', 'dni', 'crypto_wallet_name', 'crypto_network', 'crypto_wallet_address',
         'crypto_transfer_alias', 'card_brand', 'card_last4', 'card_exp_month',
@@ -109,7 +109,7 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
     .map(bot => {
       const safeBot = Object.fromEntries(
         [
-          'id', 'name', 'identity_id', 'strategy', 'outbound_ip', 'proxy_port',
+          'id', 'owner_username', 'record_source', 'name', 'identity_id', 'strategy', 'outbound_ip', 'proxy_port',
           'isp_provider', 'node_location', 'geo_match_status', 'status',
           'schedule', 'circuit_breaker',
           'gate_engine', 'risk_parameters',
@@ -126,7 +126,7 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
         .map(account => {
           const safeAccount = Object.fromEntries(
             [
-              'id', 'custom_name', 'broker', 'prop_firm', 'balance',
+              'id', 'record_source', 'mode', 'custom_name', 'broker', 'prop_firm', 'balance',
               'floating_pnl', 'realized_pnl', 'active_contracts',
               'current_position', 'entry_price', 'last_order_time',
               'titular_name', 'environment', 'max_contracts',
@@ -180,11 +180,12 @@ function sanitizeLegacySnapshot(snapshot, includeDailyMetrics = false) {
     identities,
     bots
   };
+  if (Number.isInteger(snapshot.sample_data_version)) safeSnapshot.sample_data_version = snapshot.sample_data_version;
   if (Array.isArray(snapshot.ledger_transactions)) {
     safeSnapshot.ledger_transactions = snapshot.ledger_transactions
       .filter(transaction => transaction && typeof transaction.id === 'string')
       .map(transaction => Object.fromEntries(
-        ['id', 'date', 'identity_id', 'identity_name', 'account_name', 'prop_firm', 'type', 'amount', 'status', 'notes']
+        ['id', 'owner_username', 'record_source', 'mode', 'date', 'identity_id', 'identity_name', 'account_name', 'prop_firm', 'type', 'amount', 'status', 'notes']
           .filter(key => Object.hasOwn(transaction, key))
           .map(key => [key, transaction[key]])
       ));
@@ -319,9 +320,12 @@ class SQLiteStore {
     const addSetting = this.database.prepare(
       'INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)'
     );
-    for (const key of ['server', 'auth']) {
+    for (const key of ['server', 'auth', 'sample_data_version']) {
+      if (key === 'sample_data_version' && !Number.isInteger(snapshot.sample_data_version)) continue;
       addSetting.run(key, JSON.stringify(snapshot[key] || {}), timestamp);
     }
+    const safeLedger = encryptIdentityFields({ ledger_transactions: snapshot.ledger_transactions || [] }, this.piiEncryptionKey);
+    addSetting.run('ledger_transactions', JSON.stringify(safeLedger), timestamp);
   }
 
   readSnapshot() {
@@ -341,11 +345,16 @@ class SQLiteStore {
       identity_id: row.identity_id,
       accounts: readAccounts.all(row.id).map(account => JSON.parse(account.data_json))
     }));
+    const savedLedger = settings.ledger_transactions
+      ? decryptIdentityFields(settings.ledger_transactions, this.piiEncryptionKey).ledger_transactions || []
+      : [];
     return {
       server: settings.server || { host: '127.0.0.1', port: 8000 },
       auth: settings.auth || { role: 'ADMIN_TRADER' },
+      ...(Number.isInteger(settings.sample_data_version) ? { sample_data_version: settings.sample_data_version } : {}),
       identities,
-      bots
+      bots,
+      ledger_transactions: savedLedger
     };
   }
 
@@ -408,6 +417,12 @@ class SQLiteStore {
     this.database.prepare(
       'INSERT INTO app_users (username, display_name, email, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(username, displayName, email, passwordHash, role, status, timestamp, timestamp);
+  }
+
+  updateUserPassword(username, passwordHash) {
+    return this.database.prepare(
+      'UPDATE app_users SET password_hash = ?, updated_at = ? WHERE username = ? COLLATE NOCASE'
+    ).run(passwordHash, now(), username).changes;
   }
 
   updateUserStatus(username, status) {

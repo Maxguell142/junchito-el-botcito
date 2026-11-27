@@ -4,10 +4,28 @@ doc_type: "historial"
 status: "historico"
 summary: "Registro cronológico de cambios y auditorías del proyecto."
 tags: [quantum-fx, historial, cambios, documentacion]
-last_updated: "2026-11-25"
+last_updated: "2026-11-27"
 ---
 
 # Historial de cambios de la documentación
+
+## [2026-11-27] update | Fichas de administración y cierre de ventanas
+- Las fichas de usuario ahora se despliegan dentro de la tarjeta correspondiente con transición; el acceso **Admin** quedó en el pie de la barra lateral, sobre cerrar sesión.
+- Las ventanas de creación y detalle se cierran al hacer clic en el fondo o al pulsar `Esc`; `Esc` y el fondo cancelan las confirmaciones.
+- Verificación: sintaxis JavaScript y `git diff --check`; no se ejecutó la suite de pruebas para este ajuste visual.
+
+## [2026-11-27] feature | Panel administrativo y bots guardados
+- Añadidos resumen de usuarios/sesiones/bots, filtros, ficha por cuenta y aviso visual de nuevos registros pendientes.
+- Se incorporó carga inicial idempotente de información sintética por usuario, con separación por propietario en snapshots, análisis y operaciones de bot.
+- La pestaña **Bot** muestra unidades guardadas y mantiene aparte el análisis CSV histórico. Se persiste el ledger local en SQLite.
+- Verificación: 18 pruebas Node aprobadas y 33 notas Obsidian sin enlaces rotos. La suite Python no pudo ejecutarse porque el entorno no tiene `pytest` instalado.
+- No se desplegó a Vercel; queda pendiente de la indicación “listo” acordada.
+
+## [2026-11-26] fix | Acceso de administrador y conexión Neon
+- Corregida la sincronización de la contraseña administradora: al iniciar, el hash configurado en Vercel se aplica a una cuenta ya existente y se revocan sus sesiones previas.
+- Añadidos reintentos acotados ante fallos transitorios de red al conectar con Neon.
+- Verificado en producción: inicio de sesión de `V8` con rol `ADMIN`, listado administrativo de usuarios y `/healthz` saludable.
+- La nota [[documentacion/ACCESO_Y_USUARIOS]] registra usuarios, roles y estados; no se guardan contraseñas en archivos.
 
 ## [2026-11-20] feature | Cuentas individuales y aprobación administrativa
 - Se incorporaron usuarios persistentes en SQLite local y Neon alojado, con contraseñas derivadas mediante scrypt.

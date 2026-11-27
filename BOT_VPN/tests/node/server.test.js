@@ -77,6 +77,8 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   fs.mkdirSync(tempServerDir, { recursive: true });
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'server.js'), path.join(tempServerDir, 'server.js'));
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'database.js'), path.join(tempServerDir, 'database.js'));
+  fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'neon-store.js'), path.join(tempServerDir, 'neon-store.js'));
+  fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'sample-data.js'), path.join(tempServerDir, 'sample-data.js'));
   fs.copyFileSync(path.join(projectRoot, 'src', 'server', 'market_analysis.js'), path.join(tempServerDir, 'market_analysis.js'));
   fs.cpSync(path.join(projectRoot, 'migrations'), path.join(tempRoot, 'migrations'), { recursive: true });
   fs.cpSync(path.join(projectRoot, 'public'), path.join(tempRoot, 'public'), { recursive: true });
@@ -165,7 +167,7 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   const login = await loginResponse.json();
   assert.equal(typeof login.token, 'string');
   assert.ok(login.token.length >= 40);
-  assert.equal(login.expires_in, 1800);
+  assert.equal(login.expires_in, 43200);
   const token = login.token;
   assert.equal((await fetch(`${baseUrl}/api/system/snapshot`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -182,6 +184,72 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   assert.equal(snapshot.bots[0].proxy_url, 'socks5://proxy.example:1080');
   assert.equal(JSON.stringify(snapshot).includes('proxy-password'), false);
   assert.equal(JSON.stringify(snapshot).includes('legacy-broker-login'), false);
+
+  const adminStatsResponse = await fetch(`${baseUrl}/api/admin/stats`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  assert.equal(adminStatsResponse.status, 200);
+  const adminStats = await adminStatsResponse.json();
+  assert.ok(adminStats.total_bots >= 4);
+  assert.ok(adminStats.active_users >= 3);
+  assert.equal(adminStats.sample_data, true);
+
+  const adminListResponse = await fetch(`${baseUrl}/api/admin/users`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const adminList = await adminListResponse.json();
+  assert.equal(adminListResponse.status, 200);
+  assert.ok(adminList.users.some(user => user.username === 'lucas.romero' && user.bot_count >= 3));
+  assert.equal(JSON.stringify(adminList).includes('password_hash'), false);
+
+  const sampleUserDetailResponse = await fetch(`${baseUrl}/api/admin/users/lucas.romero`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const sampleUserDetail = await sampleUserDetailResponse.json();
+  assert.equal(sampleUserDetailResponse.status, 200);
+  assert.equal(sampleUserDetail.identities.length, 2);
+  assert.equal(sampleUserDetail.bots.length, 3);
+  assert.equal(sampleUserDetail.accounts.length, 2);
+  assert.ok(sampleUserDetail.finance.transactions.length >= 3);
+  assert.equal(JSON.stringify(sampleUserDetail).includes('password_hash'), false);
+
+  const registrationPassword = 'temporary-test-password-2036';
+  const registrationResponse = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'isolated.member', password: registrationPassword })
+  });
+  assert.equal(registrationResponse.status, 201);
+  const pendingUsers = await fetch(`${baseUrl}/api/admin/users?status=PENDING`, {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(response => response.json());
+  assert.ok(pendingUsers.users.some(user => user.username === 'isolated.member'));
+  const approveResponse = await fetch(`${baseUrl}/api/admin/users/isolated.member`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'ACTIVE' })
+  });
+  assert.equal(approveResponse.status, 200);
+  const memberLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'isolated.member', password: registrationPassword })
+  }).then(response => response.json());
+  const memberHeaders = { Authorization: `Bearer ${memberLogin.token}`, 'Content-Type': 'application/json' };
+  assert.equal(memberLogin.user.role, 'USER');
+  const memberSnapshot = await fetch(`${baseUrl}/api/system/snapshot`, { headers: memberHeaders }).then(response => response.json());
+  assert.deepEqual(memberSnapshot.identities, []);
+  assert.deepEqual(memberSnapshot.bots, []);
+  assert.equal((await fetch(`${baseUrl}/api/admin/stats`, { headers: memberHeaders })).status, 403);
+  const memberIdentityResponse = await fetch(`${baseUrl}/api/identities`, {
+    method: 'POST',
+    headers: memberHeaders,
+    body: JSON.stringify({ id: 'member-owned-identity', full_name: 'Perfil de prueba', country: 'AR' })
+  });
+  assert.equal(memberIdentityResponse.status, 201);
+  const updatedMemberSnapshot = await fetch(`${baseUrl}/api/system/snapshot`, { headers: memberHeaders }).then(response => response.json());
+  assert.deepEqual(updatedMemberSnapshot.identities.map(identity => identity.id), ['member-owned-identity']);
+  assert.equal((await fetch(`${baseUrl}/api/bots/legacy-secret-bot/close`, { method: 'POST', headers: memberHeaders })).status, 404);
   assert.equal((await fetch(`${baseUrl}/api/analysis/status`)).status, 401, 'analysis routes should require a session');
   const identityResponse = await fetch(`${baseUrl}/api/identities`, {
     method: 'POST',
@@ -306,8 +374,8 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   });
   assert.equal(statusResponse.status, 200);
   const analysisStatus = await statusResponse.json();
-  assert.equal(analysisStatus.datasets.NQ.candles, 60);
-  assert.equal(analysisStatus.datasets.ES.candles, 60);
+  assert.equal(analysisStatus.datasets[`${username.toLowerCase()}:NQ`].candles, 60);
+  assert.equal(analysisStatus.datasets[`${username.toLowerCase()}:ES`].candles, 60);
   assert.equal(analysisStatus.data_type, 'HISTORICAL');
   const analysisHealth = await fetch(`${baseUrl}/healthz`).then(response => response.json());
   assert.equal(analysisHealth.components.market_data, 'historical_csv');
@@ -321,19 +389,19 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   assert.ok(Array.isArray(candlesPayload.candles));
   assert.ok(candlesPayload.candles.length > 0);
 
-  const botCandlesResponse = await fetch(`${baseUrl}/api/bot/bot_1/candles?limit=10`, {
+  const botCandlesResponse = await fetch(`${baseUrl}/api/bot/security-test-bot/candles?limit=10`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   assert.equal(botCandlesResponse.status, 200);
   const botCandlesPayload = await botCandlesResponse.json();
-  assert.equal(botCandlesPayload.botId, 'bot_1');
+  assert.equal(botCandlesPayload.botId, 'security-test-bot');
   assert.ok(Array.isArray(botCandlesPayload.candles));
   assert.ok(botCandlesPayload.candles.length > 0);
 
   const invalidCsvResponse = await fetch(`${baseUrl}/api/analysis/csv?symbol=NQ&timeframe=1m`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'text/csv' },
-    body: 'timestamp,open,high,low,close,volume\n2025-01-02 14:00:00,1,2,0.5,1.5,10'
+    body: 'timestamp,open,high,low,close,volume\nnot-a-timestamp,1,2,0.5,1.5,10'
   });
   assert.equal(invalidCsvResponse.status, 400);
   const invalidSchedule = await fetch(`${baseUrl}/api/bots/security-test-bot/schedule`, {
@@ -426,7 +494,7 @@ test('Node server starts and protects REST and WebSocket endpoints', { timeout: 
   assert.equal(storedJson.includes('ignored-config-webhook-secret'), false);
   assert.equal(storedJson.includes('proxy-password'), false);
   assert.equal(storedJson.includes('legacy-broker-password'), false);
-  assert.equal(database.prepare('SELECT count(*) AS count FROM schema_migrations').get().count, 1);
+  assert.ok(database.prepare('SELECT count(*) AS count FROM schema_migrations').get().count >= 2);
   assert.equal(database.prepare('SELECT count(*) AS count FROM audit_events').get().count >= 4, true);
   assert.equal(database.prepare("SELECT count(*) AS count FROM accounts WHERE account_id = 'security-test-account'").get().count, 1);
   const operation = database.prepare('SELECT mode, status FROM operations').get();

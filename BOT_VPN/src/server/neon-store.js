@@ -8,6 +8,24 @@ const {
   parseIdentityKey
 } = require('./database');
 
+function isTransientNetworkError(error) {
+  const details = [error?.message, error?.cause?.message, error?.code, error?.cause?.code]
+    .filter(Boolean)
+    .join(' ');
+  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENETUNREACH/i.test(details);
+}
+
+async function withTransientRetry(operation, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isTransientNetworkError(error) || attempt >= 2) throw error;
+      await wait(200 * (attempt + 1));
+    }
+  }
+}
+
 function tokenHash(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -15,7 +33,8 @@ function tokenHash(token) {
 class NeonStore {
   constructor(connectionString = process.env.QUANTUM_FX_POSTGRES_URL_NON_POOLING || process.env.QUANTUM_FX_POSTGRES_URL) {
     if (!connectionString) throw new Error('Falta QUANTUM_FX_POSTGRES_URL.');
-    this.sql = neon(connectionString);
+    const sql = neon(connectionString);
+    this.sql = { query: (...args) => withTransientRetry(() => sql.query(...args)) };
     this.piiEncryptionKey = parseIdentityKey(process.env.BOT_VPN_PII_ENCRYPTION_KEY);
     this.canEncryptIdentityPii = Boolean(this.piiEncryptionKey);
     this.revision = 0;
@@ -38,6 +57,7 @@ class NeonStore {
         expires_at timestamptz NOT NULL
       )
     `);
+    await this.sql.query('CREATE INDEX IF NOT EXISTS quantum_fx_sessions_expires_idx ON quantum_fx_sessions (expires_at)');
     await this.sql.query(`
       CREATE TABLE IF NOT EXISTS quantum_fx_users (
         username text PRIMARY KEY,
@@ -156,11 +176,26 @@ class NeonStore {
     );
   }
 
+  async countActiveSessionsByUser() {
+    return this.sql.query(
+      'SELECT username, count(*)::int AS count FROM quantum_fx_sessions WHERE expires_at > now() GROUP BY username'
+    );
+  }
+
   async createUser({ username, displayName = '', email = '', passwordHash, role = 'USER', status = 'PENDING' }) {
     await this.sql.query(
       'INSERT INTO quantum_fx_users (username, display_name, email, password_hash, role, status) VALUES ($1, $2, $3, $4, $5, $6)',
       [username, displayName, email, passwordHash, role, status]
     );
+  }
+
+  async updateUserPassword(username, passwordHash) {
+    const rows = await this.sql.query(
+      'UPDATE quantum_fx_users SET password_hash = $2, updated_at = now() WHERE lower(username) = lower($1) RETURNING username',
+      [username, passwordHash]
+    );
+    if (rows.length) await this.deleteUserSessions(username);
+    return rows.length;
   }
 
   async updateUserStatus(username, status) {
@@ -203,4 +238,4 @@ class NeonStore {
   }
 }
 
-module.exports = { NeonStore };
+module.exports = { NeonStore, withTransientRetry };

@@ -32,6 +32,9 @@ const state = {
 let ws = null;
 let reconnectTimer = null;
 let snapshotPollingTimer = null;
+let adminSearchTimer = null;
+let adminPendingPollTimer = null;
+let lastPendingUserCount = null;
 let confirmResolver = null;
 
 // ======================================================================
@@ -234,6 +237,75 @@ function updateUserManagementAccess() {
   const admin = state.currentUser?.role === 'ADMIN';
   document.getElementById('admin-users-nav')?.classList.toggle('hidden', !admin);
   if (!admin && state.activeTab === 'users') switchTab('dashboard');
+  if (admin) startAdminPendingPolling();
+  else stopAdminPendingPolling();
+}
+
+function stopAdminPendingPolling() {
+  if (adminPendingPollTimer) clearInterval(adminPendingPollTimer);
+  adminPendingPollTimer = null;
+  lastPendingUserCount = null;
+}
+
+async function pollAdminPendingUsers() {
+  if (state.currentUser?.role !== 'ADMIN' || document.hidden) return;
+  try {
+    const response = await apiFetch('/api/admin/users?status=PENDING');
+    const data = await response.json();
+    if (!response.ok) return;
+    const pending = Number(data.pending_count) || 0;
+    const badge = document.getElementById('count-pending-users');
+    if (badge) badge.textContent = String(pending);
+    if (lastPendingUserCount !== null && pending > lastPendingUserCount) {
+      showToast(`Hay ${pending - lastPendingUserCount} nueva(s) solicitud(es) de cuenta.`, 'info');
+    }
+    lastPendingUserCount = pending;
+    if (state.activeTab === 'users') await loadAdminStats();
+  } catch { /* el siguiente sondeo reintentará */ }
+}
+
+function startAdminPendingPolling() {
+  if (adminPendingPollTimer) return;
+  pollAdminPendingUsers();
+  adminPendingPollTimer = setInterval(pollAdminPendingUsers, 30000);
+}
+
+function showBotWorkspace(view) {
+  const saved = view !== 'history';
+  document.getElementById('saved-bots-panel')?.classList.toggle('hidden', !saved);
+  document.getElementById('historical-analysis-panel')?.classList.toggle('hidden', saved);
+  const savedTab = document.getElementById('bot-workspace-saved-tab');
+  const historyTab = document.getElementById('bot-workspace-history-tab');
+  savedTab?.classList.toggle('active', saved);
+  historyTab?.classList.toggle('active', !saved);
+  savedTab?.setAttribute('aria-selected', String(saved));
+  historyTab?.setAttribute('aria-selected', String(!saved));
+  if (saved) renderSavedBots();
+  else loadAnalysisStatus();
+}
+
+function renderSavedBots() {
+  const grid = document.getElementById('saved-bots-grid');
+  if (!grid) return;
+  if (!state.bots.length) {
+    grid.innerHTML = '<div class="empty-state">Todavía no hay bots guardados. Crea uno para verlo aquí.</div>';
+    return;
+  }
+  grid.innerHTML = state.bots.map(bot => {
+    const accountCount = (bot.accounts || []).length;
+    const status = bot.status === 'ACTIVE' ? 'Activo' : bot.status === 'ERROR' ? 'Con fallos' : 'Pausado';
+    return `<article class="saved-bot-card">
+      <div class="saved-bot-heading"><div><strong>${escapeHtml(bot.name)}</strong><span>${escapeHtml(bot.strategy || 'Estrategia sin definir')}</span></div><span class="saved-bot-status ${bot.status === 'ACTIVE' ? 'is-active' : bot.status === 'ERROR' ? 'has-error' : ''}">${status}</span></div>
+      <div class="saved-bot-metrics"><span>${accountCount} cuenta(s)</span><span>${escapeHtml(bot.analysis_symbol || 'NQ')}</span><strong class="tabular-nums ${(Number(bot.net_pnl) || 0) < 0 ? 'text-danger' : 'text-neon'}">${formatCurrency(Number(bot.net_pnl) || 0)}</strong></div>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="openSavedBot('${encodeURIComponent(bot.id)}')">Abrir detalles</button>
+    </article>`;
+  }).join('');
+}
+
+function openSavedBot(encodedBotId) {
+  const botId = decodeURIComponent(encodedBotId);
+  switchTab('dashboard');
+  setTimeout(() => openDetailModal(botId), 80);
 }
 
 function toggleUserMenu(force) {
@@ -343,6 +415,8 @@ async function logoutUser() {
     console.warn('La sesión local se cerró aunque el servidor no respondió.', err);
   }
   state.token = null;
+  state.currentUser = null;
+  stopAdminPendingPolling();
   localStorage.removeItem('quantum_auth_token');
   ws?.close();
   goToLandingScreen();
@@ -371,7 +445,7 @@ function switchTab(tabName) {
     renderBotGrid();
   }
   if (tabName === 'ledger') loadLedgerData();
-  if (tabName === 'analysis') loadAnalysisStatus();
+  if (tabName === 'analysis') renderSavedBots();
   if (tabName === 'noticias') loadEconomicNews();
   if (tabName === 'users') loadAdminUsers();
     if (tabName === 'charts') {
@@ -386,15 +460,19 @@ async function loadAdminUsers() {
   if (!container || state.currentUser?.role !== 'ADMIN') return;
   container.innerHTML = '<div class="bento-loading">Cargando usuarios…</div>';
   try {
-    const response = await apiFetch('/api/admin/users');
+    const search = document.getElementById('admin-user-search')?.value.trim() || '';
+    const status = document.getElementById('admin-user-status-filter')?.value || '';
+    const role = document.getElementById('admin-user-role-filter')?.value || '';
+    const params = new URLSearchParams({ search, status, role });
+    const response = await apiFetch(`/api/admin/users?${params}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'No se pudo cargar la lista.');
     const users = data.users || [];
-    const pending = users.filter(user => user.status === 'PENDING').length;
     const badge = document.getElementById('count-pending-users');
-    if (badge) badge.textContent = String(pending);
+    if (badge) badge.textContent = String(data.pending_count || 0);
+    await loadAdminStats();
     if (!users.length) {
-      container.innerHTML = '<div class="card-empty-state">Todavía no hay cuentas registradas.</div>';
+      container.innerHTML = '<div class="card-empty-state">No hay usuarios que coincidan con esos filtros.</div>';
       return;
     }
     container.innerHTML = users.map(user => {
@@ -407,11 +485,85 @@ async function loadAdminUsers() {
       const displayName = user.display_name || user.username;
       const contact = user.email ? ` · ${escapeHtml(user.email)}` : '';
       const created = user.created_at ? new Date(user.created_at).toLocaleDateString() : '—';
-      return `<article class="admin-user-card"><div><strong>${escapeHtml(displayName)}</strong><span>@${escapeHtml(user.username)}${contact}</span><span>${protectedAdmin ? 'Administrador' : 'Usuario'} · ${escapeHtml(user.status)} · Alta ${escapeHtml(created)}</span></div><div class="admin-user-actions">${primaryAction}${deleteAction}</div></article>`;
+      return `<article class="admin-user-card"><div class="admin-user-main"><strong>${escapeHtml(displayName)}</strong><span>@${escapeHtml(user.username)}${contact}</span><span>${protectedAdmin ? 'Administrador' : 'Usuario'} · ${escapeHtml(user.status)} · Alta ${escapeHtml(created)}</span><div class="admin-user-counts"><span>${Number(user.identity_count) || 0} identidades</span><span>${Number(user.account_count) || 0} cuentas</span><span>${Number(user.bot_count) || 0} bots</span><span>${Number(user.active_sessions) || 0} sesiones</span></div></div><div class="admin-user-actions"><button class="btn btn-secondary btn-sm" aria-expanded="false" onclick="loadAdminUserDetail('${encodeURIComponent(user.username)}', this)">Ver ficha</button>${primaryAction}${deleteAction}</div><section class="admin-user-detail" hidden aria-live="polite"><div class="admin-user-detail-content"></div></section></article>`;
     }).join('');
   } catch (error) {
     container.innerHTML = `<div class="card-empty-state">${escapeHtml(error.message)}</div>`;
   }
+}
+
+async function loadAdminStats() {
+  const grid = document.getElementById('admin-stats-grid');
+  if (!grid || state.currentUser?.role !== 'ADMIN') return;
+  try {
+    const response = await apiFetch('/api/admin/stats');
+    const stats = await response.json();
+    if (!response.ok) throw new Error(stats.detail || 'No se pudieron cargar las métricas.');
+    document.getElementById('admin-sample-note')?.classList.toggle('hidden', !stats.sample_data);
+    const cards = [
+      ['Usuarios activos', stats.active_users, `${stats.total_users} registrados`],
+      ['Sesiones vigentes', stats.active_sessions, 'Con acceso no vencido'],
+      ['Bots activos', stats.active_bots, `${stats.inactive_bots} pausados`],
+      ['Bots con fallos', stats.bots_with_errors, `${stats.total_bots} en total`]
+    ];
+    grid.innerHTML = cards.map(([label, value, note]) => `<article class="admin-stat-card"><span>${escapeHtml(label)}</span><strong class="tabular-nums">${Number(value) || 0}</strong><small>${escapeHtml(note)}</small></article>`).join('');
+  } catch (error) {
+    grid.innerHTML = `<div class="card-empty-state">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function loadAdminUserDetail(encodedUsername, trigger) {
+  const username = decodeURIComponent(encodedUsername);
+  const card = trigger?.closest('.admin-user-card');
+  const panel = card?.querySelector('.admin-user-detail');
+  if (!panel) return;
+  if (panel.classList.contains('is-open')) {
+    closeAdminUserDetail(trigger);
+    return;
+  }
+  document.querySelectorAll('.admin-user-detail.is-open').forEach(openPanel => {
+    const openTrigger = openPanel.closest('.admin-user-card')?.querySelector('.admin-user-actions button[aria-expanded="true"]');
+    closeAdminUserDetail(openTrigger);
+  });
+  panel.hidden = false;
+  panel.style.maxHeight = '0px';
+  panel.querySelector('.admin-user-detail-content').innerHTML = '<div class="bento-loading">Cargando ficha…</div>';
+  trigger.setAttribute('aria-expanded', 'true');
+  requestAnimationFrame(() => {
+    panel.classList.add('is-open');
+    panel.style.maxHeight = `${panel.scrollHeight}px`;
+  });
+  try {
+    const response = await apiFetch(`/api/admin/users/${encodeURIComponent(username)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'No se pudo cargar la ficha.');
+    const identityRows = (data.identities || []).map(identity => `<article class="admin-detail-row"><div><strong>${escapeHtml(identity.full_name || 'Identidad')}</strong><span>${escapeHtml(identity.alias || 'Sin alias')} · ${escapeHtml(identity.city || 'Sin ciudad')}, ${escapeHtml(identity.province || identity.country || '')}</span></div><span class="badge-status ${identity.kyc_status === 'VERIFIED' ? 'is-active' : ''}">${escapeHtml(identity.kyc_status || 'PENDING')}</span></article>`).join('') || '<p class="card-empty-state">Sin identidades vinculadas.</p>';
+    const botRows = (data.bots || []).map(bot => `<article class="admin-detail-row"><div><strong>${escapeHtml(bot.name)}</strong><span>${escapeHtml(bot.strategy || 'Estrategia')} · ${(bot.accounts || []).length} cuenta(s)</span></div><span>${escapeHtml(bot.status || '—')}</span><strong class="tabular-nums ${(Number(bot.net_pnl) || 0) < 0 ? 'text-danger' : 'text-neon'}">${formatCurrency(Number(bot.net_pnl) || 0)}</strong></article>`).join('') || '<p class="card-empty-state">Sin bots vinculados.</p>';
+    const accountRows = (data.accounts || []).map(account => `<article class="admin-detail-row"><div><strong>${escapeHtml(account.custom_name || 'Cuenta')}</strong><span>${escapeHtml(account.bot_name || '')} · ${escapeHtml(account.prop_firm || '')}</span></div><strong class="tabular-nums">${formatCurrency(Number(account.balance) || 0)}</strong><span class="tabular-nums">PnL ${formatCurrency(Number(account.realized_pnl) || 0)}</span></article>`).join('') || '<p class="card-empty-state">Sin cuentas vinculadas.</p>';
+    const transactions = data.finance?.transactions || [];
+    const transactionRows = transactions.slice(0, 12).map(transaction => `<article class="admin-detail-row"><div><strong>${escapeHtml(transaction.type || 'Movimiento')}</strong><span>${escapeHtml(transaction.date || '')} · ${escapeHtml(transaction.account_name || '')}</span></div><strong class="tabular-nums ${Number(transaction.amount) < 0 ? 'text-danger' : 'text-neon'}">${formatCurrency(Number(transaction.amount) || 0)}</strong><span>${escapeHtml(transaction.mode === 'SIMULATED' ? 'Simulado' : transaction.status || '')}</span></article>`).join('') || '<p class="card-empty-state">Sin movimientos registrados.</p>';
+    const user = data.user || {};
+    const finance = data.finance?.summary || {};
+    panel.querySelector('.admin-user-detail-content').innerHTML = `<div class="admin-detail-heading"><div><span>FICHA DE USUARIO</span><h3>${escapeHtml(user.display_name || user.username || username)}</h3><small>@${escapeHtml(user.username || username)} · ${escapeHtml(user.role || 'USER')} · ${escapeHtml(user.status || '—')}</small></div><button class="btn btn-secondary btn-sm" type="button" onclick="closeAdminUserDetail(this)">Cerrar ficha</button></div>
+      <div class="admin-detail-summary"><article><span>Balance de cuentas</span><strong>${formatCurrency((data.accounts || []).reduce((sum, account) => sum + (Number(account.balance) || 0), 0))}</strong></article><article><span>Movimientos</span><strong>${transactions.length}</strong></article><article><span>Pagos pendientes</span><strong>${formatCurrency(Number(finance.pending_to_titulares) || 0)}</strong></article></div>
+      <div class="admin-detail-grid"><section><h4>Identidades</h4>${identityRows}</section><section><h4>Bots asociados</h4>${botRows}</section><section><h4>Cuentas</h4>${accountRows}</section><section><h4>Finanzas recientes <small>Las cifras de práctica son simuladas</small></h4>${transactionRows}</section></div>`;
+    requestAnimationFrame(() => { panel.style.maxHeight = `${panel.scrollHeight}px`; });
+  } catch (error) {
+    panel.querySelector('.admin-user-detail-content').innerHTML = `<div class="card-empty-state">${escapeHtml(error.message)}</div>`;
+    requestAnimationFrame(() => { panel.style.maxHeight = `${panel.scrollHeight}px`; });
+  }
+}
+
+function closeAdminUserDetail(trigger) {
+  const panel = trigger?.closest('.admin-user-card')?.querySelector('.admin-user-detail');
+  if (!panel) return;
+  const viewButton = panel.closest('.admin-user-card')?.querySelector('.admin-user-actions button[aria-expanded="true"]');
+  viewButton?.setAttribute('aria-expanded', 'false');
+  panel.classList.remove('is-open');
+  panel.style.maxHeight = '0px';
+  setTimeout(() => {
+    if (!panel.classList.contains('is-open')) panel.hidden = true;
+  }, 360);
 }
 
 async function setAdminUserStatus(encodedUsername, status) {
@@ -587,6 +739,7 @@ function handleStateSnapshot(snapshot) {
 
   // Renderizar vista activa
   if (state.activeTab === 'dashboard') renderBotGrid();
+  if (state.activeTab === 'analysis') renderSavedBots();
   if (state.activeTab === 'titulares') renderIdentities();
   if (state.activeTab === 'cuentas') renderGlobalAccounts();
   if (state.activeTab === 'vpn') renderVpnCenter();
@@ -771,7 +924,7 @@ function renderBotGrid() {
               <span class="badge-strat">${escapeHtml(bot.strategy)}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; font-size: 0.72rem; color: var(--text-secondary);" class="text-mono">
-              <span>${escapeHtml(bot.id)}</span>
+              <span>${escapeHtml(bot.record_source === 'SAMPLE' ? String(bot.id).replace(/demo/ig, '').replace(/__+/g, '_') : bot.id)}</span>
               <span>•</span>
               <span style="color: var(--color-neon);">⏰ ${escapeHtml(bot.schedule ? bot.schedule.start_time : '09:30')} - ${escapeHtml(bot.schedule ? bot.schedule.end_time : '11:30')} EST</span>
             </div>
@@ -897,7 +1050,7 @@ function renderIdentities() {
 
   if (state.identities.length === 0) {
     container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;">
-      <p>No hay titulares guardados. La demo no precarga ni inventa identidades KYC.</p>
+      <p>No hay titulares guardados. Registra una identidad para asociarla a tus bots.</p>
       <button class="btn btn-primary" type="button" onclick="openAddIdentityModal()">Registrar titular</button>
       <p class="form-hint">El estado inicial será Pendiente. Este registro local no verifica identidad ni almacena documentos.</p>
     </div>`;
@@ -1343,7 +1496,7 @@ function openAddBotModal() {
   clearUploadedBotFile();
   const identSelect = document.getElementById('new-bot-identity');
   if (identSelect) {
-    identSelect.innerHTML = '<option value="">Sin titular — demo local</option>' + state.identities.map(i => {
+    identSelect.innerHTML = '<option value="">Sin titular — entorno local</option>' + state.identities.map(i => {
       return `<option value="${i.id}">${i.flag} ${escapeHtml(i.full_name)} (${escapeHtml(i.country)})` + `</option>`;
     }).join('');
   }
@@ -2205,6 +2358,37 @@ function resolveConfirm(result) {
   }
 }
 
+function dismissModal(modal) {
+  if (!modal) return;
+  const closeActions = {
+    'bot-detail-modal': closeDetailModal,
+    'add-account-modal': closeAddAccountModal,
+    'add-bot-modal': closeAddBotModal,
+    'add-identity-modal': closeAddIdentityModal,
+    'edit-bot-modal': closeEditBotModal,
+    'add-ledger-modal': closeAddLedgerModal
+  };
+  if (modal.id === 'confirm-modal') {
+    resolveConfirm(false);
+    return;
+  }
+  closeActions[modal.id]?.();
+}
+
+document.addEventListener('click', event => {
+  const overlay = event.target.closest?.('.modal-overlay.open');
+  if (overlay && event.target === overlay) dismissModal(overlay);
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  const openModals = document.querySelectorAll('.modal-overlay.open');
+  const topModal = openModals[openModals.length - 1];
+  if (!topModal) return;
+  event.preventDefault();
+  dismissModal(topModal);
+});
+
 // ======================================================================
 // 14. MOTOR DE NOTIFICACIONES TOAST (ALERTAS EN VIVO)
 // ======================================================================
@@ -3030,6 +3214,13 @@ function initLucidSidebarPreferences() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initLucidSidebarPreferences();
+  const scheduleAdminSearch = () => {
+    if (adminSearchTimer) clearTimeout(adminSearchTimer);
+    adminSearchTimer = setTimeout(loadAdminUsers, 220);
+  };
+  document.getElementById('admin-user-search')?.addEventListener('input', scheduleAdminSearch);
+  document.getElementById('admin-user-status-filter')?.addEventListener('change', loadAdminUsers);
+  document.getElementById('admin-user-role-filter')?.addEventListener('change', loadAdminUsers);
   initAuth();
   if (state.token) initWebSocket();
 });
