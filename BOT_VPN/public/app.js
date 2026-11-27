@@ -771,11 +771,13 @@ function renderDashboardBento(globalStats = {}) {
     }).join('')
     : '<div class="bento-empty">Aún no hay bots para mostrar.</div>';
   const accountRows = accounts.length
-    ? accounts.slice(0, 5).map(account => `<div class="bento-account-row"><div><strong>${escapeHtml(account.custom_name || 'Cuenta')}</strong><span>${escapeHtml(account.botName)}</span></div><strong class="tabular-nums">${formatCurrency(Number(account.balance) || 0)}</strong></div>`).join('')
+    ? accounts.map(account => `<div class="bento-account-row"><div><strong>${escapeHtml(account.custom_name || 'Cuenta')}</strong><span>${escapeHtml(account.botName)}</span></div><strong class="tabular-nums">${formatCurrency(Number(account.balance) || 0)}</strong></div>`).join('')
     : '<div class="bento-empty">Vincula una cuenta para ver su balance.</div>';
   const statusRows = state.bots.length
     ? state.bots.map(bot => `<div class="bento-bot-row"><div class="bento-state-indicator ${bot.status === 'ACTIVE' ? 'is-active' : ''}"></div><div class="bento-bot-meta"><strong>${escapeHtml(bot.name)}</strong><span>${bot.proxy_url ? 'Proxy definido · estado de túnel no verificado' : 'Proxy no configurado'}</span></div><span class="bento-status ${bot.status === 'ACTIVE' ? 'is-active' : ''}">${bot.status === 'ACTIVE' ? 'ACTIVO' : 'PAUSADO'}</span></div>`).join('')
     : '<div class="bento-empty">Sin bots registrados.</div>';
+  const botCount = document.getElementById('dashboard-bots-count');
+  if (botCount) botCount.textContent = `${state.bots.length} registrados · ${activeBots} activos`;
 
   root.innerHTML = `
     <article class="bento-card bento-kpi bento-pnl-card">
@@ -800,15 +802,15 @@ function renderDashboardBento(globalStats = {}) {
     </article>
     <article class="bento-card bento-performance">
       <div class="bento-card-heading"><div><span class="bento-label">RENDIMIENTO POR BOT</span><h3>P&L registrado</h3></div><span class="bento-period">ACUMULADO</span></div>
-      <div class="bento-performance-list">${pnlRows}</div>
+      <div class="bento-list-scroll"><div class="bento-performance-list">${pnlRows}</div></div>
     </article>
     <article class="bento-card bento-accounts">
       <div class="bento-card-heading"><div><span class="bento-label">CUENTAS</span><h3>Balances</h3></div><button class="bento-link" onclick="switchTab('cuentas')">Ver todas ↗</button></div>
-      <div class="bento-account-list">${accountRows}</div>
+      <div class="bento-list-scroll"><div class="bento-account-list">${accountRows}</div></div>
     </article>
     <article class="bento-card bento-status-card">
       <div class="bento-card-heading"><div><span class="bento-label">NODOS DE EJECUCIÓN</span><h3>Estado de bots</h3></div><span class="bento-period">${activeBots} ACTIVOS</span></div>
-      <div class="bento-status-list">${statusRows}</div>
+      <div class="bento-list-scroll"><div class="bento-status-list">${statusRows}</div></div>
     </article>`;
 }
 

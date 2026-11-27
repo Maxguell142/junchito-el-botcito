@@ -478,21 +478,31 @@
           <h2>Panel de control</h2>
           <span class="section-sub">Balances, rendimiento y estado reportado de tus bots.</span>
         </div>
-        <!-- Cápsula de Filtros Redondeada estilo Lucid Trading -->
-        <div class="lucid-filter-capsule">
-          <button class="filter-capsule-item filter-tag active" onclick="filterBots('ALL')">Todos</button>
-          <button class="filter-capsule-item filter-tag" onclick="filterBots('ACTIVE')">Activos</button>
-          <button class="filter-capsule-item filter-tag" onclick="filterBots('PAUSED')">Pausados</button>
-        </div>
       </div>
 
       <div class="dashboard-bento" id="dashboard-bento" aria-live="polite">
         <div class="bento-loading">Cargando métricas de cuentas y bots…</div>
       </div>
 
-      <div class="bot-grid" id="bot-grid">
-        <!-- Renderizado dinámico desde app.js -->
-      </div>
+      <section class="dashboard-bots-section" aria-labelledby="dashboard-bots-title">
+        <div class="dashboard-bots-heading">
+          <div class="dashboard-bots-heading-copy">
+            <span class="terminal-eyebrow">EJECUCIÓN</span>
+            <div class="dashboard-bots-title-row">
+              <h3 id="dashboard-bots-title">Bots</h3>
+              <span id="dashboard-bots-count" class="dashboard-bots-count"></span>
+            </div>
+          </div>
+          <div class="lucid-filter-capsule" role="group" aria-label="Filtrar bots">
+            <button class="filter-capsule-item filter-tag active" onclick="filterBots('ALL')">Todos</button>
+            <button class="filter-capsule-item filter-tag" onclick="filterBots('ACTIVE')">Activos</button>
+            <button class="filter-capsule-item filter-tag" onclick="filterBots('PAUSED')">Pausados</button>
+          </div>
+        </div>
+        <div class="bot-grid" id="bot-grid">
+          <!-- Renderizado dinámico desde app.js -->
+        </div>
+      </section>
     </section>
 
     <section class="tab-view" id="view-analysis">
